@@ -47,15 +47,16 @@ export const SERVICE_TYPE_LABELS: Record<string, string> = {
 };
 
 export const SERVICE_STATUS_LABELS: Record<string, string> = {
-  pending: 'Pendiente',
-  in_review: 'En Revisión',
+  draft: 'Borrador',
+  submitted: 'Enviado a revisión',
+  in_review: 'En revisión',
   approved: 'Aprobado',
   rejected: 'Rechazado',
 };
 
 export const REPORT_STATUS_LABELS: Record<string, string> = {
   draft: 'Borrador',
-  ai_generated: 'Generado por IA',
+  generated: 'Generado',
   reviewed: 'Revisado',
   approved: 'Aprobado',
   sent: 'Enviado',
