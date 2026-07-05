@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Fondo verde -->
+  <rect width="32" height="32" rx="6" fill="#8DB600"/>
+  <!-- Triángulo (ascensor) -->
+  <polygon points="16,6 8,22 24,22" fill="#ffffff"/>
+</svg>

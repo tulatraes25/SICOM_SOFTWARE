@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paleta SICOM Patagonia Ascensores */
+  --color-primary: #06172E;
+  --color-primary-light: #0B5C8F;
+  --color-primary-dark: #040f1d;
+  --color-secondary: #8DB600;
+  --color-secondary-light: #a3cc00;
+  --color-secondary-dark: #7a9e00;
+  --color-accent: #17B3E2;
+  --color-accent-light: #4dc9f0;
+  --color-accent-dark: #0d9bc7;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-info: #17B3E2;
+  
+  /* Colores SICOM adicionales */
+  --color-sicom-navy: #06172E;
+  --color-sicom-blue: #0B5C8F;
+  --color-sicom-cyan: #17B3E2;
+  --color-sicom-green: #8DB600;
+  
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f8fafc;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Utilidades SICOM */
+.bg-sicom-gradient {
+  background: linear-gradient(135deg, #06172E 0%, #0B5C8F 100%);
+}
+
+.bg-sicom-gradient-light {
+  background: linear-gradient(135deg, #0B5C8F 0%, #17B3E2 100%);
+}
+
+.text-sicom-gradient {
+  background: linear-gradient(135deg, #06172E, #0B5C8F);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.border-sicom {
+  border-color: #17B3E2;
+}
+
+/* Glassmorphism SICOM */
+.glass-sicom {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Sombras SICOM */
+.shadow-sicom {
+  box-shadow: 0 4px 20px rgba(6, 23, 46, 0.15);
+}
+
+.shadow-sicom-lg {
+  box-shadow: 0 10px 40px rgba(6, 23, 46, 0.2);
+}
