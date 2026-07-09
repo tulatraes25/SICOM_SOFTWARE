@@ -1,5 +1,6 @@
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { COMPANY_NAME, COMPANY_SLOGAN, COMPANY_WEBSITE } from '@/config/constants';
+import { SICOM_LOGO_BASE64 } from '@/lib/logo';
 
 interface ServiceRecordPDFProps {
   record: {
@@ -52,24 +53,14 @@ const CHECKLIST_STATUS: Record<string, string> = {
   na: 'No aplica',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  operativo: '#166534',
-  operativo_con_observaciones: '#92400e',
-  no_operativo: '#991b1b',
-  fuera_de_servicio_preventivo: '#991b1b',
-  fuera_de_servicio_por_reparacion: '#991b1b',
-  conforme: '#166534',
-  observado: '#92400e',
-  requiere_reparacion: '#991b1b',
-  fuera_de_servicio: '#991b1b',
-  pendiente_de_verificacion: '#92400e',
-};
-
 const styles = StyleSheet.create({
   page: { padding: 40, fontFamily: 'Helvetica', fontSize: 10, lineHeight: 1.5 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 2, borderBottomColor: '#8DB600', paddingBottom: 15, marginBottom: 20 },
-  companyName: { fontSize: 16, fontWeight: 'bold', color: '#1a1a1a' },
-  companySlogan: { fontSize: 7, color: '#666', marginTop: 2 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: '#8DB600', paddingBottom: 15, marginBottom: 20 },
+  logoContainer: { width: 120, height: 45 },
+  logo: { width: 120, height: 45 },
+  headerRight: { alignItems: 'flex-end' },
+  companyName: { fontSize: 14, fontWeight: 'bold', color: '#1a1a1a' },
+  companySlogan: { fontSize: 7, color: '#666', marginTop: 2, maxWidth: 200 },
   title: { fontSize: 14, fontWeight: 'bold', color: '#8DB600', textAlign: 'center', marginBottom: 10 },
   section: { marginBottom: 15 },
   sectionTitle: { fontSize: 11, fontWeight: 'bold', color: '#1a1a1a', borderBottomWidth: 1, borderBottomColor: '#8DB600', paddingBottom: 4, marginBottom: 8 },
@@ -85,6 +76,19 @@ const styles = StyleSheet.create({
   checklistStatus: { width: '30%', fontSize: 9, fontWeight: 'bold' },
   checklistNotes: { width: '20%', fontSize: 8, color: '#666' },
 });
+
+const STATUS_COLORS_MAP: Record<string, string> = {
+  operativo: '#166534',
+  operativo_con_observaciones: '#92400e',
+  no_operativo: '#991b1b',
+  fuera_de_servicio_preventivo: '#991b1b',
+  fuera_de_servicio_por_reparacion: '#991b1b',
+  conforme: '#166534',
+  observado: '#92400e',
+  requiere_reparacion: '#991b1b',
+  fuera_de_servicio: '#991b1b',
+  pendiente_de_verificacion: '#92400e',
+};
 
 function getMainReportText(record: any): string {
   if (record.final_report_text && record.final_report_text.trim()) {
@@ -111,18 +115,17 @@ export default function ServiceRecordPDF({
 }: ServiceRecordPDFProps) {
   const building = elevator.building;
   const mainReport = getMainReportText(record);
-  const hasOriginalReport = (record.technical_report && record.technical_report.trim() && record.technical_report.trim() !== mainReport.trim());
+  const hasOriginalReport = record.technical_report && record.technical_report.trim() && record.technical_report.trim() !== mainReport.trim();
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Header */}
+        {/* Header con logo */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.companyName}>SICOM</Text>
+          <View style={styles.logoContainer}>
+            <Image src={SICOM_LOGO_BASE64} style={styles.logo} />
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.companyName}>{COMPANY_NAME}</Text>
+          <View style={styles.headerRight}>
             <Text style={styles.companySlogan}>{COMPANY_SLOGAN}</Text>
           </View>
         </View>
@@ -178,13 +181,13 @@ export default function ServiceRecordPDF({
             </View>
             <View style={styles.col}>
               <Text style={styles.label}>Estado Operativo</Text>
-              <Text style={[styles.value, { color: STATUS_COLORS[record.operational_status_at_service || ''] || '#333' }]}>
+              <Text style={[styles.value, { color: STATUS_COLORS_MAP[record.operational_status_at_service || ''] || '#333' }]}>
                 {STATUS_LABELS[record.operational_status_at_service || ''] || record.operational_status_at_service || 'N/D'}
               </Text>
             </View>
             <View style={styles.col}>
               <Text style={styles.label}>Estado Conservación</Text>
-              <Text style={[styles.value, { color: STATUS_COLORS[record.conservation_status_at_service || ''] || '#333' }]}>
+              <Text style={[styles.value, { color: STATUS_COLORS_MAP[record.conservation_status_at_service || ''] || '#333' }]}>
                 {STATUS_LABELS[record.conservation_status_at_service || ''] || record.conservation_status_at_service || 'N/D'}
               </Text>
             </View>
@@ -197,19 +200,11 @@ export default function ServiceRecordPDF({
           <Text style={styles.content}>{mainReport}</Text>
         </View>
 
-        {/* Registro original del técnico (solo si difiere del informe final) */}
+        {/* Registro original del técnico */}
         {hasOriginalReport && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Registro Técnico Original</Text>
             <Text style={styles.content}>{record.technical_report}</Text>
-          </View>
-        )}
-
-        {/* Observaciones (solo si existen y no están en el informe principal) */}
-        {record.observations && record.observations.trim() && !mainReport.includes(record.observations) && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Observaciones</Text>
-            <Text style={styles.content}>{record.observations}</Text>
           </View>
         )}
 
