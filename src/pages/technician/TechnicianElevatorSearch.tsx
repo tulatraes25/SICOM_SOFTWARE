@@ -14,6 +14,7 @@ export default function TechnicianElevatorSearch() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,11 +22,13 @@ export default function TechnicianElevatorSearch() {
 
     setLoading(true);
     setSearched(true);
+    setError('');
     try {
       const data = await searchElevatorsForTechnician(query);
       setResults(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error:', err);
+      setError(err?.message || 'Error al buscar ascensores');
     } finally {
       setLoading(false);
     }
@@ -54,6 +57,13 @@ export default function TechnicianElevatorSearch() {
             </form>
           </CardContent>
         </Card>
+
+        {/* Error */}
+        {error && (
+          <div className="p-3 bg-danger/10 border border-danger/30 rounded-lg text-danger text-sm">
+            {error}
+          </div>
+        )}
 
         {/* Results */}
         {loading ? (

@@ -186,9 +186,29 @@ export async function deleteServicePhoto(id: string): Promise<void> {
 export async function searchElevatorsForTechnician(query: string) {
   const { data, error } = await supabase
     .from('elevators')
-    .select('id, code, operational_status, conservation_status, building:buildings(name, address, locality)')
-    .or(`code.ilike.%${query}%,building.address.ilike.%${query}%,building.locality.ilike.%${query}%`)
+    .select(`
+      id,
+      code,
+      operational_status,
+      conservation_status,
+      contractual_status,
+      manufacturer,
+      model,
+      serial_number,
+      active,
+      building:buildings(
+        id,
+        name,
+        address,
+        locality,
+        client:clients(
+          id,
+          name
+        )
+      )
+    `)
     .eq('active', true)
+    .or(`code.ilike.%${query}%,serial_number.ilike.%${query}%,manufacturer.ilike.%${query}%,model.ilike.%${query}%`)
     .order('code')
     .limit(20);
 
