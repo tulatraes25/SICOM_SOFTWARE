@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getServiceRecordById, getChecklistByServiceRecord, getPhotosByServiceRecord } from '@/services/serviceRecords.service';
+import { getServiceRecordById } from '@/services/serviceRecords.service';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -9,8 +9,8 @@ import ServiceChecklist from '@/components/service/ServiceChecklist';
 import ServicePhotoUpload from '@/components/service/ServicePhotoUpload';
 import { SERVICE_STATUS_LABELS } from '@/config/constants';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
-import type { ServiceRecord, ServiceChecklistItem, ServicePhoto } from '@/types/database';
-import { Building2, Calendar, ArrowLeft, Edit } from 'lucide-react';
+import type { ServiceRecord } from '@/types/database';
+import { Building2, Calendar, ArrowLeft, Edit, AlertCircle } from 'lucide-react';
 
 const STATUS_BADGE_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default',
@@ -25,27 +25,28 @@ export default function ServiceRecordDetail() {
   const navigate = useNavigate();
   
   const [record, setRecord] = useState<ServiceRecord | null>(null);
-  const [checklist, setChecklist] = useState<ServiceChecklistItem[]>([]);
-  const [photos, setPhotos] = useState<ServicePhoto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     loadData();
   }, [id]);
 
   const loadData = async () => {
-    if (!id) return;
+    if (!id) {
+      setError('ID de registro no proporcionado');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const [recordData, checklistData, photosData] = await Promise.all([
-        getServiceRecordById(id),
-        getChecklistByServiceRecord(id),
-        getPhotosByServiceRecord(id),
-      ]);
+      setLoading(true);
+      setError('');
+      const recordData = await getServiceRecordById(id);
       setRecord(recordData);
-      setChecklist(checklistData);
-      setPhotos(photosData);
-    } catch (err) {
-      console.error('Error:', err);
+    } catch (err: any) {
+      console.error('Error loading record:', err);
+      setError(err?.message || 'Error al cargar el registro de mantenimiento');
     } finally {
       setLoading(false);
     }
@@ -56,6 +57,35 @@ export default function ServiceRecordDetail() {
       <DashboardLayout role="technician" title="Detalle de Mantenimiento">
         <div className="text-center py-8">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-gray-500 mt-4">Cargando registro...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout role="technician" title="Detalle de Mantenimiento">
+        <div className="max-w-2xl mx-auto">
+          <button
+            onClick={() => navigate('/tecnico')}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
+          >
+            <ArrowLeft size={18} />
+            Volver
+          </button>
+          <Card>
+            <CardContent>
+              <div className="text-center py-8">
+                <AlertCircle size={48} className="mx-auto text-danger mb-4" />
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">Error</h2>
+                <p className="text-gray-600">{error}</p>
+                <Button onClick={loadData} className="mt-4">
+                  Reintentar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </DashboardLayout>
     );
@@ -64,21 +94,37 @@ export default function ServiceRecordDetail() {
   if (!record) {
     return (
       <DashboardLayout role="technician" title="Detalle de Mantenimiento">
-        <div className="text-center py-8">
-          <p className="text-gray-500">Registro no encontrado</p>
+        <div className="max-w-2xl mx-auto">
+          <button
+            onClick={() => navigate('/tecnico')}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
+          >
+            <ArrowLeft size={18} />
+            Volver
+          </button>
+          <Card>
+            <CardContent>
+              <div className="text-center py-8">
+                <p className="text-gray-500">Registro no encontrado</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </DashboardLayout>
     );
   }
 
-  const canEdit = record.status === 'draft' || record.status === 'rejected';
   const elevator = record.elevator as any;
+  const building = elevator?.building;
+  const checklist = (record as any).checklist || [];
+  const photos = (record as any).photos || [];
+  const canEdit = record.status === 'draft' || record.status === 'rejected';
 
   return (
     <DashboardLayout role="technician" title="Detalle de Mantenimiento">
       <div className="space-y-6 max-w-3xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <button
             onClick={() => navigate('/tecnico')}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
@@ -88,7 +134,7 @@ export default function ServiceRecordDetail() {
           </button>
           
           <Badge variant={STATUS_BADGE_VARIANT[record.status] || 'default'}>
-            {SERVICE_STATUS_LABELS[record.status] || record.status}
+            {SERVICE_STATUS_LABELS[record.status as keyof typeof SERVICE_STATUS_LABELS] || record.status}
           </Badge>
         </div>
 
@@ -100,25 +146,28 @@ export default function ServiceRecordDetail() {
               <div>
                 <h2 className="font-mono font-bold text-xl">{elevator?.code || '-'}</h2>
                 <p className="text-sm text-gray-600">
-                  {elevator?.building?.name} - {elevator?.building?.address}
+                  {elevator?.manufacturer} {elevator?.model}
                 </p>
+                {building && (
+                  <p className="text-sm text-gray-500">
+                    {building.name} - {building.address}, {building.locality}
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Service info */}
+        {/* Service data */}
         <Card>
           <CardContent>
             <h3 className="font-semibold text-gray-900 mb-4">Datos del Servicio</h3>
-            
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-gray-500">Fecha</p>
-                <p className="font-medium flex items-center gap-2">
-                  <Calendar size={14} />
-                  {new Date(record.service_date).toLocaleDateString('es-AR')}
+                <p className="text-sm text-gray-500 flex items-center gap-2">
+                  <Calendar size={14} /> Fecha
                 </p>
+                <p className="font-medium">{new Date(record.service_date).toLocaleDateString('es-AR')}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Tipo</p>
@@ -126,70 +175,78 @@ export default function ServiceRecordDetail() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Estado operativo</p>
-                <Badge>{OPERATIONAL_STATUS_LABELS[record.operational_status_at_service as keyof typeof OPERATIONAL_STATUS_LABELS] || record.operational_status_at_service}</Badge>
+                <p className="font-medium">
+                  {OPERATIONAL_STATUS_LABELS[record.operational_status_at_service as keyof typeof OPERATIONAL_STATUS_LABELS] || record.operational_status_at_service || '-'}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Estado conservación</p>
-                <Badge>{CONSERVATION_STATUS_LABELS[record.conservation_status_at_service as keyof typeof CONSERVATION_STATUS_LABELS] || record.conservation_status_at_service}</Badge>
+                <p className="font-medium">
+                  {CONSERVATION_STATUS_LABELS[record.conservation_status_at_service as keyof typeof CONSERVATION_STATUS_LABELS] || record.conservation_status_at_service || '-'}
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Checklist */}
-        <Card>
-          <CardContent>
-            <ServiceChecklist
-              items={checklist.map(c => ({
-                item_name: c.item_name,
-                status: c.status as any,
-                notes: c.notes || '',
-              }))}
-              onChange={() => {}}
-              readOnly
-            />
-          </CardContent>
-        </Card>
+        {checklist.length > 0 && (
+          <Card>
+            <CardContent>
+              <ServiceChecklist
+                items={checklist.map((c: any) => ({
+                  item_name: c.item_name,
+                  status: c.status,
+                  notes: c.notes || '',
+                }))}
+                onChange={() => {}}
+                readOnly
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Description */}
         <Card>
           <CardContent>
-            <h3 className="font-semibold text-gray-900 mb-4">Descripción</h3>
-            
+            <h3 className="font-semibold text-gray-900 mb-4">Descripción del Trabajo</h3>
             {record.description && (
               <div className="mb-4">
-                <p className="text-sm text-gray-500 mb-1">Descripción general</p>
+                <p className="text-sm text-gray-500 mb-1">Descripción</p>
                 <p className="text-gray-700">{record.description}</p>
               </div>
             )}
-
             {record.observations && (
               <div className="mb-4">
                 <p className="text-sm text-gray-500 mb-1">Observaciones</p>
                 <p className="text-gray-700">{record.observations}</p>
               </div>
             )}
-
             {record.technical_report && (
               <div>
                 <p className="text-sm text-gray-500 mb-1">Mini informe técnico</p>
                 <p className="text-gray-700 whitespace-pre-wrap">{record.technical_report}</p>
               </div>
             )}
+            {!record.description && !record.observations && !record.technical_report && (
+              <p className="text-gray-500">No hay descripción registrada</p>
+            )}
           </CardContent>
         </Card>
 
         {/* Photos */}
-        <Card>
-          <CardContent>
-            <ServicePhotoUpload
-              serviceRecordId={record.id}
-              photos={photos}
-              onPhotosChange={setPhotos}
-              readOnly={!canEdit}
-            />
-          </CardContent>
-        </Card>
+        {photos.length > 0 && (
+          <Card>
+            <CardContent>
+              <ServicePhotoUpload
+                serviceRecordId={record.id}
+                photos={photos}
+                onPhotosChange={() => {}}
+                readOnly
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Actions */}
         {canEdit && (

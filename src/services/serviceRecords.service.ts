@@ -26,7 +26,32 @@ export async function listServiceRecordsByElevator(elevatorId: string): Promise<
 export async function getServiceRecordById(id: string): Promise<ServiceRecord | null> {
   const { data, error } = await supabase
     .from('service_records')
-    .select('*, elevator:elevators(code, building:buildings(name, address, locality)), technician:profiles(full_name, email)')
+    .select(`
+      *,
+      elevator:elevators(
+        id,
+        code,
+        manufacturer,
+        model,
+        serial_number,
+        operational_status,
+        conservation_status,
+        contractual_status,
+        building:buildings(
+          id,
+          name,
+          address,
+          locality,
+          client:clients(
+            id,
+            name
+          )
+        )
+      ),
+      technician:profiles(id, full_name, email),
+      checklist:service_checklist_items(*),
+      photos:service_photos(*)
+    `)
     .eq('id', id)
     .single();
 
