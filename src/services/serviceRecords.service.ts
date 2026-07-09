@@ -48,7 +48,6 @@ export async function getServiceRecordById(id: string): Promise<ServiceRecord | 
           )
         )
       ),
-      technician:profiles(id, full_name, email),
       checklist:service_checklist_items(*),
       photos:service_photos(*)
     `)

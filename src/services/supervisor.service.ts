@@ -8,7 +8,7 @@ export async function listPendingServiceRecords(): Promise<ServiceRecord[]> {
     .select(`
       *,
       elevator:elevators(code, building:buildings(name, address, client:clients(name))),
-      technician:profiles(full_name, email)
+      technician:profiles!service_records_technician_id_fkey(full_name, email)
     `)
     .in('status', ['submitted', 'in_review', 'rejected'])
     .order('created_at', { ascending: false });
@@ -24,7 +24,7 @@ export async function listApprovedServiceRecords(): Promise<ServiceRecord[]> {
     .select(`
       *,
       elevator:elevators(code, building:buildings(name, address, client:clients(name))),
-      technician:profiles(full_name, email)
+      technician:profiles!service_records_technician_id_fkey(full_name, email)
     `)
     .eq('status', 'approved')
     .order('approved_at', { ascending: false })
@@ -41,7 +41,7 @@ export async function getServiceRecordForReview(id: string): Promise<ServiceReco
     .select(`
       *,
       elevator:elevators(code, building:buildings(name, address, locality, client:clients(name, contact_name, contact_email))),
-      technician:profiles(full_name, email)
+      technician:profiles!service_records_technician_id_fkey(full_name, email)
     `)
     .eq('id', id)
     .single();
