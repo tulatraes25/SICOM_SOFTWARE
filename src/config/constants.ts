@@ -1,6 +1,6 @@
 export const APP_NAME = 'SICOM QR Ascensores';
 export const APP_DESCRIPTION = 'Sistema de trazabilidad y mantenimiento de ascensores';
-export const COMPANY_NAME = 'SICOM Patagonia Ascensores';
+export const COMPANY_NAME = 'SICOM Patagonia SRL';
 export const COMPANY_SLOGAN = 'Mantenimiento, reparación, modernización y asistencia técnica de ascensores.';
 export const COMPANY_WEBSITE = 'https://sicompatagonia.com/';
 export const COMPANY_PHONE = '+54 299 XXX-XXXX';
