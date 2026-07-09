@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { supabase } from '@/config/supabase';
 import { getServiceRecordForReview, approveServiceRecord, rejectServiceRecord, updateElevatorStatusFromApprovedService } from '@/services/supervisor.service';
 import { createAuditLog } from '@/services/audit.service';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -12,7 +13,7 @@ import { PDFDownloadLink } from '@react-pdf/renderer';
 import { SERVICE_STATUS_LABELS } from '@/config/constants';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import type { ServiceRecord } from '@/types/database';
-import { Building2, Calendar, ArrowLeft, CheckCircle, XCircle, AlertCircle, Download, Loader2 } from 'lucide-react';
+import { Building2, Calendar, ArrowLeft, CheckCircle, XCircle, AlertCircle, Download, Loader2, Sparkles, Save } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default',
@@ -31,6 +32,8 @@ export default function AdminServiceReviewDetailPage() {
   const [error, setError] = useState('');
   const [rejectNotes, setRejectNotes] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [generatingAI, setGeneratingAI] = useState(false);
+  const [finalReport, setFinalReport] = useState('');
 
   useEffect(() => { loadData(); }, [id]);
 
@@ -41,10 +44,55 @@ export default function AdminServiceReviewDetailPage() {
       setError('');
       const data = await getServiceRecordForReview(id);
       setRecord(data);
+      setFinalReport((data as any).ai_report_draft || (data as any).final_report_text || '');
     } catch (err: any) {
       setError(err?.message || 'Error al cargar');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateAI = async () => {
+    if (!id) return;
+    setGeneratingAI(true);
+    setError('');
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('generate-report', {
+        body: { service_record_id: id },
+      });
+      if (fnError) throw fnError;
+      if (data.error) throw new Error(data.error);
+      
+      const report = data.report;
+      setFinalReport(report);
+
+      // Save to database
+      await supabase
+        .from('service_records')
+        .update({ ai_report_draft: report, final_report_text: report, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      await createAuditLog({ action: 'generate_ai_report', entity_type: 'service_record', entity_id: id });
+    } catch (err: any) {
+      setError(err?.message || 'Error al generar informe con IA');
+    } finally {
+      setGeneratingAI(false);
+    }
+  };
+
+  const handleSaveReport = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await supabase
+        .from('service_records')
+        .update({ final_report_text: finalReport, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      await createAuditLog({ action: 'save_report', entity_type: 'service_record', entity_id: id });
+    } catch (err: any) {
+      setError(err?.message || 'Error al guardar');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -53,7 +101,7 @@ export default function AdminServiceReviewDetailPage() {
     if (!confirm('¿Aprobar este mantenimiento?')) return;
     setSaving(true);
     try {
-      await approveServiceRecord(id);
+      await approveServiceRecord(id, finalReport || undefined);
       await updateElevatorStatusFromApprovedService(id);
       await createAuditLog({ action: 'approve', entity_type: 'service_record', entity_id: id });
       loadData();
@@ -85,6 +133,7 @@ export default function AdminServiceReviewDetailPage() {
   const checklist = (record as any).checklist || [];
   const canReview = record.status === 'submitted' || record.status === 'in_review';
   const isApproved = record.status === 'approved';
+  const canUseAI = ['submitted', 'in_review', 'approved'].includes(record.status);
   const fileName = `informe-${elevator?.code || 'ascensor'}-${record.service_date}.pdf`;
 
   return (
@@ -130,6 +179,52 @@ export default function AdminServiceReviewDetailPage() {
           {!record.description && !record.observations && !record.technical_report && <p className="text-gray-500">No hay descripción</p>}
         </CardContent></Card>
 
+        {/* AI Report Section */}
+        <Card>
+          <CardContent>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                <Sparkles size={18} className="text-secondary" /> Informe con Asistencia IA
+              </h3>
+              {canUseAI && (
+                <Button
+                  onClick={handleGenerateAI}
+                  loading={generatingAI}
+                  variant="secondary"
+                  size="sm"
+                >
+                  {generatingAI ? (
+                    <><Loader2 size={14} className="mr-1 animate-spin" /> Generando...</>
+                  ) : (
+                    <><Sparkles size={14} className="mr-1" /> Generar borrador con IA</>
+                  )}
+                </Button>
+              )}
+            </div>
+
+            {finalReport ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Informe Final (editable)</label>
+                  <textarea
+                    value={finalReport}
+                    onChange={(e) => setFinalReport(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    rows={12}
+                  />
+                </div>
+                <Button onClick={handleSaveReport} loading={saving} size="sm">
+                  <Save size={14} className="mr-1" /> Guardar cambios
+                </Button>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm">
+                Haga clic en "Generar borrador con IA" para crear un informe formal basado en los datos del mantenimiento.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Actions */}
         <Card><CardContent>
           <h3 className="font-semibold text-gray-900 mb-4">Acciones</h3>
@@ -140,7 +235,7 @@ export default function AdminServiceReviewDetailPage() {
             </>}
             {isApproved && (
               <PDFDownloadLink
-                document={<ServiceRecordPDF record={record} elevator={elevator} technician={technician} approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Admin' } : undefined} checklist={checklist} />}
+                document={<ServiceRecordPDF record={{...record, description: finalReport || record.description}} elevator={elevator} technician={technician} approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Admin' } : undefined} checklist={checklist} />}
                 fileName={fileName}
               >
                 {({ loading: pdfLoading }) => (
