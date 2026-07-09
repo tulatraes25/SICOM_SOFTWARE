@@ -40,7 +40,7 @@ export async function getServiceRecordForReview(id: string): Promise<ServiceReco
     .from('service_records')
     .select(`
       *,
-      elevator:elevators(code, building:buildings(name, address, locality, client:clients(name, contact_name, contact_email))),
+      elevator:elevators(id, code, manufacturer, model, elevator_type, building:buildings(name, address, locality, client:clients(name, contact_name, contact_email))),
       technician:profiles!service_records_technician_id_fkey(full_name, email)
     `)
     .eq('id', id)
