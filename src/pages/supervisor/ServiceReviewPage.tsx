@@ -55,7 +55,7 @@ export default function ServiceReviewPage() {
       setRecord(recordData);
       setChecklist(checklistData);
       setPhotos(photosData);
-      setReportContent(recordData?.ai_generated_report || recordData?.supervisor_notes || '');
+      setReportContent(recordData?.ai_report_draft || recordData?.final_report_text || '');
     } catch (err) {
       console.error('Error:', err);
     } finally {

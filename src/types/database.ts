@@ -119,8 +119,8 @@ export interface ServiceRecord {
   approved_by?: string;
   approved_at?: string;
   rejection_reason?: string;
-  ai_generated_report?: string;
-  supervisor_notes?: string;
+  ai_report_draft?: string;
+  final_report_text?: string;
   created_at: string;
   updated_at: string;
   elevator?: Elevator;

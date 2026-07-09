@@ -10,6 +10,8 @@ interface ServiceRecordPDFProps {
     description?: string;
     observations?: string;
     technical_report?: string;
+    final_report_text?: string;
+    ai_report_draft?: string;
     status: string;
     approved_at?: string;
   };
@@ -50,6 +52,19 @@ const CHECKLIST_STATUS: Record<string, string> = {
   na: 'No aplica',
 };
 
+const STATUS_COLORS: Record<string, string> = {
+  operativo: '#166534',
+  operativo_con_observaciones: '#92400e',
+  no_operativo: '#991b1b',
+  fuera_de_servicio_preventivo: '#991b1b',
+  fuera_de_servicio_por_reparacion: '#991b1b',
+  conforme: '#166534',
+  observado: '#92400e',
+  requiere_reparacion: '#991b1b',
+  fuera_de_servicio: '#991b1b',
+  pendiente_de_verificacion: '#92400e',
+};
+
 const styles = StyleSheet.create({
   page: { padding: 40, fontFamily: 'Helvetica', fontSize: 10, lineHeight: 1.5 },
   header: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 2, borderBottomColor: '#8DB600', paddingBottom: 15, marginBottom: 20 },
@@ -65,25 +80,27 @@ const styles = StyleSheet.create({
   content: { fontSize: 10, lineHeight: 1.6 },
   footer: { marginTop: 30, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#8DB600', fontSize: 8, color: '#666', textAlign: 'center' },
   footerWebsite: { color: '#8DB600', marginTop: 5 },
-  badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, fontSize: 9, fontWeight: 'bold', alignSelf: 'flex-start' },
   checklistItem: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingVertical: 4 },
   checklistName: { width: '50%', fontSize: 9 },
   checklistStatus: { width: '30%', fontSize: 9, fontWeight: 'bold' },
   checklistNotes: { width: '20%', fontSize: 8, color: '#666' },
 });
 
-const STATUS_COLORS: Record<string, string> = {
-  operativo: '#166534',
-  operativo_con_observaciones: '#92400e',
-  no_operativo: '#991b1b',
-  fuera_de_servicio_preventivo: '#991b1b',
-  fuera_de_servicio_por_reparacion: '#991b1b',
-  conforme: '#166534',
-  observado: '#92400e',
-  requiere_reparacion: '#991b1b',
-  fuera_de_servicio: '#991b1b',
-  pendiente_de_verificacion: '#92400e',
-};
+function getMainReportText(record: any): string {
+  if (record.final_report_text && record.final_report_text.trim()) {
+    return record.final_report_text;
+  }
+  if (record.ai_report_draft && record.ai_report_draft.trim()) {
+    return record.ai_report_draft;
+  }
+  if (record.technical_report && record.technical_report.trim()) {
+    return record.technical_report;
+  }
+  if (record.description && record.description.trim()) {
+    return record.description;
+  }
+  return 'No disponible';
+}
 
 export default function ServiceRecordPDF({
   record,
@@ -93,6 +110,8 @@ export default function ServiceRecordPDF({
   checklist = [],
 }: ServiceRecordPDFProps) {
   const building = elevator.building;
+  const mainReport = getMainReportText(record);
+  const hasOriginalReport = (record.technical_report && record.technical_report.trim() && record.technical_report.trim() !== mainReport.trim());
 
   return (
     <Document>
@@ -132,11 +151,11 @@ export default function ServiceRecordPDF({
             </View>
             <View style={styles.col}>
               <Text style={styles.label}>Fabricante</Text>
-              <Text style={styles.value}>{elevator.manufacturer || 'N/D'}</Text>
+              <Text style={styles.value}>{elevator.manufacturer && elevator.manufacturer.trim() ? elevator.manufacturer : 'N/D'}</Text>
             </View>
             <View style={styles.col}>
               <Text style={styles.label}>Modelo</Text>
-              <Text style={styles.value}>{elevator.model || 'N/D'}</Text>
+              <Text style={styles.value}>{elevator.model && elevator.model.trim() ? elevator.model : 'N/D'}</Text>
             </View>
           </View>
         </View>
@@ -172,25 +191,25 @@ export default function ServiceRecordPDF({
           </View>
         </View>
 
-        {/* Descripción */}
+        {/* Informe técnico final */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Descripción del Trabajo</Text>
-          <Text style={styles.content}>{record.description || 'No informado'}</Text>
+          <Text style={styles.sectionTitle}>Informe Técnico</Text>
+          <Text style={styles.content}>{mainReport}</Text>
         </View>
 
-        {/* Observaciones */}
-        {record.observations && (
+        {/* Registro original del técnico (solo si difiere del informe final) */}
+        {hasOriginalReport && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Observaciones</Text>
-            <Text style={styles.content}>{record.observations}</Text>
+            <Text style={styles.sectionTitle}>Registro Técnico Original</Text>
+            <Text style={styles.content}>{record.technical_report}</Text>
           </View>
         )}
 
-        {/* Mini informe */}
-        {record.technical_report && (
+        {/* Observaciones (solo si existen y no están en el informe principal) */}
+        {record.observations && record.observations.trim() && !mainReport.includes(record.observations) && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Informe Técnico</Text>
-            <Text style={styles.content}>{record.technical_report}</Text>
+            <Text style={styles.sectionTitle}>Observaciones</Text>
+            <Text style={styles.content}>{record.observations}</Text>
           </View>
         )}
 

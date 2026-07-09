@@ -235,7 +235,18 @@ export default function AdminServiceReviewDetailPage() {
             </>}
             {isApproved && (
               <PDFDownloadLink
-                document={<ServiceRecordPDF record={{...record, description: finalReport || record.description}} elevator={elevator} technician={technician} approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Admin' } : undefined} checklist={checklist} />}
+                document={
+                  <ServiceRecordPDF
+                    record={{
+                      ...record,
+                      final_report_text: finalReport || record.final_report_text,
+                    }}
+                    elevator={elevator}
+                    technician={technician}
+                    approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Administrador' } : undefined}
+                    checklist={checklist}
+                  />
+                }
                 fileName={fileName}
               >
                 {({ loading: pdfLoading }) => (
