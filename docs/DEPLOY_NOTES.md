@@ -1,11 +1,11 @@
 # Deploy Notes
 
-Force Vercel redeploy after technician elevator search fix.
+Force Vercel redeploy after SICOM logo added to PDF.
 
 ## Última corrección
-- Búsqueda de ascensores para técnico corregida
-- Busca solo en campos propios: code, serial_number, manufacturer, model
-- Manejo de errores visible en UI
+- Logo SICOM Patagonia SRL agregado al PDF técnico
+- Fabricante y modelo muestran datos reales
+- Sin duplicación de texto en encabezado
 
 ## Fecha
 9 de julio de 2026
