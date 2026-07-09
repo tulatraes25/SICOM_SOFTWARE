@@ -26,6 +26,7 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Clientes', path: ROUTES.ADMIN_CLIENTS, icon: Users },
     { label: 'Edificios', path: ROUTES.ADMIN_BUILDINGS, icon: Building2 },
     { label: 'Ascensores', path: ROUTES.ADMIN_ELEVATORS, icon: Wrench },
+    { label: 'Revisión de Servicios', path: '/admin/mantenimientos', icon: FileText },
     { label: 'Usuarios', path: ROUTES.ADMIN_USERS, icon: Users, disabled: true },
     { label: 'Configuración', path: ROUTES.ADMIN_SETTINGS, icon: Settings, disabled: true },
   ],

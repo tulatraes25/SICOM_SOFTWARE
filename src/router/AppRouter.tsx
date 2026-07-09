@@ -13,6 +13,8 @@ import AdminDashboard from '@/pages/admin/AdminDashboard';
 import ClientsPage from '@/pages/admin/ClientsPage';
 import BuildingsPage from '@/pages/admin/BuildingsPage';
 import ElevatorsPage from '@/pages/admin/ElevatorsPage';
+import AdminServiceReviewPage from '@/pages/admin/AdminServiceReviewPage';
+import AdminServiceReviewDetailPage from '@/pages/admin/AdminServiceReviewDetailPage';
 
 // Technician
 import TechDashboard from '@/pages/technician/TechDashboard';
@@ -68,6 +70,22 @@ export default function AppRouter() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <ElevatorsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/mantenimientos"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <AdminServiceReviewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/mantenimientos/:id"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <AdminServiceReviewDetailPage />
             </ProtectedRoute>
           }
         />

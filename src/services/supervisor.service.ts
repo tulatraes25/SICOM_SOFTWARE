@@ -101,19 +101,24 @@ export async function generateAIReportDraft(
 // Aprobar registro de servicio
 export async function approveServiceRecord(
   id: string,
-  finalReport: string
+  finalReport?: string
 ): Promise<ServiceRecord> {
   const { data: { user } } = await supabase.auth.getUser();
   
+  const updateData: Record<string, any> = {
+    status: 'approved',
+    approved_by: user?.id,
+    approved_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (finalReport) {
+    updateData.final_report = finalReport;
+  }
+
   const { data, error } = await supabase
     .from('service_records')
-    .update({
-      status: 'approved',
-      approved_by: user?.id,
-      approved_at: new Date().toISOString(),
-      final_report: finalReport,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq('id', id)
     .select()
     .single();
