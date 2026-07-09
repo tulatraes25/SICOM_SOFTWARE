@@ -2,7 +2,7 @@ import { useRef, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Download, Copy, Check, Printer } from 'lucide-react';
 import { useState } from 'react';
-import { appConfig } from '@/config/supabase';
+import { getElevatorPublicUrl } from '@/config/supabase';
 
 interface ElevatorQRCodeProps {
   qrToken: string;
@@ -24,7 +24,7 @@ export default function ElevatorQRCode({
   const qrRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
-  const publicUrl = `${appConfig.publicUrl}/${qrToken}`;
+  const publicUrl = getElevatorPublicUrl(qrToken);
 
   const handleCopyUrl = useCallback(async () => {
     try {

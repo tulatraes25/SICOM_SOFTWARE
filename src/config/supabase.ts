@@ -30,3 +30,12 @@ export const appConfig = {
   url: import.meta.env.VITE_APP_URL || window.location.origin,
   publicUrl: import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin,
 };
+
+/**
+ * Construye la URL pública completa para un ascensor
+ * Formato: {base}/s/ascensor/{token}
+ */
+export function getElevatorPublicUrl(qrToken: string): string {
+  const baseUrl = (import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, '');
+  return `${baseUrl}/s/ascensor/${qrToken}`;
+}
