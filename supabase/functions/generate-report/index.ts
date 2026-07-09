@@ -40,12 +40,15 @@ serve(async (req) => {
           code, manufacturer, model, elevator_type,
           building:buildings(name, address, locality, province, client:clients(name))
         ),
-        technician:profiles(full_name, email)
+        technician:profiles!service_records_technician_id_fkey(full_name, email)
       `)
       .eq("id", service_record_id)
       .single();
 
-    if (serviceError || !serviceRecord) throw new Error("Service record not found");
+    if (serviceError || !serviceRecord) {
+      console.error("Service record query error:", serviceError);
+      throw new Error(`Service record not found or query failed: ${serviceError?.message || "No data"}`);
+    }
 
     // Get checklist
     const { data: checklist } = await supabase
