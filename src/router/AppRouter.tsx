@@ -113,6 +113,14 @@ export default function AppRouter() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/tecnico/mantenimientos/:id/editar"
+          element={
+            <ProtectedRoute allowedRoles={['technician', 'admin']}>
+              <ServiceRecordForm />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Supervisor routes */}
         <Route

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getServiceRecordById } from '@/services/serviceRecords.service';
+import { getServiceRecordById, submitServiceRecord } from '@/services/serviceRecords.service';
+import { createAuditLog } from '@/services/audit.service';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -10,7 +11,7 @@ import ServicePhotoUpload from '@/components/service/ServicePhotoUpload';
 import { SERVICE_STATUS_LABELS } from '@/config/constants';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import type { ServiceRecord } from '@/types/database';
-import { Building2, Calendar, ArrowLeft, Edit, AlertCircle } from 'lucide-react';
+import { Building2, Calendar, ArrowLeft, Edit, Send, AlertCircle } from 'lucide-react';
 
 const STATUS_BADGE_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default',
@@ -26,6 +27,7 @@ export default function ServiceRecordDetail() {
   
   const [record, setRecord] = useState<ServiceRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -52,18 +54,40 @@ export default function ServiceRecordDetail() {
     }
   };
 
+  const handleSubmitForReview = async () => {
+    if (!id) return;
+    if (!confirm('¿Enviar este registro a revisión del supervisor?')) return;
+
+    setSubmitting(true);
+    setError('');
+
+    try {
+      await submitServiceRecord(id);
+      await createAuditLog({
+        action: 'submit',
+        entity_type: 'service_record',
+        entity_id: id,
+      });
+      loadData(); // Recargar para ver el nuevo estado
+    } catch (err: any) {
+      setError(err?.message || 'Error al enviar a revisión');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout role="technician" title="Detalle de Mantenimiento">
         <div className="text-center py-8">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-gray-500 mt-4">Cargando registro...</p>
         </div>
       </DashboardLayout>
     );
   }
 
-  if (error) {
+  if (error && !record) {
     return (
       <DashboardLayout role="technician" title="Detalle de Mantenimiento">
         <div className="max-w-2xl mx-auto">
@@ -119,6 +143,7 @@ export default function ServiceRecordDetail() {
   const checklist = (record as any).checklist || [];
   const photos = (record as any).photos || [];
   const canEdit = record.status === 'draft' || record.status === 'rejected';
+  const canSubmit = record.status === 'draft';
 
   return (
     <DashboardLayout role="technician" title="Detalle de Mantenimiento">
@@ -137,6 +162,13 @@ export default function ServiceRecordDetail() {
             {SERVICE_STATUS_LABELS[record.status as keyof typeof SERVICE_STATUS_LABELS] || record.status}
           </Badge>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="p-3 bg-danger/10 border border-danger/30 rounded-lg text-danger text-sm">
+            {error}
+          </div>
+        )}
 
         {/* Elevator info */}
         <Card>
@@ -249,14 +281,25 @@ export default function ServiceRecordDetail() {
         )}
 
         {/* Actions */}
-        {canEdit && (
-          <div className="flex justify-end gap-3 pb-6">
-            <Button
-              onClick={() => navigate(`/tecnico/mantenimientos/${record.id}/editar`)}
-            >
-              <Edit size={16} className="mr-2" />
-              Editar
-            </Button>
+        {(canEdit || canSubmit) && (
+          <div className="flex flex-col sm:flex-row justify-end gap-3 pb-6">
+            {canEdit && (
+              <Button
+                onClick={() => navigate(`/tecnico/mantenimientos/${record.id}/editar`)}
+              >
+                <Edit size={16} className="mr-2" />
+                Editar
+              </Button>
+            )}
+            {canSubmit && (
+              <Button
+                onClick={handleSubmitForReview}
+                loading={submitting}
+              >
+                <Send size={16} className="mr-2" />
+                Enviar a Revisión
+              </Button>
+            )}
           </div>
         )}
       </div>

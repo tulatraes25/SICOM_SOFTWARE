@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { getElevatorById } from '@/services/elevators.service';
 import {
+  getServiceRecordById,
   createServiceRecord,
   updateServiceRecord,
   submitServiceRecord,
@@ -26,8 +27,9 @@ import { Building2, Save, Send } from 'lucide-react';
 
 export default function ServiceRecordForm() {
   const navigate = useNavigate();
-  const { elevatorId } = useParams<{ elevatorId: string }>();
+  const { elevatorId, id: recordId } = useParams<{ elevatorId?: string; id?: string }>();
   const { user } = useAuth();
+  const isEditing = !!recordId;
   
   const [elevator, setElevator] = useState<Elevator | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,8 +58,55 @@ export default function ServiceRecordForm() {
   });
 
   useEffect(() => {
-    loadElevator();
-  }, [elevatorId]);
+    if (isEditing) {
+      loadRecord();
+    } else if (elevatorId) {
+      loadElevator();
+    }
+  }, [elevatorId, recordId]);
+
+  const loadRecord = async () => {
+    if (!recordId) return;
+    try {
+      const record = await getServiceRecordById(recordId);
+      if (!record) {
+        setError('Registro no encontrado');
+        setLoading(false);
+        return;
+      }
+      
+      // Cargar el ascensor del registro
+      const elevatorIdFromRecord = record.elevator_id;
+      const elevatorData = await getElevatorById(elevatorIdFromRecord);
+      setElevator(elevatorData);
+      
+      setFormData({
+        service_date: record.service_date,
+        service_type: record.service_type as ServiceType,
+        operational_status_at_service: record.operational_status_at_service || '',
+        conservation_status_at_service: record.conservation_status_at_service || '',
+        description: record.description || '',
+        observations: record.observations || '',
+        technical_report: record.technical_report || '',
+      });
+      
+      setSavedRecordId(record.id);
+      
+      // Cargar checklist del registro
+      const checklistItems = (record as any).checklist || [];
+      if (checklistItems.length > 0) {
+        setChecklist(checklistItems.map((item: any) => ({
+          item_name: item.item_name,
+          status: item.status,
+          notes: item.notes || '',
+        })));
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Error al cargar el registro');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadElevator = async () => {
     if (!elevatorId) return;
@@ -84,94 +133,66 @@ export default function ServiceRecordForm() {
     setSaving(true);
 
     try {
-      let recordId = savedRecordId;
+      let currentRecordId = savedRecordId;
 
-      if (recordId) {
-        // Update existing draft
-        await updateServiceRecord(recordId, formData);
-        
-        // Delete old checklist and create new
-        await deleteChecklistByServiceRecord(recordId);
-        await createChecklistItems(
-          checklist.map(item => ({
-            service_record_id: recordId!,
-            ...item,
-          }))
-        );
+      if (currentRecordId) {
+        // Update existing
+        await updateServiceRecord(currentRecordId, formData);
       } else {
-        // Create new record
+        // Create new
         const record = await createServiceRecord({
           elevator_id: elevator.id,
           technician_id: user.id,
           ...formData,
         });
-        recordId = record.id;
-        setSavedRecordId(recordId);
-
-        // Create checklist
-        await createChecklistItems(
-          checklist.map(item => ({
-            service_record_id: recordId!,
-            ...item,
-          }))
-        );
-
-        await createAuditLog({
-          action: 'create',
-          entity_type: 'service_record',
-          entity_id: recordId,
-          new_data: formData,
-        });
+        currentRecordId = record.id;
+        setSavedRecordId(record.id);
       }
 
+      // Update checklist
+      await deleteChecklistByServiceRecord(currentRecordId);
+      await createChecklistItems(
+        checklist.map(item => ({
+          service_record_id: currentRecordId!,
+          ...item,
+        }))
+      );
+
+      await createAuditLog({
+        action: isEditing ? 'update' : 'create',
+        entity_type: 'service_record',
+        entity_id: currentRecordId,
+        new_data: formData,
+      });
+
       navigate('/tecnico');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al guardar');
+    } catch (err: any) {
+      setError(err?.message || 'Error al guardar');
     } finally {
       setSaving(false);
     }
   };
 
   const handleSubmitForReview = async () => {
-    if (!elevator || !user) return;
-    
+    if (!savedRecordId) {
+      setError('Primero debe guardar el registro');
+      return;
+    }
     if (!confirm('¿Enviar este registro a revisión del supervisor?')) return;
-    
-    setError('');
+
     setSaving(true);
+    setError('');
 
     try {
-      let recordId = savedRecordId;
-
-      if (!recordId) {
-        // Create first
-        const record = await createServiceRecord({
-          elevator_id: elevator.id,
-          technician_id: user.id,
-          ...formData,
-        });
-        recordId = record.id;
-
-        await createChecklistItems(
-          checklist.map(item => ({
-            service_record_id: recordId!,
-            ...item,
-          }))
-        );
-      }
-
-      // Submit
-      await submitServiceRecord(recordId);
-
+      await submitServiceRecord(savedRecordId);
       await createAuditLog({
         action: 'submit',
         entity_type: 'service_record',
-        entity_id: recordId,
+        entity_id: savedRecordId,
       });
-
       navigate('/tecnico');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al enviar');
+    } catch (err: any) {
+      setError(err?.message || 'Error al enviar a revisión');
     } finally {
       setSaving(false);
     }
@@ -179,9 +200,9 @@ export default function ServiceRecordForm() {
 
   if (loading) {
     return (
-      <DashboardLayout role="technician" title="Cargar Mantenimiento">
+      <DashboardLayout role="technician" title={isEditing ? 'Editar Mantenimiento' : 'Cargar Mantenimiento'}>
         <div className="text-center py-8">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin mx-auto" />
         </div>
       </DashboardLayout>
     );
@@ -198,7 +219,7 @@ export default function ServiceRecordForm() {
   }
 
   return (
-    <DashboardLayout role="technician" title="Cargar Mantenimiento">
+    <DashboardLayout role="technician" title={isEditing ? 'Editar Mantenimiento' : 'Cargar Mantenimiento'}>
       <div className="space-y-6 max-w-3xl mx-auto">
         {/* Elevator info */}
         <Card>
@@ -221,7 +242,7 @@ export default function ServiceRecordForm() {
           </div>
         )}
 
-        {/* Service form */}
+        {/* Form */}
         <Card>
           <CardContent>
             <h3 className="font-semibold text-gray-900 mb-4">Datos del Servicio</h3>
@@ -277,9 +298,7 @@ export default function ServiceRecordForm() {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Descripción general
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción general</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -290,9 +309,7 @@ export default function ServiceRecordForm() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Observaciones
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
                 <textarea
                   value={formData.observations}
                   onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
@@ -303,9 +320,7 @@ export default function ServiceRecordForm() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mini informe técnico
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mini informe técnico</label>
                 <textarea
                   value={formData.technical_report}
                   onChange={(e) => setFormData({ ...formData, technical_report: e.target.value })}
@@ -347,13 +362,15 @@ export default function ServiceRecordForm() {
             <Save size={16} className="mr-2" />
             Guardar Borrador
           </Button>
-          <Button
-            onClick={handleSubmitForReview}
-            loading={saving}
-          >
-            <Send size={16} className="mr-2" />
-            Enviar a Revisión
-          </Button>
+          {savedRecordId && (
+            <Button
+              onClick={handleSubmitForReview}
+              loading={saving}
+            >
+              <Send size={16} className="mr-2" />
+              Enviar a Revisión
+            </Button>
+          )}
         </div>
       </div>
     </DashboardLayout>
