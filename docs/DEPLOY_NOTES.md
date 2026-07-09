@@ -1,11 +1,11 @@
 # Deploy Notes
 
-Force Vercel redeploy after SICOM logo added to PDF.
+Force Vercel redeploy after PDF logo fix (PNG).
 
 ## Última corrección
-- Logo SICOM Patagonia SRL agregado al PDF técnico
-- Fabricante y modelo muestran datos reales
-- Sin duplicación de texto en encabezado
+- Logo PNG importado correctamente
+- PDF genera y descarga sin errores
+- Logo SICOM en encabezado
 
 ## Fecha
 9 de julio de 2026
