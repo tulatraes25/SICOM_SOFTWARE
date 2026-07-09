@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { COMPANY_NAME, COMPANY_SLOGAN, COMPANY_WEBSITE } from '@/config/constants';
-import { SICOM_LOGO_BASE64 } from '@/lib/logo';
+import logoSicom from '@/assets/logo-sicom.png';
 
 interface ServiceRecordPDFProps {
   record: {
@@ -56,9 +56,8 @@ const CHECKLIST_STATUS: Record<string, string> = {
 const styles = StyleSheet.create({
   page: { padding: 40, fontFamily: 'Helvetica', fontSize: 10, lineHeight: 1.5 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: '#8DB600', paddingBottom: 15, marginBottom: 20 },
-  logoContainer: { width: 120, height: 45 },
-  logo: { width: 120, height: 45 },
-  headerRight: { alignItems: 'flex-end' },
+  logo: { width: 100, height: 45 },
+  headerRight: { alignItems: 'flex-end', flex: 1, marginLeft: 15 },
   companyName: { fontSize: 14, fontWeight: 'bold', color: '#1a1a1a' },
   companySlogan: { fontSize: 7, color: '#666', marginTop: 2, maxWidth: 200 },
   title: { fontSize: 14, fontWeight: 'bold', color: '#8DB600', textAlign: 'center', marginBottom: 10 },
@@ -91,18 +90,10 @@ const STATUS_COLORS_MAP: Record<string, string> = {
 };
 
 function getMainReportText(record: any): string {
-  if (record.final_report_text && record.final_report_text.trim()) {
-    return record.final_report_text;
-  }
-  if (record.ai_report_draft && record.ai_report_draft.trim()) {
-    return record.ai_report_draft;
-  }
-  if (record.technical_report && record.technical_report.trim()) {
-    return record.technical_report;
-  }
-  if (record.description && record.description.trim()) {
-    return record.description;
-  }
+  if (record.final_report_text && record.final_report_text.trim()) return record.final_report_text;
+  if (record.ai_report_draft && record.ai_report_draft.trim()) return record.ai_report_draft;
+  if (record.technical_report && record.technical_report.trim()) return record.technical_report;
+  if (record.description && record.description.trim()) return record.description;
   return 'No disponible';
 }
 
@@ -120,11 +111,8 @@ export default function ServiceRecordPDF({
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Header con logo */}
         <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <Image src={SICOM_LOGO_BASE64} style={styles.logo} />
-          </View>
+          <Image src={logoSicom} style={styles.logo} />
           <View style={styles.headerRight}>
             <Text style={styles.companySlogan}>{COMPANY_SLOGAN}</Text>
           </View>
@@ -132,75 +120,34 @@ export default function ServiceRecordPDF({
 
         <Text style={styles.title}>INFORME TÉCNICO DE MANTENIMIENTO</Text>
 
-        {/* Datos del equipo */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Datos del Equipo</Text>
           <View style={styles.row}>
-            <View style={styles.col}>
-              <Text style={styles.label}>Código</Text>
-              <Text style={styles.value}>{elevator.code}</Text>
-            </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Edificio</Text>
-              <Text style={styles.value}>{building?.name || 'N/D'}</Text>
-            </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Dirección</Text>
-              <Text style={styles.value}>{building?.address || 'N/D'}, {building?.locality || 'N/D'}</Text>
-            </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Cliente</Text>
-              <Text style={styles.value}>{building?.client?.name || 'N/D'}</Text>
-            </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Fabricante</Text>
-              <Text style={styles.value}>{elevator.manufacturer && elevator.manufacturer.trim() ? elevator.manufacturer : 'N/D'}</Text>
-            </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Modelo</Text>
-              <Text style={styles.value}>{elevator.model && elevator.model.trim() ? elevator.model : 'N/D'}</Text>
-            </View>
+            <View style={styles.col}><Text style={styles.label}>Código</Text><Text style={styles.value}>{elevator.code}</Text></View>
+            <View style={styles.col}><Text style={styles.label}>Edificio</Text><Text style={styles.value}>{building?.name || 'N/D'}</Text></View>
+            <View style={styles.col}><Text style={styles.label}>Dirección</Text><Text style={styles.value}>{building?.address || 'N/D'}, {building?.locality || 'N/D'}</Text></View>
+            <View style={styles.col}><Text style={styles.label}>Cliente</Text><Text style={styles.value}>{building?.client?.name || 'N/D'}</Text></View>
+            <View style={styles.col}><Text style={styles.label}>Fabricante</Text><Text style={styles.value}>{elevator.manufacturer?.trim() || 'N/D'}</Text></View>
+            <View style={styles.col}><Text style={styles.label}>Modelo</Text><Text style={styles.value}>{elevator.model?.trim() || 'N/D'}</Text></View>
           </View>
         </View>
 
-        {/* Datos del servicio */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Datos del Servicio</Text>
           <View style={styles.row}>
-            <View style={styles.col}>
-              <Text style={styles.label}>Fecha</Text>
-              <Text style={styles.value}>{new Date(record.service_date).toLocaleDateString('es-AR')}</Text>
-            </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Tipo</Text>
-              <Text style={styles.value}>{record.service_type}</Text>
-            </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Técnico</Text>
-              <Text style={styles.value}>{technician?.full_name || 'N/D'}</Text>
-            </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Estado Operativo</Text>
-              <Text style={[styles.value, { color: STATUS_COLORS_MAP[record.operational_status_at_service || ''] || '#333' }]}>
-                {STATUS_LABELS[record.operational_status_at_service || ''] || record.operational_status_at_service || 'N/D'}
-              </Text>
-            </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>Estado Conservación</Text>
-              <Text style={[styles.value, { color: STATUS_COLORS_MAP[record.conservation_status_at_service || ''] || '#333' }]}>
-                {STATUS_LABELS[record.conservation_status_at_service || ''] || record.conservation_status_at_service || 'N/D'}
-              </Text>
-            </View>
+            <View style={styles.col}><Text style={styles.label}>Fecha</Text><Text style={styles.value}>{new Date(record.service_date).toLocaleDateString('es-AR')}</Text></View>
+            <View style={styles.col}><Text style={styles.label}>Tipo</Text><Text style={styles.value}>{record.service_type}</Text></View>
+            <View style={styles.col}><Text style={styles.label}>Técnico</Text><Text style={styles.value}>{technician?.full_name || 'N/D'}</Text></View>
+            <View style={styles.col}><Text style={styles.label}>Estado Operativo</Text><Text style={[styles.value, { color: STATUS_COLORS_MAP[record.operational_status_at_service || ''] || '#333' }]}>{STATUS_LABELS[record.operational_status_at_service || ''] || record.operational_status_at_service || 'N/D'}</Text></View>
+            <View style={styles.col}><Text style={styles.label}>Estado Conservación</Text><Text style={[styles.value, { color: STATUS_COLORS_MAP[record.conservation_status_at_service || ''] || '#333' }]}>{STATUS_LABELS[record.conservation_status_at_service || ''] || record.conservation_status_at_service || 'N/D'}</Text></View>
           </View>
         </View>
 
-        {/* Informe técnico final */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Informe Técnico</Text>
           <Text style={styles.content}>{mainReport}</Text>
         </View>
 
-        {/* Registro original del técnico */}
         {hasOriginalReport && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Registro Técnico Original</Text>
@@ -208,7 +155,6 @@ export default function ServiceRecordPDF({
           </View>
         )}
 
-        {/* Checklist */}
         {checklist.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Checklist de Mantenimiento</Text>
@@ -222,7 +168,6 @@ export default function ServiceRecordPDF({
           </View>
         )}
 
-        {/* Footer */}
         <View style={styles.footer}>
           <Text>Estado del informe: APROBADO</Text>
           {record.approved_at && <Text>Fecha de aprobación: {new Date(record.approved_at).toLocaleDateString('es-AR')}</Text>}
