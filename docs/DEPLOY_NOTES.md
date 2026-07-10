@@ -1,11 +1,11 @@
 # Deploy Notes
 
-Force Vercel redeploy after PDF logo fix (PNG).
+Force Vercel redeploy after recipients fix.
 
 ## Última corrección
-- Logo PNG importado correctamente
-- PDF genera y descarga sin errores
-- Logo SICOM en encabezado
+- Destinatarios de informes funcionando
+- Sin duplicación en edición de ascensor
+- RLS corregido para admin
 
 ## Fecha
-9 de julio de 2026
+10 de julio de 2026
