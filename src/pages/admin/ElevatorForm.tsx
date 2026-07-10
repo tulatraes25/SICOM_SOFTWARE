@@ -4,6 +4,7 @@ import { getBuildingsByClient } from '@/services/buildings.service';
 import { listResponsible } from '@/services/profiles.service';
 import { createElevator, updateElevator } from '@/services/elevators.service';
 import { createAuditLog } from '@/services/audit.service';
+import RecipientsManager from './RecipientsManager';
 import {
   OPERATIONAL_STATUS_LABELS,
   CONSERVATION_STATUS_LABELS,
@@ -293,6 +294,16 @@ export default function ElevatorForm({ elevator, onSuccess, onCancel }: Elevator
           />
         </div>
       </div>
+
+      {/* Destinatarios de informes - solo al editar */}
+      {elevator && (
+        <div className="border-t pt-4 mt-4">
+          <RecipientsManager
+            elevatorId={elevator.id}
+            onClose={() => {}}
+          />
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
