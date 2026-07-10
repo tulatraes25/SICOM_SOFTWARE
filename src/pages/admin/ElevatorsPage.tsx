@@ -8,7 +8,6 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Select from '@/components/ui/Select';
 import ElevatorForm from './ElevatorForm';
-import RecipientsManager from './RecipientsManager';
 import ModalQR from '@/components/qr/ModalQR';
 import type { Elevator, Client } from '@/types/database';
 import {
@@ -17,7 +16,7 @@ import {
   CONTRACTUAL_STATUS_LABELS,
   STATUS_COLORS,
 } from '@/types/elevators';
-import { Plus, Search, Edit, Trash2, Users, QrCode } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, QrCode } from 'lucide-react';
 
 export default function ElevatorsPage() {
   const [elevators, setElevators] = useState<Elevator[]>([]);
@@ -32,7 +31,6 @@ export default function ElevatorsPage() {
   });
   const [showForm, setShowForm] = useState(false);
   const [editingElevator, setEditingElevator] = useState<Elevator | null>(null);
-  const [showRecipients, setShowRecipients] = useState<string | null>(null);
   const [qrModal, setQrModal] = useState<Elevator | null>(null);
 
   const loadElevators = async () => {
@@ -185,18 +183,6 @@ export default function ElevatorsPage() {
           </Card>
         )}
 
-        {/* Recipients Modal */}
-        {showRecipients && (
-          <Card>
-            <CardContent>
-              <RecipientsManager
-                elevatorId={showRecipients}
-                onClose={() => setShowRecipients(null)}
-              />
-            </CardContent>
-          </Card>
-        )}
-
         {/* QR Modal */}
         {qrModal && (
           <ModalQR
@@ -272,14 +258,6 @@ export default function ElevatorsPage() {
                               title="Editar"
                             >
                               <Edit size={16} />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setShowRecipients(showRecipients === elevator.id ? null : elevator.id)}
-                              title="Destinatarios"
-                            >
-                              <Users size={16} />
                             </Button>
                             {elevator.active && (
                               <Button
