@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
 import { getServiceRecordForReview, approveServiceRecord, rejectServiceRecord, updateElevatorStatusFromApprovedService } from '@/services/supervisor.service';
+import { listServiceReportSends, sendServiceReportByEmail } from '@/services/serviceReportSends.service';
 import { createAuditLog } from '@/services/audit.service';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -9,18 +10,14 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import ServiceChecklist from '@/components/service/ServiceChecklist';
 import ServiceRecordPDF from '@/components/pdf/ServiceRecordPDF';
-import { PDFDownloadLink } from '@react-pdf/renderer';
+import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
 import { SERVICE_STATUS_LABELS } from '@/config/constants';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import type { ServiceRecord } from '@/types/database';
-import { Building2, Calendar, ArrowLeft, CheckCircle, XCircle, AlertCircle, Download, Loader2, Sparkles, Save } from 'lucide-react';
+import { Building2, Calendar, ArrowLeft, CheckCircle, XCircle, AlertCircle, Download, Loader2, Sparkles, Save, Mail, Clock, Check, X } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
-  draft: 'default',
-  submitted: 'info',
-  in_review: 'warning',
-  approved: 'success',
-  rejected: 'danger',
+  draft: 'default', submitted: 'info', in_review: 'warning', approved: 'success', rejected: 'danger',
 };
 
 export default function AdminServiceReviewDetailPage() {
@@ -34,8 +31,20 @@ export default function AdminServiceReviewDetailPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
   const [finalReport, setFinalReport] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailResult, setEmailResult] = useState<{ success: number; failed: number } | null>(null);
+  const [sendHistory, setSendHistory] = useState<any[]>([]);
+  const [recipients, setRecipients] = useState<any[]>([]);
 
   useEffect(() => { loadData(); }, [id]);
+
+  // Get recipients when record loads
+  useEffect(() => {
+    if (record?.elevator_id) {
+      supabase.from('report_recipients').select('*').eq('elevator_id', record.elevator_id).eq('active', true)
+        .then(({ data }) => setRecipients(data || []));
+    }
+  }, [record?.elevator_id]);
 
   const loadData = async () => {
     if (!id) return;
@@ -45,6 +54,9 @@ export default function AdminServiceReviewDetailPage() {
       const data = await getServiceRecordForReview(id);
       setRecord(data);
       setFinalReport((data as any).ai_report_draft || (data as any).final_report_text || '');
+      // Load send history
+      const sends = await listServiceReportSends(id);
+      setSendHistory(sends);
     } catch (err: any) {
       setError(err?.message || 'Error al cargar');
     } finally {
@@ -62,19 +74,11 @@ export default function AdminServiceReviewDetailPage() {
       });
       if (fnError) throw fnError;
       if (data.error) throw new Error(data.error);
-      
-      const report = data.report;
-      setFinalReport(report);
-
-      // Save to database
-      await supabase
-        .from('service_records')
-        .update({ ai_report_draft: report, final_report_text: report, updated_at: new Date().toISOString() })
-        .eq('id', id);
-
+      setFinalReport(data.report);
+      await supabase.from('service_records').update({ ai_report_draft: data.report, final_report_text: data.report, updated_at: new Date().toISOString() }).eq('id', id);
       await createAuditLog({ action: 'generate_ai_report', entity_type: 'service_record', entity_id: id });
     } catch (err: any) {
-      setError(err?.message || 'Error al generar informe con IA');
+      setError(err?.message || 'Error al generar informe');
     } finally {
       setGeneratingAI(false);
     }
@@ -84,16 +88,10 @@ export default function AdminServiceReviewDetailPage() {
     if (!id) return;
     setSaving(true);
     try {
-      await supabase
-        .from('service_records')
-        .update({ final_report_text: finalReport, updated_at: new Date().toISOString() })
-        .eq('id', id);
+      await supabase.from('service_records').update({ final_report_text: finalReport, updated_at: new Date().toISOString() }).eq('id', id);
       await createAuditLog({ action: 'save_report', entity_type: 'service_record', entity_id: id });
-    } catch (err: any) {
-      setError(err?.message || 'Error al guardar');
-    } finally {
-      setSaving(false);
-    }
+    } catch (err: any) { setError(err?.message || 'Error al guardar'); }
+    finally { setSaving(false); }
   };
 
   const handleApprove = async () => {
@@ -122,6 +120,50 @@ export default function AdminServiceReviewDetailPage() {
     finally { setSaving(false); }
   };
 
+  const handleSendEmail = async () => {
+    if (!id || !record) return;
+    setSendingEmail(true);
+    setEmailResult(null);
+    setError('');
+
+    try {
+      // Generate PDF as base64
+      const elevator = record.elevator as any;
+      const technician = (record as any).technician;
+      const checklist = (record as any).checklist || [];
+
+      const pdfBlob = await pdf(
+        <ServiceRecordPDF
+          record={{ ...record, final_report_text: finalReport || record.final_report_text }}
+          elevator={elevator}
+          technician={technician}
+          approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Administrador' } : undefined}
+          checklist={checklist}
+        />
+      ).toBlob();
+
+      // Convert to base64
+      const arrayBuffer = await pdfBlob.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+
+      const filename = `informe-${elevator?.code || 'ascensor'}-${record.service_date}.pdf`;
+
+      const result = await sendServiceReportByEmail(id, base64, filename);
+      setEmailResult(result);
+      await createAuditLog({ action: 'send_email', entity_type: 'service_record', entity_id: id, new_data: result });
+
+      // Reload send history
+      const sends = await listServiceReportSends(id);
+      setSendHistory(sends);
+    } catch (err: any) {
+      setError(err?.message || 'Error al enviar correo');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   if (loading) return <DashboardLayout role="admin" title="Revisión"><div className="text-center py-8"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin mx-auto" /></div></DashboardLayout>;
   if (error && !record) return <DashboardLayout role="admin" title="Revisión"><div className="max-w-2xl mx-auto"><button onClick={() => navigate('/admin/mantenimientos')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"><ArrowLeft size={18} /> Volver</button><Card><CardContent><div className="text-center py-8"><AlertCircle size={48} className="mx-auto text-danger mb-4" /><p className="text-gray-600">{error}</p></div></CardContent></Card></div></DashboardLayout>;
   if (!record) return <DashboardLayout role="admin" title="Revisión"><div className="text-center py-8"><p className="text-gray-500">No encontrado</p></div></DashboardLayout>;
@@ -129,7 +171,7 @@ export default function AdminServiceReviewDetailPage() {
   const elevator = record.elevator as any;
   const building = elevator?.building;
   const client = building?.client;
-  const technician = record.technician as any;
+  const technician = (record as any).technician;
   const checklist = (record as any).checklist || [];
   const canReview = record.status === 'submitted' || record.status === 'in_review';
   const isApproved = record.status === 'approved';
@@ -156,7 +198,6 @@ export default function AdminServiceReviewDetailPage() {
               <div><span className="text-sm text-gray-500">Cliente: </span><span>{client?.name || '-'}</span></div>
             </div>
           </CardContent></Card>
-
           <Card><CardContent>
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={18} /> Servicio</h3>
             <div className="space-y-2">
@@ -183,44 +224,23 @@ export default function AdminServiceReviewDetailPage() {
         <Card>
           <CardContent>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Sparkles size={18} className="text-secondary" /> Informe con Asistencia IA
-              </h3>
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Sparkles size={18} className="text-secondary" /> Informe con Asistencia IA</h3>
               {canUseAI && (
-                <Button
-                  onClick={handleGenerateAI}
-                  loading={generatingAI}
-                  variant="secondary"
-                  size="sm"
-                >
-                  {generatingAI ? (
-                    <><Loader2 size={14} className="mr-1 animate-spin" /> Generando...</>
-                  ) : (
-                    <><Sparkles size={14} className="mr-1" /> Generar borrador con IA</>
-                  )}
+                <Button onClick={handleGenerateAI} loading={generatingAI} variant="secondary" size="sm">
+                  {generatingAI ? <><Loader2 size={14} className="mr-1 animate-spin" /> Generando...</> : <><Sparkles size={14} className="mr-1" /> Generar borrador con IA</>}
                 </Button>
               )}
             </div>
-
             {finalReport ? (
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Informe Final (editable)</label>
-                  <textarea
-                    value={finalReport}
-                    onChange={(e) => setFinalReport(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    rows={12}
-                  />
+                  <textarea value={finalReport} onChange={(e) => setFinalReport(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" rows={12} />
                 </div>
-                <Button onClick={handleSaveReport} loading={saving} size="sm">
-                  <Save size={14} className="mr-1" /> Guardar cambios
-                </Button>
+                <Button onClick={handleSaveReport} loading={saving} size="sm"><Save size={14} className="mr-1" /> Guardar cambios</Button>
               </div>
             ) : (
-              <p className="text-gray-500 text-sm">
-                Haga clic en "Generar borrador con IA" para crear un informe formal basado en los datos del mantenimiento.
-              </p>
+              <p className="text-gray-500 text-sm">Haga clic en "Generar borrador con IA" para crear un informe formal.</p>
             )}
           </CardContent>
         </Card>
@@ -234,30 +254,54 @@ export default function AdminServiceReviewDetailPage() {
               <Button variant="danger" onClick={() => setShowRejectModal(true)} disabled={saving}><XCircle size={16} className="mr-2" /> Rechazar</Button>
             </>}
             {isApproved && (
-              <PDFDownloadLink
-                document={
-                  <ServiceRecordPDF
-                    record={{
-                      ...record,
-                      final_report_text: finalReport || record.final_report_text,
-                    }}
-                    elevator={elevator}
-                    technician={technician}
-                    approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Administrador' } : undefined}
-                    checklist={checklist}
-                  />
-                }
-                fileName={fileName}
-              >
-                {({ loading: pdfLoading }) => (
-                  <Button disabled={pdfLoading}>
-                    {pdfLoading ? <><Loader2 size={16} className="mr-2 animate-spin" /> Generando...</> : <><Download size={16} className="mr-2" /> Descargar PDF</>}
-                  </Button>
-                )}
-              </PDFDownloadLink>
+              <>
+                <PDFDownloadLink
+                  document={<ServiceRecordPDF record={{ ...record, final_report_text: finalReport || record.final_report_text }} elevator={elevator} technician={technician} approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Administrador' } : undefined} checklist={checklist} />}
+                  fileName={fileName}
+                >
+                  {({ loading: pdfLoading }) => (
+                    <Button disabled={pdfLoading}>
+                      {pdfLoading ? <><Loader2 size={16} className="mr-2 animate-spin" /> Generando...</> : <><Download size={16} className="mr-2" /> Descargar PDF</>}
+                    </Button>
+                  )}
+                </PDFDownloadLink>
+                <Button onClick={handleSendEmail} loading={sendingEmail} variant="secondary">
+                  {sendingEmail ? <><Loader2 size={16} className="mr-2 animate-spin" /> Enviando...</> : <><Mail size={16} className="mr-2" /> Enviar PDF por correo</>}
+                </Button>
+              </>
             )}
           </div>
+          {recipients.length > 0 && isApproved && (
+            <p className="text-sm text-gray-500 mt-3">Se enviará a: {recipients.map(r => r.email).join(', ')}</p>
+          )}
+          {recipients.length === 0 && isApproved && (
+            <p className="text-sm text-danger mt-3">No hay destinatarios registrados para este ascensor.</p>
+          )}
+          {emailResult && (
+            <div className={`mt-3 p-3 rounded-lg ${emailResult.failed > 0 ? 'bg-warning/10' : 'bg-success/10'}`}>
+              <p className="text-sm font-medium">{emailResult.success} enviados, {emailResult.failed} fallidos</p>
+            </div>
+          )}
         </CardContent></Card>
+
+        {/* Send History */}
+        {sendHistory.length > 0 && (
+          <Card><CardContent>
+            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={18} /> Historial de Envíos</h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {sendHistory.map((send) => (
+                <div key={send.id} className="flex items-center gap-3 text-sm p-2 bg-gray-50 rounded">
+                  {send.status === 'sent' ? <Check size={14} className="text-success" /> : <X size={14} className="text-danger" />}
+                  <div className="flex-1">
+                    <p className="font-medium">{send.recipient_name}</p>
+                    <p className="text-gray-500">{send.recipient_email}</p>
+                  </div>
+                  <span className="text-xs text-gray-400">{send.sent_at ? new Date(send.sent_at).toLocaleString('es-AR') : '-'}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent></Card>
+        )}
 
         {showRejectModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
