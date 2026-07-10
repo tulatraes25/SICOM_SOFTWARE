@@ -46,17 +46,21 @@ serve(async (req) => {
 
     if (recordError || !record) throw new Error("Service record not found");
 
-    // Get recipients
+    const elevator = record.elevator as any;
+    const buildingId = elevator?.building_id;
+
+    if (!buildingId) throw new Error("No se encontró el edificio del ascensor");
+
+    // Get recipients from building
     const { data: recipients, error: recipientsError } = await supabase
-      .from("report_recipients")
+      .from("building_report_recipients")
       .select("*")
-      .eq("elevator_id", record.elevator_id)
+      .eq("building_id", buildingId)
       .eq("active", true);
 
     if (recipientsError) throw recipientsError;
-    if (!recipients || recipients.length === 0) throw new Error("No hay destinatarios activos para este ascensor");
+    if (!recipients || recipients.length === 0) throw new Error("No hay destinatarios activos para el edificio de este ascensor");
 
-    const elevator = record.elevator as any;
     const isMock = !resendApiKey;
     const results: Array<{ email: string; name: string; status: string; error?: string }> = [];
     let successCount = 0;

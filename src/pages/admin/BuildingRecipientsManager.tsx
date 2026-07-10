@@ -1,0 +1,135 @@
+import { useState, useEffect } from 'react';
+import { listByBuilding, createRecipient, updateRecipient, deleteRecipient } from '@/services/buildingReportRecipients.service';
+import { createAuditLog } from '@/services/audit.service';
+import type { BuildingRecipient } from '@/services/buildingReportRecipients.service';
+import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import { Plus, Edit, Trash2, User } from 'lucide-react';
+
+interface BuildingRecipientsManagerProps {
+  buildingId: string;
+}
+
+export default function BuildingRecipientsManager({ buildingId }: BuildingRecipientsManagerProps) {
+  const [recipients, setRecipients] = useState<BuildingRecipient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingRecipient, setEditingRecipient] = useState<BuildingRecipient | null>(null);
+  const [formData, setFormData] = useState({ name: '', email: '', role: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (buildingId) loadRecipients();
+  }, [buildingId]);
+
+  const loadRecipients = async () => {
+    try {
+      setLoading(true);
+      const data = await listByBuilding(buildingId);
+      setRecipients(data);
+    } catch (err: any) {
+      setError(err?.message || 'Error al cargar destinatarios');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!formData.name.trim() || !formData.email.trim()) {
+      setError('Nombre y email son obligatorios');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editingRecipient) {
+        await updateRecipient(editingRecipient.id, formData);
+        await createAuditLog({ action: 'update', entity_type: 'building_recipient', entity_id: editingRecipient.id });
+      } else {
+        await createRecipient(buildingId, formData);
+        await createAuditLog({ action: 'create', entity_type: 'building_recipient', new_data: formData });
+      }
+      setShowForm(false);
+      setEditingRecipient(null);
+      setFormData({ name: '', email: '', role: '' });
+      await loadRecipients();
+    } catch (err: any) {
+      setError(err?.message || 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (recipient: BuildingRecipient) => {
+    if (!confirm(`¿Eliminar "${recipient.name}"?`)) return;
+    try {
+      await deleteRecipient(recipient.id);
+      await createAuditLog({ action: 'delete', entity_type: 'building_recipient', entity_id: recipient.id });
+      await loadRecipients();
+    } catch (err: any) {
+      setError(err?.message || 'Error al eliminar');
+    }
+  };
+
+  const startEdit = (recipient: BuildingRecipient) => {
+    setEditingRecipient(recipient);
+    setFormData({ name: recipient.name, email: recipient.email, role: recipient.role || '' });
+    setShowForm(true);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="font-medium text-gray-700">Destinatarios de Informes</h4>
+        {!showForm && (
+          <Button size="sm" onClick={() => setShowForm(true)}>
+            <Plus size={14} className="mr-1" /> Agregar
+          </Button>
+        )}
+      </div>
+
+      {error && <div className="p-2 bg-danger/10 border border-danger/30 rounded text-danger text-sm">{error}</div>}
+
+      {showForm && (
+        <form onSubmit={handleSubmit} className="p-3 bg-gray-50 rounded-lg space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Input label="Nombre *" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+            <Input label="Email *" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
+            <Input label="Cargo" value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} placeholder="Ej: Director" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => { setShowForm(false); setEditingRecipient(null); setFormData({ name: '', email: '', role: '' }); }}>Cancelar</Button>
+            <Button type="submit" size="sm" loading={saving}>{editingRecipient ? 'Actualizar' : 'Agregar'}</Button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <div className="text-center py-4"><div className="w-6 h-6 border-2 border-secondary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+      ) : recipients.length === 0 ? (
+        <p className="text-sm text-gray-500 text-center py-4">No hay destinatarios configurados.</p>
+      ) : (
+        <div className="space-y-2">
+          {recipients.map((r) => (
+            <div key={r.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-secondary/10 rounded-full flex items-center justify-center"><User size={14} className="text-secondary" /></div>
+                <div>
+                  <p className="font-medium text-gray-900 text-sm">{r.name}</p>
+                  <p className="text-xs text-gray-500">{r.email}</p>
+                  {r.role && <p className="text-xs text-gray-400">{r.role}</p>}
+                </div>
+              </div>
+              <div className="flex gap-1">
+                <Button size="sm" variant="ghost" onClick={() => startEdit(r)}><Edit size={14} /></Button>
+                <Button size="sm" variant="ghost" onClick={() => handleDelete(r)} className="text-danger hover:text-danger"><Trash2 size={14} /></Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

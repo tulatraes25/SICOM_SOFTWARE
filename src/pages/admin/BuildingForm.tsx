@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { listClients } from '@/services/clients.service';
 import { createBuilding, updateBuilding } from '@/services/buildings.service';
 import { createAuditLog } from '@/services/audit.service';
+import BuildingRecipientsManager from './BuildingRecipientsManager';
 import type { Client, Building } from '@/types/database';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -167,6 +168,17 @@ export default function BuildingForm({ building, onSuccess, onCancel }: Building
           placeholder="-67.5000"
         />
       </div>
+
+      {/* Destinatarios de informes */}
+      {building ? (
+        <div className="border-t pt-4 mt-4">
+          <BuildingRecipientsManager buildingId={building.id} />
+        </div>
+      ) : (
+        <div className="border-t pt-4 mt-4">
+          <p className="text-sm text-gray-500">Guarde el edificio antes de agregar destinatarios de informes.</p>
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>

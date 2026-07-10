@@ -38,13 +38,14 @@ export default function AdminServiceReviewDetailPage() {
 
   useEffect(() => { loadData(); }, [id]);
 
-  // Get recipients when record loads
+  // Get recipients from building when record loads
   useEffect(() => {
-    if (record?.elevator_id) {
-      supabase.from('report_recipients').select('*').eq('elevator_id', record.elevator_id).eq('active', true)
+    const buildingId = (record?.elevator as any)?.building_id;
+    if (buildingId) {
+      supabase.from('building_report_recipients').select('*').eq('building_id', buildingId).eq('active', true)
         .then(({ data }) => setRecipients(data || []));
     }
-  }, [record?.elevator_id]);
+  }, [(record?.elevator as any)?.building_id]);
 
   const loadData = async () => {
     if (!id) return;
