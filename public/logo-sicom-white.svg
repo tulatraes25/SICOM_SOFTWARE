@@ -1,22 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 140" fill="none">
-  <!-- Fondo transparente -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 180" fill="none">
+  <!-- SICOM - texto blanco grande -->
+  <text x="15" y="90" font-family="Arial, Helvetica, sans-serif" font-size="80" font-weight="bold" fill="#ffffff" letter-spacing="2">SIC</text>
   
-  <!-- SICOM - texto blanco -->
-  <text x="10" y="65" font-family="Arial, Helvetica, sans-serif" font-size="60" font-weight="bold" fill="#ffffff" letter-spacing="2">SIC</text>
-  
-  <!-- Círculo verde con triángulo (la O) -->
-  <circle cx="175" cy="38" r="24" fill="#8DB600"/>
-  <polygon points="175,18 160,55 190,55" fill="#ffffff"/>
+  <!-- Círculo verde grande (la O) -->
+  <circle cx="245" cy="52" r="38" fill="#8DB600"/>
+  <!-- Triángulo blanco dentro -->
+  <polygon points="245,20 220,75 270,75" fill="#ffffff"/>
   
   <!-- M final -->
-  <text x="200" y="65" font-family="Arial, Helvetica, sans-serif" font-size="60" font-weight="bold" fill="#ffffff">M</text>
+  <text x="278" y="90" font-family="Arial, Helvetica, sans-serif" font-size="80" font-weight="bold" fill="#ffffff">M</text>
   
   <!-- PATAGONIA -->
-  <text x="10" y="100" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="bold" fill="#ffffff" letter-spacing="3">PATAGONIA</text>
+  <text x="15" y="135" font-family="Arial, Helvetica, sans-serif" font-size="50" font-weight="bold" fill="#ffffff" letter-spacing="4">PATAGONIA</text>
   
   <!-- Barra verde -->
-  <rect x="10" y="112" width="280" height="24" rx="2" fill="#8DB600"/>
+  <rect x="15" y="148" width="370" height="28" rx="2" fill="#8DB600"/>
   
   <!-- ASCENSORES -->
-  <text x="20" y="129" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#ffffff" letter-spacing="5">ASCENSORES</text>
+  <text x="25" y="168" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="bold" fill="#ffffff" letter-spacing="6">ASCENSORES</text>
 </svg>
