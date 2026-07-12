@@ -17,8 +17,9 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const resendApiKey = Deno.env.get("RESEND_API_KEY") ?? "";
-    const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev";
-    const fromName = Deno.env.get("REPORT_FROM_NAME") || "SICOM Patagonia SRL";
+    const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "sistema@sicompatagonia.com";
+    const fromName = Deno.env.get("REPORT_FROM_NAME") || "SICOM Patagonia - Sistema automático";
+    const replyTo = Deno.env.get("RESEND_REPLY_TO") || "adriana@sicompatagonia.com";
 
     console.log("[send-service-report] fromEmail:", fromEmail);
     console.log("[send-service-report] resendApiKey configured:", !!resendApiKey);
@@ -90,6 +91,7 @@ serve(async (req) => {
           body: JSON.stringify({
             from: `${fromName} <${fromEmail}>`,
             to: [recipient.email],
+            reply_to: replyTo,
             subject,
             html,
             attachments: [{
@@ -179,5 +181,34 @@ serve(async (req) => {
 
 function generateEmailHTML(record: any, elevator: any, recipient: any, companyName: string): string {
   const building = elevator?.building;
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif;line-height:1.6;color:#333"><div style="max-width:600px;margin:0 auto;padding:20px"><div style="background:#06172E;color:white;padding:20px;text-align:center;border-radius:8px 8px 0 0"><h1 style="margin:0;font-size:20px">${companyName}</h1><p style="margin:5px 0 0;font-size:12px;opacity:0.8">Servicios Técnicos de Ascensores</p></div><div style="background:#f9fafb;padding:20px;border:1px solid #e5e7eb"><p>Estimado/a <strong>${recipient.name}</strong>,</p><p>Se adjunta el informe técnico de mantenimiento correspondiente al ascensor <strong>${elevator?.code || "N/D"}</strong>, ubicado en ${building?.name || "N/D"}.</p><p><strong>Fecha del servicio:</strong> ${record.service_date}</p><p><strong>Estado operativo:</strong> ${record.operational_status_at_service || "N/D"}</p><p><strong>Estado de conservación:</strong> ${record.conservation_status_at_service || "N/D"}</p><p>Saludos cordiales.</p><p><strong>${companyName}</strong></p></div></div></body></html>`;
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family:Arial,sans-serif;line-height:1.6;color:#333">
+  <div style="max-width:600px;margin:0 auto;padding:20px">
+    <div style="background:#06172E;color:white;padding:20px;text-align:center;border-radius:8px 8px 0 0">
+      <h1 style="margin:0;font-size:20px">${companyName}</h1>
+      <p style="margin:5px 0 0;font-size:12px;opacity:0.8">Servicios Técnicos de Ascensores</p>
+    </div>
+    <div style="background:#f9fafb;padding:20px;border:1px solid #e5e7eb">
+      <p>Estimado/a <strong>${recipient.name}</strong>,</p>
+      <p>Se adjunta el informe técnico de mantenimiento correspondiente al ascensor <strong>${elevator?.code || "N/D"}</strong>, ubicado en ${building?.name || "N/D"}.</p>
+      <div style="background:white;padding:15px;border-radius:8px;margin:15px 0;border-left:4px solid #8DB600">
+        <p style="margin:0"><strong>Fecha del servicio:</strong> ${record.service_date}</p>
+        <p style="margin:5px 0 0"><strong>Estado operativo:</strong> ${record.operational_status_at_service || "N/D"}</p>
+        <p style="margin:5px 0 0"><strong>Estado de conservación:</strong> ${record.conservation_status_at_service || "N/D"}</p>
+      </div>
+      <p>Saludos cordiales.</p>
+      <p><strong>${companyName}</strong></p>
+    </div>
+    <div style="background:#e5e7eb;padding:15px;text-align:center;border-radius:0 0 8px 8px;font-size:11px;color:#666">
+      <p style="margin:0 0 5px 0"><strong>Este es un mensaje automático. Por favor, no responda a este correo.</strong></p>
+      <p style="margin:0">Para consultas, comuníquese con <a href="mailto:adriana@sicompatagonia.com" style="color:#06172E">adriana@sicompatagonia.com</a> o <a href="mailto:lucas@sicompatagonia.com" style="color:#06172E">lucas@sicompatagonia.com</a></p>
+    </div>
+  </div>
+</body>
+</html>`;
 }
