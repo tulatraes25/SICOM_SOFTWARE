@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { getPublicElevatorByToken, logQRScan } from '@/services/publicElevator.service';
+import { getPublicElevatorByToken, logQRScan, getPublicServiceHistory } from '@/services/publicElevator.service';
+import type { PublicServiceHistory } from '@/services/publicElevator.service';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import { COMPANY_NAME, COMPANY_SLOGAN, COMPANY_WEBSITE, COMPANY_PHONE, COMPANY_EMAIL, COMPANY_ADDRESS } from '@/config/constants';
 import Badge from '@/components/ui/Badge';
@@ -34,6 +35,7 @@ export default function PublicElevatorView() {
   const { token } = useParams<{ token: string }>();
   const [showIntro, setShowIntro] = useState(true);
   const [elevator, setElevator] = useState<PublicElevatorData | null>(null);
+  const [history, setHistory] = useState<PublicServiceHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -49,6 +51,9 @@ export default function PublicElevatorView() {
       if (!data) { setError('No se encontró un ascensor asociado a este código QR.'); return; }
       setElevator(data);
       await logQRScan(token!, data.id);
+      // Cargar historial
+      const historyData = await getPublicServiceHistory(data.id);
+      setHistory(historyData);
     } catch { setError('Error al cargar la información del ascensor.'); }
     finally { setLoading(false); }
   };
@@ -67,7 +72,7 @@ export default function PublicElevatorView() {
   if (error || !elevator) return (
     <div className="min-h-screen bg-gradient-to-b from-primary to-primary-dark flex items-center justify-center p-4">
       <div className="text-center max-w-md bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
-        <img src="/logo-sicom-white.svg" alt={COMPANY_NAME} className="h-16 mx-auto mb-6" />
+        <img src="/images/sicom/logo_original_sicom.png" alt={COMPANY_NAME} className="h-16 mx-auto mb-6 object-contain" />
         <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
           <AlertCircle size={32} className="text-white" />
         </div>
@@ -84,23 +89,15 @@ export default function PublicElevatorView() {
   if (showIntro) return (
     <div className="min-h-screen bg-gradient-to-b from-primary to-primary-dark flex items-center justify-center p-4">
       <div className="text-center max-w-lg">
-        {/* Logo oficial en contenedor blanco */}
         <div className="rounded-2xl bg-white px-8 py-6 shadow-lg mx-auto mb-8 inline-block">
-          <img 
-            src="/images/sicom/logo_original_sicom.png" 
-            alt={COMPANY_NAME} 
-            className="h-auto w-full max-w-[280px] object-contain"
-          />
+          <img src="/images/sicom/logo_original_sicom.png" alt={COMPANY_NAME} className="h-auto w-full max-w-[280px] object-contain" />
         </div>
-        
         <h1 className="text-2xl font-bold text-white mb-4">SICOM Patagonia SRL</h1>
         <p className="text-white/90 text-lg mb-4 leading-relaxed">{COMPANY_SLOGAN}</p>
         <p className="text-white/70 mb-8">Comodoro Rivadavia y Patagonia.</p>
-        
         <button onClick={() => setShowIntro(false)} className="inline-flex items-center gap-2 bg-secondary text-white font-semibold px-8 py-4 rounded-xl hover:bg-secondary-dark transition-all transform hover:scale-105 shadow-lg">
           Ver estado del ascensor <ArrowRight size={20} />
         </button>
-        
         <div className="mt-8 pt-6 border-t border-white/20">
           <a href={COMPANY_WEBSITE} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-white/60 hover:text-white transition-colors text-sm">
             <ExternalLink size={14} /> {COMPANY_WEBSITE}
@@ -173,6 +170,48 @@ export default function PublicElevatorView() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* HISTORIAL RECIENTE */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Clock size={18} className="text-secondary" />
+            Historial Reciente
+          </h3>
+          {history.length > 0 ? (
+            <div className="space-y-4">
+              {history.map((item, index) => (
+                <div key={index} className={`${index < history.length - 1 ? 'border-b border-gray-100 pb-4' : ''}`}>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                    <div>
+                      <p className="text-xs text-gray-500">Fecha</p>
+                      <p className="font-medium text-gray-900">
+                        {new Date(item.service_date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Tipo</p>
+                      <p className="font-medium text-gray-900 capitalize">{item.service_type}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Estado Operativo</p>
+                      <Badge className={`${getStatusBadgeClass(item.operational_status)} text-xs`}>
+                        {getStatusLabel(item.operational_status, OPERATIONAL_STATUS_LABELS)}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Conservación</p>
+                      <Badge className={`${getStatusBadgeClass(item.conservation_status)} text-xs`}>
+                        {getStatusLabel(item.conservation_status, CONSERVATION_STATUS_LABELS)}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm">Este ascensor aún no posee historial de mantenimientos.</p>
+          )}
         </div>
 
         {/* Company info */}

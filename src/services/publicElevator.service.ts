@@ -65,3 +65,22 @@ export async function logQRScan(token: string, elevatorId: string): Promise<void
     console.error('Error logging QR scan:', err);
   }
 }
+
+export interface PublicServiceHistory {
+  service_date: string;
+  service_type: string;
+  operational_status: string;
+  conservation_status: string;
+}
+
+export async function getPublicServiceHistory(elevatorId: string): Promise<PublicServiceHistory[]> {
+  const { data, error } = await supabase
+    .rpc('get_public_service_history', { p_elevator_id: elevatorId });
+
+  if (error) {
+    console.error('Error fetching service history:', error);
+    return [];
+  }
+
+  return data || [];
+}
