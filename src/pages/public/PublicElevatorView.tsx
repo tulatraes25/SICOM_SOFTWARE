@@ -67,7 +67,7 @@ export default function PublicElevatorView() {
   if (error || !elevator) return (
     <div className="min-h-screen bg-gradient-to-b from-primary to-primary-dark flex items-center justify-center p-4">
       <div className="text-center max-w-md bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
-        <img src="/logo-sicom.svg" alt={COMPANY_NAME} className="h-16 mx-auto mb-6 brightness-0 invert" />
+        <img src="/logo-sicom-white.svg" alt={COMPANY_NAME} className="h-16 mx-auto mb-6" />
         <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
           <AlertCircle size={32} className="text-white" />
         </div>
@@ -84,7 +84,7 @@ export default function PublicElevatorView() {
   if (showIntro) return (
     <div className="min-h-screen bg-gradient-to-b from-primary to-primary-dark flex items-center justify-center p-4">
       <div className="text-center max-w-lg">
-        <img src="/logo-sicom.svg" alt={COMPANY_NAME} className="h-20 mx-auto mb-8 brightness-0 invert" />
+        <img src="/logo-sicom-white.svg" alt={COMPANY_NAME} className="h-20 mx-auto mb-8" />
         <h1 className="text-3xl font-bold text-white mb-4">{COMPANY_NAME}</h1>
         <p className="text-white/90 text-lg mb-4 leading-relaxed">{COMPANY_SLOGAN}</p>
         <p className="text-white/70 mb-8">Comodoro Rivadavia y Patagonia.</p>

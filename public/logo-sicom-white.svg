@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" fill="none">
+  <!-- SICOM -->
+  <text x="20" y="80" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="bold" fill="#ffffff">SIC</text>
+  
+  <!-- O con círculo verde y triángulo -->
+  <circle cx="215" cy="45" r="28" fill="#8DB600"/>
+  <polygon points="215,22 198,62 232,62" fill="#ffffff"/>
+  <text x="235" y="80" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="bold" fill="#ffffff">M</text>
+  
+  <!-- PATAGONIA -->
+  <text x="20" y="125" font-family="Arial, Helvetica, sans-serif" font-size="48" font-weight="bold" fill="#ffffff">PATAGONIA</text>
+  
+  <!-- Barra verde con ASCENSORES -->
+  <rect x="20" y="140" width="360" height="30" rx="2" fill="#8DB600"/>
+  <text x="30" y="161" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="bold" fill="#ffffff" letter-spacing="6">ASCENSORES</text>
+</svg>
