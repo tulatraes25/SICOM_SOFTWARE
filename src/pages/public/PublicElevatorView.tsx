@@ -84,13 +84,23 @@ export default function PublicElevatorView() {
   if (showIntro) return (
     <div className="min-h-screen bg-gradient-to-b from-primary to-primary-dark flex items-center justify-center p-4">
       <div className="text-center max-w-lg">
-        <img src="/logo-sicom-white.svg" alt={COMPANY_NAME} className="h-20 mx-auto mb-8" />
-        <h1 className="text-3xl font-bold text-white mb-4">{COMPANY_NAME}</h1>
+        {/* Logo oficial en contenedor blanco */}
+        <div className="rounded-2xl bg-white px-8 py-6 shadow-lg mx-auto mb-8 inline-block">
+          <img 
+            src="/images/sicom/logo_original_sicom.png" 
+            alt={COMPANY_NAME} 
+            className="h-auto w-full max-w-[280px] object-contain"
+          />
+        </div>
+        
+        <h1 className="text-2xl font-bold text-white mb-4">SICOM Patagonia SRL</h1>
         <p className="text-white/90 text-lg mb-4 leading-relaxed">{COMPANY_SLOGAN}</p>
         <p className="text-white/70 mb-8">Comodoro Rivadavia y Patagonia.</p>
+        
         <button onClick={() => setShowIntro(false)} className="inline-flex items-center gap-2 bg-secondary text-white font-semibold px-8 py-4 rounded-xl hover:bg-secondary-dark transition-all transform hover:scale-105 shadow-lg">
           Ver estado del ascensor <ArrowRight size={20} />
         </button>
+        
         <div className="mt-8 pt-6 border-t border-white/20">
           <a href={COMPANY_WEBSITE} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-white/60 hover:text-white transition-colors text-sm">
             <ExternalLink size={14} /> {COMPANY_WEBSITE}
@@ -105,7 +115,7 @@ export default function PublicElevatorView() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 py-4 px-4 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <img src="/logo-sicom.svg" alt={COMPANY_NAME} className="h-10" />
+          <img src="/images/sicom/logo_original_sicom.png" alt={COMPANY_NAME} className="h-10 object-contain" />
           <a href={COMPANY_WEBSITE} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-secondary transition-colors">
             <ExternalLink size={18} />
           </a>
@@ -209,7 +219,7 @@ export default function PublicElevatorView() {
 
         {/* Footer */}
         <footer className="text-center py-8 mt-4 border-t border-gray-200">
-          <img src="/logo-sicom.svg" alt={COMPANY_NAME} className="h-8 mx-auto mb-3 opacity-50" />
+          <img src="/images/sicom/logo_original_sicom.png" alt={COMPANY_NAME} className="h-12 mx-auto mb-3 object-contain" />
           <p className="text-gray-600 text-sm font-medium">{COMPANY_NAME}</p>
           <p className="text-gray-500 text-xs">{COMPANY_ADDRESS}</p>
           <a href={COMPANY_WEBSITE} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-secondary hover:text-secondary-dark transition-colors text-xs">
