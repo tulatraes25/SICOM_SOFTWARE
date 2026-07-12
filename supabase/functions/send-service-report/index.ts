@@ -17,11 +17,21 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const resendApiKey = Deno.env.get("RESEND_API_KEY") ?? "";
-    const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "sistema@sicompatagonia.com";
-    const fromName = Deno.env.get("REPORT_FROM_NAME") || "SICOM Patagonia - Sistema automático";
-    const replyTo = Deno.env.get("RESEND_REPLY_TO") || "adriana@sicompatagonia.com";
+    const fromEmail = Deno.env.get("RESEND_FROM_EMAIL")?.trim() || "sistema@sicompatagonia.com";
+    const replyTo = Deno.env.get("RESEND_REPLY_TO")?.trim() || "adriana@sicompatagonia.com";
+
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(fromEmail)) {
+      throw new Error(`RESEND_FROM_EMAIL inválido: ${fromEmail}`);
+    }
+
+    // Formato correcto para Resend: solo la dirección
+    const from = fromEmail;
 
     console.log("[send-service-report] fromEmail:", fromEmail);
+    console.log("[send-service-report] formatted from:", from);
+    console.log("[send-service-report] replyTo:", replyTo);
     console.log("[send-service-report] resendApiKey configured:", !!resendApiKey);
 
     if (!resendApiKey) {
@@ -78,14 +88,14 @@ serve(async (req) => {
     let failedCount = 0;
 
     for (const recipient of recipients) {
-      const subject = `Informe técnico de mantenimiento - ${elevator?.code || "Ascensor"} - ${fromName}`;
-      const html = generateEmailHTML(record, elevator, recipient, fromName);
+      const subject = `Informe técnico de mantenimiento - ${elevator?.code || "Ascensor"} - SICOM Patagonia`;
+      const html = generateEmailHTML(record, elevator, recipient);
 
       console.log(`[send-service-report] Sending to: ${recipient.email}`);
 
       try {
         const emailBody = JSON.stringify({
-          from: `${fromName} <${fromEmail}>`,
+          from,
           to: [recipient.email],
           reply_to: replyTo,
           subject,
@@ -198,8 +208,9 @@ serve(async (req) => {
   }
 });
 
-function generateEmailHTML(record: any, elevator: any, recipient: any, companyName: string): string {
+function generateEmailHTML(record: any, elevator: any, recipient: any): string {
   const building = elevator?.building;
+  const companyName = "SICOM Patagonia";
   return `<!DOCTYPE html>
 <html>
 <head>
