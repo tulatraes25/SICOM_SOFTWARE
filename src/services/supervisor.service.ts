@@ -113,7 +113,7 @@ export async function approveServiceRecord(
   };
 
   if (finalReport) {
-    updateData.final_report = finalReport;
+    updateData.final_report_text = finalReport;
   }
 
   const { data, error } = await supabase
@@ -185,7 +185,7 @@ export async function createOrUpdateMonthlyReport(
   // Obtener el servicio
   const { data: service, error: serviceError } = await supabase
     .from('service_records')
-    .select('elevator_id, service_date, id, final_report')
+    .select('elevator_id, service_date, id, final_report_text')
     .eq('id', serviceRecordId)
     .single();
 
@@ -210,7 +210,7 @@ export async function createOrUpdateMonthlyReport(
     const { data, error } = await supabase
       .from('monthly_reports')
       .update({
-        content: service.final_report,
+        content: service.final_report_text,
         status: 'reviewed',
         reviewed_by: user?.id,
         updated_at: new Date().toISOString(),
@@ -233,7 +233,7 @@ export async function createOrUpdateMonthlyReport(
         elevator_id: service.elevator_id,
         period,
         title: `Informe Mensual - ${period}`,
-        content: service.final_report,
+        content: service.final_report_text,
         status: 'reviewed',
         created_by: user?.id,
         reviewed_by: user?.id,
