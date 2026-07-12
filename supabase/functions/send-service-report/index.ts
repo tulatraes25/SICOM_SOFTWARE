@@ -81,31 +81,48 @@ serve(async (req) => {
       const subject = `Informe técnico de mantenimiento - ${elevator?.code || "Ascensor"} - ${fromName}`;
       const html = generateEmailHTML(record, elevator, recipient, fromName);
 
+      console.log(`[send-service-report] Sending to: ${recipient.email}`);
+
       try {
+        const emailBody = JSON.stringify({
+          from: `${fromName} <${fromEmail}>`,
+          to: [recipient.email],
+          reply_to: replyTo,
+          subject,
+          html,
+          attachments: [{
+            filename: pdf_filename || `informe-${elevator?.code || "ascensor"}.pdf`,
+            content: pdf_base64,
+          }],
+        });
+
+        console.log(`[send-service-report] Email body length: ${emailBody.length}`);
+
         const emailResponse = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${resendApiKey}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            from: `${fromName} <${fromEmail}>`,
-            to: [recipient.email],
-            reply_to: replyTo,
-            subject,
-            html,
-            attachments: [{
-              filename: pdf_filename || `informe-${elevator?.code || "ascensor"}.pdf`,
-              content: pdf_base64,
-            }],
-          }),
+          body: emailBody,
         });
 
-        const emailData = await emailResponse.json();
+        console.log(`[send-service-report] Response status: ${emailResponse.status}`);
+        console.log(`[send-service-report] Response headers: ${JSON.stringify(Object.fromEntries(emailResponse.headers.entries()))}`);
+
+        const responseText = await emailResponse.text();
+        console.log(`[send-service-report] Response body: ${responseText}`);
+
+        let emailData: any;
+        try {
+          emailData = JSON.parse(responseText);
+        } catch (e) {
+          emailData = { raw: responseText };
+        }
 
         if (!emailResponse.ok) {
-          const errorMsg = emailData?.message || emailData?.error || `HTTP ${emailResponse.status}`;
-          console.error("[send-service-report] Resend error:", errorMsg);
+          const errorMsg = `HTTP ${emailResponse.status}: ${JSON.stringify(emailData)}`;
+          console.error(`[send-service-report] FAILED for ${recipient.email}:`, errorMsg);
 
           await supabase.from("service_report_sends").insert({
             service_record_id,
@@ -121,6 +138,8 @@ serve(async (req) => {
           failedCount++;
           continue;
         }
+
+        console.log(`[send-service-report] SUCCESS for ${recipient.email}:`, JSON.stringify(emailData));
 
         // Success
         await supabase.from("service_report_sends").insert({
