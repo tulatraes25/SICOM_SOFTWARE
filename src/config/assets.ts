@@ -26,8 +26,8 @@ export const SICOM_IMAGES = {
   // Historial
   history: "/images/sicom/10_historial_digital_libro_interno.png",
   
-  // Logos
-  logo: "/logo-sicom.svg",
+  // Logos - USAR SIEMPRE logoPng (oficial)
+  logo: "/images/sicom/logo_original_sicom.png",
   logoPng: "/images/sicom/logo_original_sicom.png",
   logo512: "/images/sicom/logo_sicom_512_transparent.png",
 };

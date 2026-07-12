@@ -178,7 +178,7 @@ export default function PublicElevatorView() {
         {/* Company info */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <div className="flex items-center gap-3 mb-3">
-            <img src="/logo-sicom.svg" alt={COMPANY_NAME} className="h-6" />
+            <img src="/images/sicom/logo_original_sicom.png" alt={COMPANY_NAME} className="h-12 w-auto object-contain" />
             <div>
               <p className="font-medium text-gray-900 text-sm">{COMPANY_NAME}</p>
               <p className="text-xs text-gray-500">Empresa conservadora</p>

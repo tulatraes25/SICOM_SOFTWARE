@@ -3,7 +3,7 @@ export const APP_DESCRIPTION = 'Sistema de trazabilidad y mantenimiento de ascen
 export const COMPANY_NAME = 'SICOM Patagonia SRL';
 export const COMPANY_SLOGAN = 'Mantenimiento, reparación, modernización y asistencia técnica de ascensores.';
 export const COMPANY_WEBSITE = 'https://sicompatagonia.com/';
-export const COMPANY_PHONE = '+54 299 XXX-XXXX';
+export const COMPANY_PHONE = '+54 297 421-4430';
 export const COMPANY_EMAIL = 'info@sicompatagonia.com';
 export const COMPANY_ADDRESS = 'Comodoro Rivadavia, Chubut, Argentina';
 
