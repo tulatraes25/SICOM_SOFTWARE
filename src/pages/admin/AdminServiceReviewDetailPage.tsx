@@ -5,19 +5,21 @@ import { getServiceRecordForReview, approveServiceRecord, rejectServiceRecord, u
 import { listServiceReportSends, sendServiceReportByEmail } from '@/services/serviceReportSends.service';
 import { createAuditLog } from '@/services/audit.service';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Card, CardContent } from '@/components/ui/Card';
+import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import ServiceChecklist from '@/components/service/ServiceChecklist';
 import ServiceRecordPDF from '@/components/pdf/ServiceRecordPDF';
 import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
-import { SERVICE_STATUS_LABELS } from '@/config/constants';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import type { ServiceRecord } from '@/types/database';
-import { Building2, Calendar, ArrowLeft, CheckCircle, XCircle, AlertCircle, Download, Loader2, Sparkles, Save, Mail, Clock, Check, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, AlertCircle, Download, Loader2, Sparkles, Save, Mail, Clock, Check, X, Image, Calendar } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default', submitted: 'info', in_review: 'warning', approved: 'success', rejected: 'danger',
+};
+
+const STATUS_LABELS_ES: Record<string, string> = {
+  draft: 'Borrador', submitted: 'Enviado', in_review: 'En revisión', approved: 'Aprobado', rejected: 'Rechazado',
 };
 
 export default function AdminServiceReviewDetailPage() {
@@ -27,18 +29,16 @@ export default function AdminServiceReviewDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [rejectNotes, setRejectNotes] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
   const [finalReport, setFinalReport] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
-  const [emailResult, setEmailResult] = useState<{ success: number; failed: number } | null>(null);
   const [sendHistory, setSendHistory] = useState<any[]>([]);
   const [recipients, setRecipients] = useState<any[]>([]);
 
   useEffect(() => { loadData(); }, [id]);
-
-  // Get recipients from building when record loads
   useEffect(() => {
     const buildingId = (record?.elevator as any)?.building_id;
     if (buildingId) {
@@ -55,7 +55,6 @@ export default function AdminServiceReviewDetailPage() {
       const data = await getServiceRecordForReview(id);
       setRecord(data);
       setFinalReport((data as any).ai_report_draft || (data as any).final_report_text || '');
-      // Load send history
       const sends = await listServiceReportSends(id);
       setSendHistory(sends);
     } catch (err: any) {
@@ -70,14 +69,13 @@ export default function AdminServiceReviewDetailPage() {
     setGeneratingAI(true);
     setError('');
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('generate-report', {
-        body: { service_record_id: id },
-      });
+      const { data, error: fnError } = await supabase.functions.invoke('generate-report', { body: { service_record_id: id } });
       if (fnError) throw fnError;
       if (data.error) throw new Error(data.error);
       setFinalReport(data.report);
       await supabase.from('service_records').update({ ai_report_draft: data.report, final_report_text: data.report, updated_at: new Date().toISOString() }).eq('id', id);
-      await createAuditLog({ action: 'generate_ai_report', entity_type: 'service_record', entity_id: id });
+      setSuccess('Informe generado correctamente');
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
       setError(err?.message || 'Error al generar informe');
     } finally {
@@ -90,9 +88,13 @@ export default function AdminServiceReviewDetailPage() {
     setSaving(true);
     try {
       await supabase.from('service_records').update({ final_report_text: finalReport, updated_at: new Date().toISOString() }).eq('id', id);
-      await createAuditLog({ action: 'save_report', entity_type: 'service_record', entity_id: id });
-    } catch (err: any) { setError(err?.message || 'Error al guardar'); }
-    finally { setSaving(false); }
+      setSuccess('Informe guardado correctamente');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err?.message || 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleApprove = async () => {
@@ -103,6 +105,8 @@ export default function AdminServiceReviewDetailPage() {
       await approveServiceRecord(id, finalReport || undefined);
       await updateElevatorStatusFromApprovedService(id);
       await createAuditLog({ action: 'approve', entity_type: 'service_record', entity_id: id });
+      setSuccess('Mantenimiento aprobado correctamente');
+      setTimeout(() => setSuccess(''), 3000);
       loadData();
     } catch (err: any) { setError(err?.message || 'Error al aprobar'); }
     finally { setSaving(false); }
@@ -116,6 +120,8 @@ export default function AdminServiceReviewDetailPage() {
       await createAuditLog({ action: 'reject', entity_type: 'service_record', entity_id: id, new_data: { reason: rejectNotes } });
       setShowRejectModal(false);
       setRejectNotes('');
+      setSuccess('Mantenimiento rechazado');
+      setTimeout(() => setSuccess(''), 3000);
       loadData();
     } catch (err: any) { setError(err?.message || 'Error al rechazar'); }
     finally { setSaving(false); }
@@ -124,38 +130,20 @@ export default function AdminServiceReviewDetailPage() {
   const handleSendEmail = async () => {
     if (!id || !record) return;
     setSendingEmail(true);
-    setEmailResult(null);
     setError('');
-
     try {
-      // Generate PDF as base64
       const elevator = record.elevator as any;
       const technician = (record as any).technician;
       const checklist = (record as any).checklist || [];
-
       const pdfBlob = await pdf(
-        <ServiceRecordPDF
-          record={{ ...record, final_report_text: finalReport || record.final_report_text }}
-          elevator={elevator}
-          technician={technician}
-          approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Administrador' } : undefined}
-          checklist={checklist}
-        />
+        <ServiceRecordPDF record={{ ...record, final_report_text: finalReport || record.final_report_text }} elevator={elevator} technician={technician} approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Administrador' } : undefined} checklist={checklist} />
       ).toBlob();
-
-      // Convert to base64
       const arrayBuffer = await pdfBlob.arrayBuffer();
-      const base64 = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-
+      const base64 = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
       const filename = `informe-${elevator?.code || 'ascensor'}-${record.service_date}.pdf`;
-
       const result = await sendServiceReportByEmail(id, base64, filename);
-      setEmailResult(result);
-      await createAuditLog({ action: 'send_email', entity_type: 'service_record', entity_id: id, new_data: result });
-
-      // Reload send history
+      setSuccess(`Informe enviado correctamente a ${result.success} destinatario(s)`);
+      setTimeout(() => setSuccess(''), 5000);
       const sends = await listServiceReportSends(id);
       setSendHistory(sends);
     } catch (err: any) {
@@ -165,7 +153,7 @@ export default function AdminServiceReviewDetailPage() {
     }
   };
 
-  if (loading) return <DashboardLayout role="admin" title="Revisión"><div className="text-center py-8"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin mx-auto" /></div></DashboardLayout>;
+  if (loading) return <DashboardLayout role="admin" title="Revisión"><div className="text-center py-12"><Loader2 size={32} className="animate-spin mx-auto text-secondary" /></div></DashboardLayout>;
   if (error && !record) return <DashboardLayout role="admin" title="Revisión"><div className="max-w-2xl mx-auto"><button onClick={() => navigate('/admin/mantenimientos')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"><ArrowLeft size={18} /> Volver</button><Card><CardContent><div className="text-center py-8"><AlertCircle size={48} className="mx-auto text-danger mb-4" /><p className="text-gray-600">{error}</p></div></CardContent></Card></div></DashboardLayout>;
   if (!record) return <DashboardLayout role="admin" title="Revisión"><div className="text-center py-8"><p className="text-gray-500">No encontrado</p></div></DashboardLayout>;
 
@@ -174,141 +162,216 @@ export default function AdminServiceReviewDetailPage() {
   const client = building?.client;
   const technician = (record as any).technician;
   const checklist = (record as any).checklist || [];
+  const photos = (record as any).photos || [];
   const canReview = record.status === 'submitted' || record.status === 'in_review';
   const isApproved = record.status === 'approved';
+  const isRejected = record.status === 'rejected';
   const canUseAI = ['submitted', 'in_review', 'approved'].includes(record.status);
   const fileName = `informe-${elevator?.code || 'ascensor'}-${record.service_date}.pdf`;
 
   return (
     <DashboardLayout role="admin" title="Revisión de Mantenimiento">
-      <div className="space-y-6 max-w-4xl mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <button onClick={() => navigate('/admin/mantenimientos')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900"><ArrowLeft size={18} /> Volver</button>
-          <Badge variant={STATUS_BADGE[record.status] || 'default'}>{SERVICE_STATUS_LABELS[record.status as keyof typeof SERVICE_STATUS_LABELS] || record.status}</Badge>
-        </div>
+      <div className="space-y-6 max-w-5xl mx-auto">
+        {/* Back button */}
+        <button onClick={() => navigate('/admin/mantenimientos')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+          <ArrowLeft size={18} /> Volver al listado
+        </button>
 
-        {error && <div className="p-3 bg-danger/10 border border-danger/30 rounded-lg text-danger text-sm">{error}</div>}
+        {/* Success/Error messages */}
+        {success && <div className="p-3 bg-success/10 border border-success/30 rounded-lg text-success text-sm flex items-center gap-2"><CheckCircle size={16} /> {success}</div>}
+        {error && <div className="p-3 bg-danger/10 border border-danger/30 rounded-lg text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card><CardContent>
-            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Building2 size={18} /> Ascensor</h3>
-            <div className="space-y-2">
-              <div><span className="text-sm text-gray-500">Código: </span><span className="font-mono font-bold">{elevator?.code || '-'}</span></div>
-              <div><span className="text-sm text-gray-500">Edificio: </span><span>{building?.name || '-'}</span></div>
-              <div><span className="text-sm text-gray-500">Dirección: </span><span>{building?.address || '-'}, {building?.locality || '-'}</span></div>
-              <div><span className="text-sm text-gray-500">Cliente: </span><span>{client?.name || '-'}</span></div>
-            </div>
-          </CardContent></Card>
-          <Card><CardContent>
-            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={18} /> Servicio</h3>
-            <div className="space-y-2">
-              <div><span className="text-sm text-gray-500">Técnico: </span><span>{technician?.full_name || '-'}</span></div>
-              <div><span className="text-sm text-gray-500">Fecha: </span><span>{new Date(record.service_date).toLocaleDateString('es-AR')}</span></div>
-              <div><span className="text-sm text-gray-500">Tipo: </span><span className="capitalize">{record.service_type}</span></div>
-              <div><span className="text-sm text-gray-500">Estado operativo: </span><span>{OPERATIONAL_STATUS_LABELS[record.operational_status_at_service as keyof typeof OPERATIONAL_STATUS_LABELS] || '-'}</span></div>
-              <div><span className="text-sm text-gray-500">Estado conservación: </span><span>{CONSERVATION_STATUS_LABELS[record.conservation_status_at_service as keyof typeof CONSERVATION_STATUS_LABELS] || '-'}</span></div>
-            </div>
-          </CardContent></Card>
-        </div>
-
-        {checklist.length > 0 && <Card><CardContent><h3 className="font-semibold text-gray-900 mb-4">Checklist</h3><ServiceChecklist items={checklist.map((c: any) => ({ item_name: c.item_name, status: c.status, notes: c.notes || '' }))} onChange={() => {}} readOnly /></CardContent></Card>}
-
-        <Card><CardContent>
-          <h3 className="font-semibold text-gray-900 mb-4">Descripción</h3>
-          {record.description && <div className="mb-4"><p className="text-sm text-gray-500 mb-1">Descripción</p><p className="text-gray-700">{record.description}</p></div>}
-          {record.observations && <div className="mb-4"><p className="text-sm text-gray-500 mb-1">Observaciones</p><p className="text-gray-700">{record.observations}</p></div>}
-          {record.technical_report && <div><p className="text-sm text-gray-500 mb-1">Informe técnico</p><p className="text-gray-700 whitespace-pre-wrap">{record.technical_report}</p></div>}
-          {!record.description && !record.observations && !record.technical_report && <p className="text-gray-500">No hay descripción</p>}
-        </CardContent></Card>
-
-        {/* AI Report Section */}
+        {/* Header with status */}
         <Card>
-          <CardContent>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Sparkles size={18} className="text-secondary" /> Informe con Asistencia IA</h3>
-              {canUseAI && (
-                <Button onClick={handleGenerateAI} loading={generatingAI} variant="secondary" size="sm">
-                  {generatingAI ? <><Loader2 size={14} className="mr-1 animate-spin" /> Generando...</> : <><Sparkles size={14} className="mr-1" /> Generar borrador con IA</>}
-                </Button>
-              )}
-            </div>
-            {finalReport ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Informe Final (editable)</label>
-                  <textarea value={finalReport} onChange={(e) => setFinalReport(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" rows={12} />
+          <CardContent className="p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <h1 className="text-2xl font-bold text-gray-900">{elevator?.code || '-'}</h1>
+                  <Badge variant={STATUS_BADGE[record.status] || 'default'}>
+                    {STATUS_LABELS_ES[record.status] || record.status}
+                  </Badge>
                 </div>
-                <Button onClick={handleSaveReport} loading={saving} size="sm"><Save size={14} className="mr-1" /> Guardar cambios</Button>
+                <p className="text-gray-600">{building?.name || '-'} · {client?.name || '-'}</p>
               </div>
-            ) : (
-              <p className="text-gray-500 text-sm">Haga clic en "Generar borrador con IA" para crear un informe formal.</p>
-            )}
+              <div className="text-right text-sm text-gray-500">
+                <p>Servicio: <span className="font-medium text-gray-900 capitalize">{record.service_type}</span></p>
+                <p>Fecha: <span className="font-medium text-gray-900">{new Date(record.service_date).toLocaleDateString('es-AR')}</span></p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Actions */}
-        <Card><CardContent>
-          <h3 className="font-semibold text-gray-900 mb-4">Acciones</h3>
-          <div className="flex flex-wrap gap-3">
-            {canReview && <>
-              <Button onClick={handleApprove} loading={saving}><CheckCircle size={16} className="mr-2" /> Aprobar</Button>
-              <Button variant="danger" onClick={() => setShowRejectModal(true)} disabled={saving}><XCircle size={16} className="mr-2" /> Rechazar</Button>
-            </>}
-            {isApproved && (
-              <>
-                <PDFDownloadLink
-                  document={<ServiceRecordPDF record={{ ...record, final_report_text: finalReport || record.final_report_text }} elevator={elevator} technician={technician} approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Administrador' } : undefined} checklist={checklist} />}
-                  fileName={fileName}
-                >
-                  {({ loading: pdfLoading }) => (
-                    <Button disabled={pdfLoading}>
-                      {pdfLoading ? <><Loader2 size={16} className="mr-2 animate-spin" /> Generando...</> : <><Download size={16} className="mr-2" /> Descargar PDF</>}
+        {/* Summary cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: 'Ascensor', value: elevator?.code || '-' },
+            { label: 'Edificio', value: building?.name || '-' },
+            { label: 'Cliente', value: client?.name || '-' },
+            { label: 'Técnico', value: technician?.full_name || '-' },
+          ].map((item) => (
+            <div key={item.label} className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 uppercase">{item.label}</p>
+              <p className="font-medium text-gray-900 mt-1">{item.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left column */}
+          <div className="space-y-6">
+            {/* Service data */}
+            <Card>
+              <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Calendar size={18} /> Datos del Servicio</h3></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><p className="text-xs text-gray-500">Tipo</p><p className="font-medium capitalize">{record.service_type}</p></div>
+                  <div><p className="text-xs text-gray-500">Estado Operativo</p><Badge className={STATUS_COLORS_MAP[record.operational_status_at_service || ''] || ''}>{OPERATIONAL_STATUS_LABELS[record.operational_status_at_service as keyof typeof OPERATIONAL_STATUS_LABELS] || '-'}</Badge></div>
+                  <div><p className="text-xs text-gray-500">Estado Conservación</p><Badge className={STATUS_COLORS_MAP[record.conservation_status_at_service || ''] || ''}>{CONSERVATION_STATUS_LABELS[record.conservation_status_at_service as keyof typeof CONSERVATION_STATUS_LABELS] || '-'}</Badge></div>
+                  <div><p className="text-xs text-gray-500">Técnico</p><p className="font-medium">{technician?.full_name || '-'}</p></div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Checklist */}
+            <Card>
+              <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><CheckCircle size={18} /> Checklist</h3></CardHeader>
+              <CardContent>
+                {checklist.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead><tr className="border-b border-gray-200"><th className="text-left py-2">Ítem</th><th className="text-left py-2">Resultado</th><th className="text-left py-2">Nota</th></tr></thead>
+                      <tbody>
+                        {checklist.map((c: any, i: number) => (
+                          <tr key={i} className="border-b border-gray-100">
+                            <td className="py-2 pr-4">{c.item_name}</td>
+                            <td className="py-2 pr-4"><Badge className={STATUS_COLORS_MAP[c.status] || ''}>{CHECKLIST_LABELS[c.status] || c.status}</Badge></td>
+                            <td className="py-2 text-gray-500 text-xs">{c.notes || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <p className="text-gray-500 text-sm">Sin checklist</p>}
+              </CardContent>
+            </Card>
+
+            {/* Photos */}
+            <Card>
+              <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Image size={18} /> Fotografías</h3></CardHeader>
+              <CardContent>
+                {photos.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {photos.map((p: any) => (
+                      <div key={p.id} className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
+                        <Image size={24} className="text-gray-400" />
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-gray-500 text-sm">Sin fotografías</p>}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right column */}
+          <div className="space-y-6">
+            {/* AI Report */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Sparkles size={18} className="text-secondary" /> Informe IA</h3>
+                  {canUseAI && (
+                    <Button onClick={handleGenerateAI} loading={generatingAI} variant="secondary" size="sm">
+                      {generatingAI ? <Loader2 size={14} className="animate-spin mr-1" /> : <Sparkles size={14} className="mr-1" />}
+                      {finalReport ? 'Regenerar' : 'Generar'} con IA
                     </Button>
                   )}
-                </PDFDownloadLink>
-                <Button onClick={handleSendEmail} loading={sendingEmail} variant="secondary">
-                  {sendingEmail ? <><Loader2 size={16} className="mr-2 animate-spin" /> Enviando...</> : <><Mail size={16} className="mr-2" /> Enviar PDF por correo</>}
-                </Button>
-              </>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <textarea
+                  value={finalReport}
+                  onChange={(e) => setFinalReport(e.target.value)}
+                  placeholder={canUseAI ? 'Haga clic en "Generar con IA" para crear un borrador...' : 'Sin informe disponible'}
+                  className="w-full h-48 border border-gray-300 rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  readOnly={!canUseAI}
+                />
+                {finalReport && (
+                  <Button onClick={handleSaveReport} loading={saving} size="sm" className="mt-3">
+                    <Save size={14} className="mr-1" /> Guardar cambios
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Actions */}
+            <Card>
+              <CardHeader><h3 className="font-semibold text-gray-900">Acciones</h3></CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {canReview && (
+                    <>
+                      <Button onClick={handleApprove} loading={saving} className="w-full"><CheckCircle size={16} className="mr-2" /> Aprobar</Button>
+                      <Button variant="danger" onClick={() => setShowRejectModal(true)} className="w-full"><XCircle size={16} className="mr-2" /> Rechazar</Button>
+                    </>
+                  )}
+                  {isApproved && (
+                    <>
+                      <PDFDownloadLink
+                        document={<ServiceRecordPDF record={{ ...record, final_report_text: finalReport || record.final_report_text }} elevator={elevator} technician={technician} approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Administrador' } : undefined} checklist={checklist} />}
+                        fileName={fileName}
+                      >
+                        {({ loading: pdfLoading }) => (
+                          <Button className="w-full" disabled={pdfLoading}>
+                            {pdfLoading ? <Loader2 size={16} className="animate-spin mr-2" /> : <Download size={16} className="mr-2" />}
+                            Descargar PDF
+                          </Button>
+                        )}
+                      </PDFDownloadLink>
+                      <Button onClick={handleSendEmail} loading={sendingEmail} variant="secondary" className="w-full mt-2">
+                        <Mail size={16} className="mr-2" /> Enviar por Correo ({recipients.length} destinatarios)
+                      </Button>
+                    </>
+                  )}
+                  {isRejected && (
+                    <div className="p-3 bg-warning/10 rounded-lg text-sm text-warning">
+                      <p className="font-medium">Rechazado</p>
+                      {record.rejection_reason && <p className="mt-1">{record.rejection_reason}</p>}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Send history */}
+            {sendHistory.length > 0 && (
+              <Card>
+                <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Clock size={18} /> Historial de Envíos</h3></CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {sendHistory.map((send) => (
+                      <div key={send.id} className="flex items-center gap-3 text-sm p-2 bg-gray-50 rounded">
+                        {send.status === 'sent' ? <Check size={14} className="text-success" /> : <X size={14} className="text-danger" />}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{send.recipient_name}</p>
+                          <p className="text-gray-500 text-xs truncate">{send.recipient_email}</p>
+                        </div>
+                        <span className="text-xs text-gray-400 whitespace-nowrap">{send.sent_at ? new Date(send.sent_at).toLocaleString('es-AR') : '-'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
-          {recipients.length > 0 && isApproved && (
-            <p className="text-sm text-gray-500 mt-3">Se enviará a: {recipients.map(r => r.email).join(', ')}</p>
-          )}
-          {recipients.length === 0 && isApproved && (
-            <p className="text-sm text-danger mt-3">No hay destinatarios registrados para este ascensor.</p>
-          )}
-          {emailResult && (
-            <div className={`mt-3 p-3 rounded-lg ${emailResult.failed > 0 ? 'bg-warning/10' : 'bg-success/10'}`}>
-              <p className="text-sm font-medium">{emailResult.success} enviados, {emailResult.failed} fallidos</p>
-            </div>
-          )}
-        </CardContent></Card>
+        </div>
 
-        {/* Send History */}
-        {sendHistory.length > 0 && (
-          <Card><CardContent>
-            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={18} /> Historial de Envíos</h3>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {sendHistory.map((send) => (
-                <div key={send.id} className="flex items-center gap-3 text-sm p-2 bg-gray-50 rounded">
-                  {send.status === 'sent' ? <Check size={14} className="text-success" /> : <X size={14} className="text-danger" />}
-                  <div className="flex-1">
-                    <p className="font-medium">{send.recipient_name}</p>
-                    <p className="text-gray-500">{send.recipient_email}</p>
-                  </div>
-                  <span className="text-xs text-gray-400">{send.sent_at ? new Date(send.sent_at).toLocaleString('es-AR') : '-'}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent></Card>
-        )}
-
+        {/* Reject modal */}
         {showRejectModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
               <h3 className="text-lg font-semibold mb-4">Motivo de Rechazo</h3>
-              <textarea value={rejectNotes} onChange={(e) => setRejectNotes(e.target.value)} placeholder="Describa el motivo..." className="w-full border border-gray-300 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-primary/20" rows={4} />
+              <textarea value={rejectNotes} onChange={(e) => setRejectNotes(e.target.value)} placeholder="Describa el motivo del rechazo..." className="w-full border border-gray-300 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-primary/20" rows={4} />
               <div className="flex justify-end gap-3 mt-4">
                 <Button variant="outline" onClick={() => setShowRejectModal(false)}>Cancelar</Button>
                 <Button variant="danger" onClick={handleReject} loading={saving} disabled={!rejectNotes.trim()}>Rechazar</Button>
@@ -320,3 +383,14 @@ export default function AdminServiceReviewDetailPage() {
     </DashboardLayout>
   );
 }
+
+const STATUS_COLORS_MAP: Record<string, string> = {
+  operativo: 'bg-success/15 text-success', operativo_con_observaciones: 'bg-warning/15 text-warning', no_operativo: 'bg-danger/15 text-danger',
+  fuera_de_servicio_preventivo: 'bg-danger/15 text-danger', fuera_de_servicio_por_reparacion: 'bg-danger/15 text-danger',
+  conforme: 'bg-success/15 text-success', observado: 'bg-warning/15 text-warning', requiere_reparacion: 'bg-danger/15 text-danger',
+  fuera_de_servicio: 'bg-danger/15 text-danger', pendiente_de_verificacion: 'bg-warning/15 text-warning',
+};
+
+const CHECKLIST_LABELS: Record<string, string> = {
+  ok: 'Conforme', needs_attention: 'Observado', failed: 'Requiere intervención', na: 'No aplica',
+};
