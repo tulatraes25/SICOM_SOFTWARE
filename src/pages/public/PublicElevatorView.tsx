@@ -4,8 +4,7 @@ import { getPublicElevatorByToken, logQRScan, getPublicServiceHistory } from '@/
 import type { PublicServiceHistory } from '@/services/publicElevator.service';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import { COMPANY_NAME, COMPANY_SLOGAN, COMPANY_WEBSITE, COMPANY_PHONE, COMPANY_EMAIL, COMPANY_ADDRESS } from '@/config/constants';
-import Badge from '@/components/ui/Badge';
-import { ArrowRight, ExternalLink, CheckCircle, Wrench, MapPin, Clock, Phone, Mail, AlertCircle, FileText } from 'lucide-react';
+import { ArrowRight, ExternalLink, CheckCircle, XCircle, Wrench, MapPin, Clock, Phone, Mail, AlertCircle, FileText } from 'lucide-react';
 
 interface PublicElevatorData {
   id: string;
@@ -25,11 +24,23 @@ function getStatusLabel(status: string, labels: Record<string, string>): string 
   return labels[status] || status || 'No informado';
 }
 
-function getStatusBadgeClass(status: string): string {
-  if (['operativo', 'conforme'].includes(status)) return 'bg-success/15 text-success border-success/30';
-  if (['operativo_con_observaciones', 'observado', 'pendiente_de_verificacion'].includes(status)) return 'bg-warning/15 text-warning border-warning/30';
-  return 'bg-danger/15 text-danger border-danger/30';
-}
+// Indicadores visuales para estados operativos
+const OPERATIONAL_ICONS: Record<string, { color: string; bg: string; icon: any }> = {
+  operativo: { color: 'text-success', bg: 'bg-success/15', icon: CheckCircle },
+  operativo_con_observaciones: { color: 'text-warning', bg: 'bg-warning/15', icon: Wrench },
+  no_operativo: { color: 'text-danger', bg: 'bg-danger/15', icon: XCircle },
+  fuera_de_servicio_preventivo: { color: 'text-warning', bg: 'bg-warning/15', icon: Wrench },
+  fuera_de_servicio_por_reparacion: { color: 'text-danger', bg: 'bg-danger/15', icon: XCircle },
+};
+
+// Indicadores visuales para estados de conservación
+const CONSERVATION_COLORS: Record<string, string> = {
+  conforme: 'bg-success/15 text-success border-success/30',
+  observado: 'bg-warning/15 text-warning border-warning/30',
+  requiere_reparacion: 'bg-danger/15 text-danger border-danger/30',
+  fuera_de_servicio: 'bg-danger/15 text-danger border-danger/30',
+  pendiente_de_verificacion: 'bg-warning/15 text-warning border-warning/30',
+};
 
 export default function PublicElevatorView() {
   const { token } = useParams<{ token: string }>();
@@ -51,7 +62,6 @@ export default function PublicElevatorView() {
       if (!data) { setError('No se encontró un ascensor asociado a este código QR.'); return; }
       setElevator(data);
       await logQRScan(token!, data.id);
-      // Cargar historial
       const historyData = await getPublicServiceHistory(data.id);
       setHistory(historyData);
     } catch { setError('Error al cargar la información del ascensor.'); }
@@ -141,19 +151,37 @@ export default function PublicElevatorView() {
           </div>
         )}
 
-        {/* Status cards */}
+        {/* ESTADOS CON INDICADORES VISUALES */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-sm text-gray-500 mb-2">Estado Operativo</p>
-            <Badge className={`${getStatusBadgeClass(elevator.operational_status)} text-sm px-3 py-1`}>
-              {getStatusLabel(elevator.operational_status, OPERATIONAL_STATUS_LABELS)}
-            </Badge>
+          {/* Estado Operativo */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <p className="text-sm text-gray-500 mb-3">Estado Operativo</p>
+            <div className="flex items-center gap-3">
+              {(() => {
+                const statusConfig = OPERATIONAL_ICONS[elevator.operational_status] || { color: 'text-gray-500', bg: 'bg-gray-100', icon: AlertCircle };
+                const Icon = statusConfig.icon;
+                return (
+                  <>
+                    <div className={`w-12 h-12 rounded-full ${statusConfig.bg} flex items-center justify-center`}>
+                      <Icon size={24} className={statusConfig.color} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{getStatusLabel(elevator.operational_status, OPERATIONAL_STATUS_LABELS)}</p>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
           </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-sm text-gray-500 mb-2">Estado de Conservación</p>
-            <Badge className={`${getStatusBadgeClass(elevator.conservation_status)} text-sm px-3 py-1`}>
-              {getStatusLabel(elevator.conservation_status, CONSERVATION_STATUS_LABELS)}
-            </Badge>
+
+          {/* Estado de Conservación */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <p className="text-sm text-gray-500 mb-3">Estado de Conservación</p>
+            <div className="flex items-center gap-3">
+              <div className={`px-3 py-1 rounded-full border ${CONSERVATION_COLORS[elevator.conservation_status] || 'bg-gray-100 text-gray-500'}`}>
+                {getStatusLabel(elevator.conservation_status, CONSERVATION_STATUS_LABELS)}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -194,16 +222,16 @@ export default function PublicElevatorView() {
                       <p className="font-medium text-gray-900 capitalize">{item.service_type}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Estado Operativo</p>
-                      <Badge className={`${getStatusBadgeClass(item.operational_status)} text-xs`}>
+                      <p className="text-xs text-gray-500">Estado</p>
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${CONSERVATION_COLORS[item.operational_status] || 'bg-gray-100 text-gray-500'}`}>
                         {getStatusLabel(item.operational_status, OPERATIONAL_STATUS_LABELS)}
-                      </Badge>
+                      </span>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">Conservación</p>
-                      <Badge className={`${getStatusBadgeClass(item.conservation_status)} text-xs`}>
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${CONSERVATION_COLORS[item.conservation_status] || 'bg-gray-100 text-gray-500'}`}>
                         {getStatusLabel(item.conservation_status, CONSERVATION_STATUS_LABELS)}
-                      </Badge>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -212,6 +240,11 @@ export default function PublicElevatorView() {
           ) : (
             <p className="text-gray-500 text-sm">Este ascensor aún no posee historial de mantenimientos.</p>
           )}
+        </div>
+
+        {/* Última actualización */}
+        <div className="text-center text-xs text-gray-400 py-2">
+          <p>Última actualización: {new Date(elevator.updated_at).toLocaleString('es-AR')}</p>
         </div>
 
         {/* Company info */}
@@ -227,7 +260,7 @@ export default function PublicElevatorView() {
             <div className="flex items-center gap-2 text-gray-600">
               <Phone size={14} className="text-secondary" /> {COMPANY_PHONE}
             </div>
-            <div className="flex items-center gap-2 text-gray-600">
+            <div className="finished items-center gap-2 text-gray-600">
               <Mail size={14} className="text-secondary" /> {COMPANY_EMAIL}
             </div>
           </div>
