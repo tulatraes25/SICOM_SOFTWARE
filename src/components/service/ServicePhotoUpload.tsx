@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, X, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { supabase } from '@/config/supabase';
 import type { ServicePhoto } from '@/types/database';
 
@@ -13,6 +13,7 @@ interface ServicePhotoUploadProps {
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_PHOTOS = 10;
 
 export default function ServicePhotoUpload({
   serviceRecordId,
@@ -23,14 +24,19 @@ export default function ServicePhotoUpload({
 }: ServicePhotoUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canEdit = serviceStatus === 'draft' || serviceStatus === 'rejected';
 
-  // Load signed URLs for existing photos
   useEffect(() => {
     loadPhotoUrls();
+    return () => {
+      // Cleanup object URLs
+      Object.values(photoUrls).forEach(url => URL.revokeObjectURL(url));
+    };
   }, [photos]);
 
   const loadPhotoUrls = async () => {
@@ -57,7 +63,13 @@ export default function ServicePhotoUpload({
       return;
     }
 
+    if (photos.length + files.length > MAX_PHOTOS) {
+      setError(`Máximo ${MAX_PHOTOS} fotografías por mantenimiento`);
+      return;
+    }
+
     setError('');
+    setSuccess('');
     setUploading(true);
 
     try {
@@ -66,19 +78,16 @@ export default function ServicePhotoUpload({
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
 
-        // Validate type
         if (!ALLOWED_TYPES.includes(file.type)) {
           setError(`El archivo ${file.name} debe ser JPG, PNG o WebP`);
           continue;
         }
 
-        // Validate size
         if (file.size > MAX_SIZE) {
           setError(`El archivo ${file.name} supera el tamaño máximo de 10 MB`);
           continue;
         }
 
-        // Upload to Storage
         const fileExt = file.name.split('.').pop();
         const fileName = `${serviceRecordId}/${crypto.randomUUID()}.${fileExt}`;
 
@@ -91,7 +100,6 @@ export default function ServicePhotoUpload({
           continue;
         }
 
-        // Insert record
         const { data, error: insertError } = await supabase
           .from('service_photos')
           .insert({
@@ -103,7 +111,6 @@ export default function ServicePhotoUpload({
           .single();
 
         if (insertError) {
-          // Rollback: delete uploaded file
           await supabase.storage.from('service-photos').remove([fileName]);
           setError('No se pudo registrar la fotografía');
           continue;
@@ -114,6 +121,8 @@ export default function ServicePhotoUpload({
 
       if (newPhotos.length > 0) {
         onPhotosChange([...photos, ...newPhotos]);
+        setSuccess('La fotografía fue cargada correctamente');
+        setTimeout(() => setSuccess(''), 3000);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al subir fotos');
@@ -146,24 +155,36 @@ export default function ServicePhotoUpload({
 
   return (
     <div className="space-y-3">
-      <h4 className="font-medium text-gray-700">Fotos</h4>
+      <div className="flex items-center justify-between">
+        <h4 className="font-medium text-gray-700">Fotos ({photos.length}/{MAX_PHOTOS})</h4>
+      </div>
 
       {!canEdit && !readOnly && (
-        <p className="text-sm text-gray-500">
+        <div className="flex items-center gap-2 p-2 bg-gray-100 rounded text-sm text-gray-600">
+          <AlertCircle size={14} />
           Este mantenimiento ya no permite agregar fotografías.
-        </p>
+        </div>
       )}
 
       {error && (
-        <div className="p-2 bg-danger/10 border border-danger/30 rounded text-danger text-sm">
-          {error}
+        <div className="p-2 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2">
+          <AlertCircle size={14} /> {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="p-2 bg-success/10 border border-success/30 rounded text-success text-sm">
+          {success}
         </div>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {photos.map((photo) => (
           <div key={photo.id} className="relative group">
-            <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+            <div
+              className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer"
+              onClick={() => setSelectedPreview(photoUrls[photo.id] || null)}
+            >
               {photoUrls[photo.id] ? (
                 <img
                   src={photoUrls[photo.id]}
@@ -189,7 +210,7 @@ export default function ServicePhotoUpload({
           </div>
         ))}
 
-        {canEdit && !readOnly && (
+        {canEdit && !readOnly && photos.length < MAX_PHOTOS && (
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -216,6 +237,28 @@ export default function ServicePhotoUpload({
         onChange={handleUpload}
         className="hidden"
       />
+
+      {/* Modal preview */}
+      {selectedPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setSelectedPreview(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh]">
+            <img
+              src={selectedPreview}
+              alt="Vista previa"
+              className="max-w-full max-h-[85vh] object-contain rounded-lg"
+            />
+            <button
+              onClick={() => setSelectedPreview(null)}
+              className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-lg"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
