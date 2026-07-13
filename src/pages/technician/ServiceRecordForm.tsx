@@ -336,29 +336,26 @@ export default function ServiceRecordForm() {
               <h3 className="font-semibold text-gray-900">Fotografías del Mantenimiento</h3>
             </div>
             
-            {!savedRecordId && (
-              <div className="mb-4 p-3 bg-warning/10 border border-warning/30 rounded-lg text-sm">
-                <p className="text-warning font-medium">
-                  Guardá el mantenimiento como borrador para poder agregar fotografías.
-                </p>
-                <Button 
-                  size="sm" 
-                  onClick={handleSaveForPhotos} 
-                  loading={saving}
-                  className="mt-2"
-                >
-                  <Save size={14} className="mr-1" /> Guardar borrador y agregar fotos
-                </Button>
-              </div>
-            )}
-
-            {savedRecordId && (
+            {savedRecordId ? (
               <ServicePhotoUpload
                 serviceRecordId={savedRecordId}
                 serviceStatus={recordStatus}
                 photos={photos}
                 onPhotosChange={setPhotos}
               />
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-gray-500 text-sm mb-3">
+                  Para agregar fotos, primero debe guardar el borrador.
+                </p>
+                <Button 
+                  onClick={handleSaveForPhotos} 
+                  loading={saving}
+                  size="sm"
+                >
+                  <Camera size={14} className="mr-1" /> Guardar y agregar fotos
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
