@@ -52,11 +52,45 @@ export default function AdminServiceReviewDetailPage() {
     try {
       setLoading(true);
       setError('');
+      
+      // Cargar registro principal
       const data = await getServiceRecordForReview(id);
       setRecord(data);
       setFinalReport((data as any).ai_report_draft || (data as any).final_report_text || '');
+      
+      // Cargar historial de envíos
       const sends = await listServiceReportSends(id);
       setSendHistory(sends);
+
+      // Cargar checklist explícitamente
+      const { data: checklistData } = await supabase
+        .from('service_checklist_items')
+        .select('*')
+        .eq('service_record_id', id)
+        .order('created_at');
+      
+      if (checklistData) {
+        setRecord(prev => prev ? { ...prev, checklist: checklistData } : prev);
+      }
+
+      // Cargar fotos explícitamente
+      const { data: photosData } = await supabase
+        .from('service_photos')
+        .select('*')
+        .eq('service_record_id', id);
+      
+      if (photosData) {
+        // Generar signed URLs
+        const photosWithUrls = await Promise.all(
+          photosData.map(async (photo: any) => {
+            const { data } = await supabase.storage
+              .from('service-photos')
+              .createSignedUrl(photo.storage_path, 3600);
+            return { ...photo, signedUrl: data?.signedUrl };
+          })
+        );
+        setRecord(prev => prev ? { ...prev, photos: photosWithUrls } : prev);
+      }
     } catch (err: any) {
       setError(err?.message || 'Error al cargar');
     } finally {
