@@ -290,13 +290,25 @@ export default function AdminServiceReviewDetailPage() {
 
             {/* Photos */}
             <Card>
-              <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Image size={18} /> Fotografías</h3></CardHeader>
+              <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Image size={18} /> Fotografías ({photos.length})</h3></CardHeader>
               <CardContent>
                 {photos.length > 0 ? (
                   <div className="grid grid-cols-3 gap-2">
                     {photos.map((p: any) => (
-                      <div key={p.id} className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
-                        <Image size={24} className="text-gray-400" />
+                      <div key={p.id} className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                        {p.signedUrl ? (
+                          <img
+                            src={p.signedUrl}
+                            alt={`Foto ${p.photo_type || 'mantenimiento'}`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).parentElement!.innerHTML = '<div class="flex items-center justify-center h-full text-xs text-gray-500">No disponible</div>';
+                            }}
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-xs text-gray-500">Cargando...</div>
+                        )}
                       </div>
                     ))}
                   </div>
