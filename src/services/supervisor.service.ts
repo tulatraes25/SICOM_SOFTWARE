@@ -1,5 +1,5 @@
 import { supabase } from '@/config/supabase';
-import type { ServiceRecord, MonthlyReport } from '@/types/database';
+import type { ServiceRecord } from '@/types/database';
 
 // Listar registros pendientes de revisión
 export async function listPendingServiceRecords(): Promise<ServiceRecord[]> {
@@ -50,46 +50,33 @@ export async function getServiceRecordForReview(id: string): Promise<ServiceReco
   return data;
 }
 
-// Marcar como en revisión
-export async function markInReview(id: string): Promise<ServiceRecord> {
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  const { data, error } = await supabase
-    .from('service_records')
-    .update({
-      status: 'in_review',
-      reviewed_by: user?.id,
-      reviewed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .select()
-    .single();
+// Marcar como en revisión - USA RPC
+export async function markInReview(id: string): Promise<void> {
+  const { data, error } = await supabase.rpc('start_service_review', {
+    p_service_record_id: id,
+  });
 
   if (error) throw error;
-  return data;
+  if (data?.error) throw new Error(data.error);
 }
 
-// Guardar borrador de informe del supervisor
+// Guardar borrador de informe del supervisor - USA RPC
 export async function saveSupervisorReportDraft(
   serviceRecordId: string,
   content: string
 ): Promise<void> {
-  const { error } = await supabase
-    .from('service_records')
-    .update({
-      supervisor_notes: content,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', serviceRecordId);
+  const { data, error } = await supabase.rpc('save_review_report', {
+    p_service_record_id: serviceRecordId,
+    p_ai_report_draft: content,
+    p_final_report_text: content,
+  });
 
   if (error) throw error;
+  if (data?.error) throw new Error(data.error);
 }
 
-// Generar informe con IA (llama a Edge Function)
-export async function generateAIReportDraft(
-  serviceRecordId: string
-): Promise<string> {
+// Generar informe con IA (Edge Function)
+export async function generateAIReportDraft(serviceRecordId: string): Promise<string> {
   const { data, error } = await supabase.functions.invoke('generate-report', {
     body: { service_record_id: serviceRecordId },
   });
@@ -98,153 +85,48 @@ export async function generateAIReportDraft(
   return data.report;
 }
 
-// Aprobar registro de servicio
-export async function approveServiceRecord(
-  id: string,
-  finalReport?: string
-): Promise<ServiceRecord> {
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  const updateData: Record<string, any> = {
-    status: 'approved',
-    approved_by: user?.id,
-    approved_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-
-  if (finalReport) {
-    updateData.final_report_text = finalReport;
-  }
-
-  const { data, error } = await supabase
-    .from('service_records')
-    .update(updateData)
-    .eq('id', id)
-    .select()
-    .single();
+// Aprobar registro - USA RPC
+export async function approveServiceRecord(id: string): Promise<void> {
+  const { data, error } = await supabase.rpc('approve_service_record', {
+    p_service_record_id: id,
+  });
 
   if (error) throw error;
-  return data;
+  if (data?.error) throw new Error(data.error);
 }
 
-// Rechazar registro de servicio
-export async function rejectServiceRecord(
-  id: string,
-  reason: string
-): Promise<ServiceRecord> {
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  const { data, error } = await supabase
-    .from('service_records')
-    .update({
-      status: 'rejected',
-      rejection_reason: reason,
-      reviewed_by: user?.id,
-      reviewed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .select()
-    .single();
+// Rechazar registro - USA RPC
+export async function rejectServiceRecord(id: string, reason: string): Promise<void> {
+  const { data, error } = await supabase.rpc('reject_service_record', {
+    p_service_record_id: id,
+    p_rejection_reason: reason,
+  });
 
   if (error) throw error;
-  return data;
+  if (data?.error) throw new Error(data.error);
 }
 
-// Actualizar estado del ascensor desde servicio aprobado
-export async function updateElevatorStatusFromApprovedService(
-  serviceRecordId: string
-): Promise<void> {
-  // Obtener el servicio aprobado
-  const { data: service, error: serviceError } = await supabase
-    .from('service_records')
-    .select('elevator_id, operational_status_at_service, conservation_status_at_service, service_date')
-    .eq('id', serviceRecordId)
-    .single();
-
-  if (serviceError || !service) throw serviceError;
-
-  // Actualizar el ascensor
-  const { error: updateError } = await supabase
-    .from('elevators')
-    .update({
-      operational_status: service.operational_status_at_service,
-      conservation_status: service.conservation_status_at_service,
-      last_service_date: service.service_date,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', service.elevator_id);
-
-  if (updateError) throw updateError;
-}
-
-// Crear o actualizar informe mensual
-export async function createOrUpdateMonthlyReport(
-  serviceRecordId: string
-): Promise<MonthlyReport> {
-  // Obtener el servicio
-  const { data: service, error: serviceError } = await supabase
-    .from('service_records')
-    .select('elevator_id, service_date, id, final_report_text')
-    .eq('id', serviceRecordId)
-    .single();
-
-  if (serviceError || !service) throw serviceError;
-
-  // Determinar período
-  const date = new Date(service.service_date);
-  const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-  // Buscar monthly_report existente
-  const { data: existing } = await supabase
+// Obtener informes mensuales
+export async function listMonthlyReports(filters?: {
+  elevator_id?: string;
+  period?: string;
+  status?: string;
+}): Promise<any[]> {
+  let query = supabase
     .from('monthly_reports')
-    .select('id')
-    .eq('elevator_id', service.elevator_id)
-    .eq('period', period)
-    .single();
+    .select(`
+      *,
+      elevator:elevators(code, building:buildings(name))
+    `)
+    .order('period', { ascending: false });
 
-  const { data: { user } } = await supabase.auth.getUser();
+  if (filters?.elevator_id) query = query.eq('elevator_id', filters.elevator_id);
+  if (filters?.period) query = query.eq('period', filters.period);
+  if (filters?.status) query = query.eq('status', filters.status);
 
-  if (existing) {
-    // Actualizar existente
-    const { data, error } = await supabase
-      .from('monthly_reports')
-      .update({
-        content: service.final_report_text,
-        status: 'reviewed',
-        reviewed_by: user?.id,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', existing.id)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Incrementar services_count por separado
-    await supabase.rpc('increment_services_count', { report_id: existing.id });
-
-    return data;
-  } else {
-    // Crear nuevo
-    const { data, error } = await supabase
-      .from('monthly_reports')
-      .insert({
-        elevator_id: service.elevator_id,
-        period,
-        title: `Informe Mensual - ${period}`,
-        content: service.final_report_text,
-        status: 'reviewed',
-        created_by: user?.id,
-        reviewed_by: user?.id,
-        services_count: 1,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
 }
 
 // Estadísticas del dashboard

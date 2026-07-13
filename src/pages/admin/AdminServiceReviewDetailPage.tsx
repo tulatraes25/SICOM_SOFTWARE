@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { getServiceRecordForReview, approveServiceRecord, rejectServiceRecord, updateElevatorStatusFromApprovedService } from '@/services/supervisor.service';
+import { getServiceRecordForReview, approveServiceRecord, rejectServiceRecord } from '@/services/supervisor.service';
 import { listServiceReportSends, sendServiceReportByEmail } from '@/services/serviceReportSends.service';
 import { createAuditLog } from '@/services/audit.service';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -102,9 +102,7 @@ export default function AdminServiceReviewDetailPage() {
     if (!confirm('¿Aprobar este mantenimiento?')) return;
     setSaving(true);
     try {
-      await approveServiceRecord(id, finalReport || undefined);
-      await updateElevatorStatusFromApprovedService(id);
-      await createAuditLog({ action: 'approve', entity_type: 'service_record', entity_id: id });
+      await approveServiceRecord(id);
       setSuccess('Mantenimiento aprobado correctamente');
       setTimeout(() => setSuccess(''), 3000);
       loadData();

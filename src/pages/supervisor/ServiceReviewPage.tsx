@@ -7,8 +7,6 @@ import {
   saveSupervisorReportDraft,
   approveServiceRecord,
   rejectServiceRecord,
-  updateElevatorStatusFromApprovedService,
-  createOrUpdateMonthlyReport,
 } from '@/services/supervisor.service';
 import { getChecklistByServiceRecord, getPhotosByServiceRecord } from '@/services/serviceRecords.service';
 import { createAuditLog } from '@/services/audit.service';
@@ -117,14 +115,7 @@ export default function ServiceReviewPage() {
     if (!id || !confirm('¿Aprobar este informe? El estado del ascensor se actualizará.')) return;
     setSaving(true);
     try {
-      await approveServiceRecord(id, reportContent);
-      await updateElevatorStatusFromApprovedService(id);
-      await createOrUpdateMonthlyReport(id);
-      await createAuditLog({
-        action: 'approve',
-        entity_type: 'service_record',
-        entity_id: id,
-      });
+      await approveServiceRecord(id);
       navigate('/supervisor');
     } catch (err) {
       console.error('Error:', err);
