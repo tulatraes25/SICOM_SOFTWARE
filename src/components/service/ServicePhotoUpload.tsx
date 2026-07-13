@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, X, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { supabase } from '@/config/supabase';
+import { buildServicePhotoPath, BUCKET_NAME } from '@/lib/storagePaths';
 import type { ServicePhoto } from '@/types/database';
 
 interface ServicePhotoUploadProps {
@@ -12,7 +13,7 @@ interface ServicePhotoUploadProps {
 }
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_SIZE = 10 * 1024 * 1024;
 const MAX_PHOTOS = 10;
 
 export default function ServicePhotoUpload({
@@ -33,10 +34,6 @@ export default function ServicePhotoUpload({
 
   useEffect(() => {
     loadPhotoUrls();
-    return () => {
-      // Cleanup object URLs
-      Object.values(photoUrls).forEach(url => URL.revokeObjectURL(url));
-    };
   }, [photos]);
 
   const loadPhotoUrls = async () => {
@@ -44,7 +41,7 @@ export default function ServicePhotoUpload({
     for (const photo of photos) {
       if (photo.storage_path) {
         const { data } = await supabase.storage
-          .from('service-photos')
+          .from(BUCKET_NAME)
           .createSignedUrl(photo.storage_path, 3600);
         if (data?.signedUrl) {
           urls[photo.id] = data.signedUrl;
@@ -88,12 +85,12 @@ export default function ServicePhotoUpload({
           continue;
         }
 
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${serviceRecordId}/${crypto.randomUUID()}.${fileExt}`;
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const storagePath = buildServicePhotoPath(serviceRecordId, fileExt);
 
         const { error: uploadError } = await supabase.storage
-          .from('service-photos')
-          .upload(fileName, file);
+          .from(BUCKET_NAME)
+          .upload(storagePath, file);
 
         if (uploadError) {
           setError('No se pudo subir la fotografía');
@@ -104,14 +101,14 @@ export default function ServicePhotoUpload({
           .from('service_photos')
           .insert({
             service_record_id: serviceRecordId,
-            storage_path: fileName,
+            storage_path: storagePath,
             photo_type: 'general',
           })
           .select()
           .single();
 
         if (insertError) {
-          await supabase.storage.from('service-photos').remove([fileName]);
+          await supabase.storage.from(BUCKET_NAME).remove([storagePath]);
           setError('No se pudo registrar la fotografía');
           continue;
         }
@@ -143,7 +140,7 @@ export default function ServicePhotoUpload({
         .single();
 
       if (data?.storage_path) {
-        await supabase.storage.from('service-photos').remove([data.storage_path]);
+        await supabase.storage.from(BUCKET_NAME).remove([data.storage_path]);
       }
 
       await supabase.from('service_photos').delete().eq('id', photoId);
@@ -186,11 +183,7 @@ export default function ServicePhotoUpload({
               onClick={() => setSelectedPreview(photoUrls[photo.id] || null)}
             >
               {photoUrls[photo.id] ? (
-                <img
-                  src={photoUrls[photo.id]}
-                  alt={photo.photo_type}
-                  className="w-full h-full object-cover"
-                />
+                <img src={photoUrls[photo.id]} alt={photo.photo_type} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <ImageIcon size={24} className="text-gray-400" />
@@ -238,22 +231,11 @@ export default function ServicePhotoUpload({
         className="hidden"
       />
 
-      {/* Modal preview */}
       {selectedPreview && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setSelectedPreview(null)}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setSelectedPreview(null)}>
           <div className="relative max-w-4xl max-h-[90vh]">
-            <img
-              src={selectedPreview}
-              alt="Vista previa"
-              className="max-w-full max-h-[85vh] object-contain rounded-lg"
-            />
-            <button
-              onClick={() => setSelectedPreview(null)}
-              className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-lg"
-            >
+            <img src={selectedPreview} alt="Vista previa" className="max-w-full max-h-[85vh] object-contain rounded-lg" />
+            <button onClick={() => setSelectedPreview(null)} className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-lg">
               <X size={16} />
             </button>
           </div>
