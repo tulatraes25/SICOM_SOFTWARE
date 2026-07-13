@@ -14,10 +14,12 @@ interface PublicElevatorData {
   elevator_type?: string;
   operational_status: string;
   conservation_status: string;
-  contractual_status: string;
   last_service_date?: string;
-  updated_at: string;
-  building?: { name: string; address: string; locality: string; province: string; };
+  building_name: string;
+  building_address: string;
+  building_locality: string;
+  building_province: string;
+  company_name: string;
 }
 
 function getStatusLabel(status: string, labels: Record<string, string>): string {
@@ -61,8 +63,8 @@ export default function PublicElevatorView() {
       const data = await getPublicElevatorByToken(token!);
       if (!data) { setError('No se encontró un ascensor asociado a este código QR.'); return; }
       setElevator(data);
-      await logQRScan(token!, data.id);
-      const historyData = await getPublicServiceHistory(data.id);
+      await logQRScan(token!);
+      const historyData = await getPublicServiceHistory(token!);
       setHistory(historyData);
     } catch { setError('Error al cargar la información del ascensor.'); }
     finally { setLoading(false); }
@@ -138,14 +140,14 @@ export default function PublicElevatorView() {
         </div>
 
         {/* Location */}
-        {elevator.building && (
+        {elevator.building_name && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <div className="flex items-start gap-3">
               <MapPin size={20} className="text-secondary mt-0.5" />
               <div>
-                <p className="font-medium text-gray-900">{elevator.building.name}</p>
-                <p className="text-sm text-gray-600">{elevator.building.address}</p>
-                <p className="text-sm text-gray-500">{elevator.building.locality}, {elevator.building.province}</p>
+                <p className="font-medium text-gray-900">{elevator.building_name}</p>
+                <p className="text-sm text-gray-600">{elevator.building_address}</p>
+                <p className="text-sm text-gray-500">{elevator.building_locality}, {elevator.building_province}</p>
               </div>
             </div>
           </div>
@@ -240,11 +242,6 @@ export default function PublicElevatorView() {
           ) : (
             <p className="text-gray-500 text-sm">Este ascensor aún no posee historial de mantenimientos.</p>
           )}
-        </div>
-
-        {/* Última actualización */}
-        <div className="text-center text-xs text-gray-400 py-2">
-          <p>Última actualización: {new Date(elevator.updated_at).toLocaleString('es-AR')}</p>
         </div>
 
         {/* Company info */}
