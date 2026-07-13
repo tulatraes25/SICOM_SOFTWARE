@@ -23,7 +23,7 @@ import type { ServiceType } from '@/types/database';
 import { SERVICE_TYPE_LABELS } from '@/config/constants';
 import type { Elevator } from '@/types/database';
 import type { ServicePhoto } from '@/types/database';
-import { Building2, Save, Send } from 'lucide-react';
+import { Building2, Save, Send, Camera } from 'lucide-react';
 
 export default function ServiceRecordForm() {
   const navigate = useNavigate();
@@ -32,12 +32,12 @@ export default function ServiceRecordForm() {
   const isEditing = !!recordId;
   
   const [elevator, setElevator] = useState<Elevator | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [checklist, setChecklist] = useState(createDefaultChecklist());
   const [photos, setPhotos] = useState<ServicePhoto[]>([]);
   const [savedRecordId, setSavedRecordId] = useState<string | null>(null);
+  const [recordStatus, setRecordStatus] = useState<string>('draft');
   
   const [formData, setFormData] = useState<{
     service_date: string;
@@ -71,13 +71,11 @@ export default function ServiceRecordForm() {
       const record = await getServiceRecordById(recordId);
       if (!record) {
         setError('Registro no encontrado');
-        setLoading(false);
+        
         return;
       }
       
-      // Cargar el ascensor del registro
-      const elevatorIdFromRecord = record.elevator_id;
-      const elevatorData = await getElevatorById(elevatorIdFromRecord);
+      const elevatorData = await getElevatorById(record.elevator_id);
       setElevator(elevatorData);
       
       setFormData({
@@ -91,8 +89,8 @@ export default function ServiceRecordForm() {
       });
       
       setSavedRecordId(record.id);
+      setRecordStatus(record.status);
       
-      // Cargar checklist del registro
       const checklistItems = (record as any).checklist || [];
       if (checklistItems.length > 0) {
         setChecklist(checklistItems.map((item: any) => ({
@@ -101,10 +99,13 @@ export default function ServiceRecordForm() {
           notes: item.notes || '',
         })));
       }
+      
+      const photoItems = (record as any).photos || [];
+      setPhotos(photoItems);
     } catch (err: any) {
       setError(err?.message || 'Error al cargar el registro');
     } finally {
-      setLoading(false);
+      
     }
   };
 
@@ -123,23 +124,20 @@ export default function ServiceRecordForm() {
     } catch (err) {
       console.error('Error:', err);
     } finally {
-      setLoading(false);
+      
     }
   };
 
-  const handleSaveDraft = async () => {
-    if (!elevator || !user) return;
+  const saveDraft = async (): Promise<string | null> => {
+    if (!elevator || !user) return null;
     setError('');
-    setSaving(true);
-
+    
     try {
       let currentRecordId = savedRecordId;
 
       if (currentRecordId) {
-        // Update existing
         await updateServiceRecord(currentRecordId, formData);
       } else {
-        // Create new
         const record = await createServiceRecord({
           elevator_id: elevator.id,
           technician_id: user.id,
@@ -147,9 +145,9 @@ export default function ServiceRecordForm() {
         });
         currentRecordId = record.id;
         setSavedRecordId(record.id);
+        setRecordStatus('draft');
       }
 
-      // Update checklist
       await deleteChecklistByServiceRecord(currentRecordId);
       await createChecklistItems(
         checklist.map(item => ({
@@ -165,9 +163,27 @@ export default function ServiceRecordForm() {
         new_data: formData,
       });
 
-      navigate('/tecnico');
+      return currentRecordId;
     } catch (err: any) {
       setError(err?.message || 'Error al guardar');
+      return null;
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    setSaving(true);
+    try {
+      await saveDraft();
+      navigate('/tecnico');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveForPhotos = async () => {
+    setSaving(true);
+    try {
+      await saveDraft();
     } finally {
       setSaving(false);
     }
@@ -198,43 +214,25 @@ export default function ServiceRecordForm() {
     }
   };
 
-  if (loading) {
-    return (
-      <DashboardLayout role="technician" title={isEditing ? 'Editar Mantenimiento' : 'Cargar Mantenimiento'}>
-        <div className="text-center py-8">
-          <div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin mx-auto" />
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  if (!elevator) {
-    return (
-      <DashboardLayout role="technician" title="Cargar Mantenimiento">
-        <div className="text-center py-8">
-          <p className="text-gray-500">Ascensor no encontrado</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   return (
     <DashboardLayout role="technician" title={isEditing ? 'Editar Mantenimiento' : 'Cargar Mantenimiento'}>
       <div className="space-y-6 max-w-3xl mx-auto">
         {/* Elevator info */}
-        <Card>
-          <CardContent>
-            <div className="flex items-center gap-3">
-              <Building2 size={24} className="text-primary" />
-              <div>
-                <h2 className="font-mono font-bold text-xl">{elevator.code}</h2>
-                <p className="text-sm text-gray-600">
-                  {elevator.building?.name} - {elevator.building?.address}
-                </p>
+        {elevator && (
+          <Card>
+            <CardContent>
+              <div className="flex items-center gap-3">
+                <Building2 size={24} className="text-primary" />
+                <div>
+                  <h2 className="font-mono font-bold text-xl">{elevator.code}</h2>
+                  <p className="text-sm text-gray-600">
+                    {elevator.building?.name} - {elevator.building?.address}
+                  </p>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {error && (
           <div className="p-3 bg-danger/10 border border-danger/30 rounded-lg text-danger text-sm">
@@ -284,10 +282,7 @@ export default function ServiceRecordForm() {
         {/* Checklist */}
         <Card>
           <CardContent>
-            <ServiceChecklist
-              items={checklist}
-              onChange={setChecklist}
-            />
+            <ServiceChecklist items={checklist} onChange={setChecklist} />
           </CardContent>
         </Card>
 
@@ -324,7 +319,7 @@ export default function ServiceRecordForm() {
                 <textarea
                   value={formData.technical_report}
                   onChange={(e) => setFormData({ ...formData, technical_report: e.target.value })}
-                  placeholder="Resumen técnico del mantenimiento realizado..."
+                  placeholder="Resumen técnico del mantenimiento..."
                   className="w-full border border-gray-300 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   rows={4}
                 />
@@ -333,18 +328,40 @@ export default function ServiceRecordForm() {
           </CardContent>
         </Card>
 
-        {/* Photos */}
-        {savedRecordId && (
-          <Card>
-            <CardContent>
+        {/* Photos - siempre visible */}
+        <Card>
+          <CardContent>
+            <div className="flex items-center gap-2 mb-4">
+              <Camera size={18} className="text-primary" />
+              <h3 className="font-semibold text-gray-900">Fotografías del Mantenimiento</h3>
+            </div>
+            
+            {!savedRecordId && (
+              <div className="mb-4 p-3 bg-warning/10 border border-warning/30 rounded-lg text-sm">
+                <p className="text-warning font-medium">
+                  Guardá el mantenimiento como borrador para poder agregar fotografías.
+                </p>
+                <Button 
+                  size="sm" 
+                  onClick={handleSaveForPhotos} 
+                  loading={saving}
+                  className="mt-2"
+                >
+                  <Save size={14} className="mr-1" /> Guardar borrador y agregar fotos
+                </Button>
+              </div>
+            )}
+
+            {savedRecordId && (
               <ServicePhotoUpload
                 serviceRecordId={savedRecordId}
+                serviceStatus={recordStatus}
                 photos={photos}
                 onPhotosChange={setPhotos}
               />
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </CardContent>
+        </Card>
 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row justify-end gap-3 pb-6">
