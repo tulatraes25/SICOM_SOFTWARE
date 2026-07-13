@@ -5,22 +5,52 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(date: string | Date): string {
+/**
+ * Formatea una fecha DATE (YYYY-MM-DD) sin problemas de zona horaria.
+ * Usa parseo manual para evitar que new Date("2026-07-09") se convierta a 08/07 por UTC.
+ */
+export function formatDate(dateStr: string | Date): string {
+  if (!dateStr) return 'N/D';
+  
+  if (dateStr instanceof Date) {
+    return new Intl.DateTimeFormat('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(dateStr);
+  }
+
+  // Para strings DATE (YYYY-MM-DD), parsear manualmente
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    return `${day}/${month}/${year}`;
+  }
+
+  // Fallback para timestamps
   return new Intl.DateTimeFormat('es-AR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-  }).format(new Date(date));
+  }).format(new Date(dateStr));
 }
 
-export function formatDateTime(date: string | Date): string {
+/**
+ * Formatea un timestamp con zona horaria Argentina
+ */
+export function formatDateTime(dateStr: string | Date): string {
+  if (!dateStr) return 'N/D';
+  
+  const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
+  
   return new Intl.DateTimeFormat('es-AR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(date));
+    timeZone: 'America/Argentina/Buenos_Aires',
+  }).format(date);
 }
 
 export function formatPeriod(date: Date): string {
