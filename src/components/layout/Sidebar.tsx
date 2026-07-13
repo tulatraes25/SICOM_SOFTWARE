@@ -131,6 +131,9 @@ export default function Sidebar({ role, onLogout }: SidebarProps) {
 
         {/* Footer */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+          {!collapsed && (
+            <p className="text-xs text-gray-400 text-center mb-2">SICOM Patagonia SRL v1.0.0</p>
+          )}
           <button
             onClick={onLogout}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors w-full"
