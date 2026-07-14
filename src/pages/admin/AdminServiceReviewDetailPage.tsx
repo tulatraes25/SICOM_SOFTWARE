@@ -9,10 +9,11 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import ServiceRecordPDF from '@/components/pdf/ServiceRecordPDF';
+import PhotoViewerModal from '@/components/photos/PhotoViewerModal';
 import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import type { ServiceRecord } from '@/types/database';
-import { ArrowLeft, CheckCircle, XCircle, AlertCircle, Download, Loader2, Sparkles, Save, Mail, Clock, Check, X, Image, Calendar } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, AlertCircle, Download, Loader2, Sparkles, Save, Mail, Check, X, Image, Calendar, Clock } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default', submitted: 'info', in_review: 'warning', approved: 'success', rejected: 'danger',
@@ -37,6 +38,8 @@ export default function AdminServiceReviewDetailPage() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [sendHistory, setSendHistory] = useState<any[]>([]);
   const [recipients, setRecipients] = useState<any[]>([]);
+  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
+  const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
 
   useEffect(() => { loadData(); }, [id]);
   useEffect(() => {
@@ -201,6 +204,17 @@ export default function AdminServiceReviewDetailPage() {
   const canUseAI = ['submitted', 'in_review', 'approved'].includes(record.status);
   const fileName = `informe-${elevator?.code || 'ascensor'}-${record.service_date}.pdf`;
 
+  const openPhoto = (index: number) => {
+    if (photos[index]?.signedUrl) {
+      setPhotoViewerIndex(index);
+      setPhotoViewerOpen(true);
+    }
+  };
+
+  const closePhoto = () => setPhotoViewerOpen(false);
+  const showPrevious = () => setPhotoViewerIndex(prev => Math.max(0, prev - 1));
+  const showNext = () => setPhotoViewerIndex(prev => Math.min(photos.length - 1, prev + 1));
+
   return (
     <DashboardLayout role="admin" title="Revisión de Mantenimiento">
       <div className="space-y-6 max-w-5xl mx-auto">
@@ -294,22 +308,24 @@ export default function AdminServiceReviewDetailPage() {
               <CardContent>
                 {photos.length > 0 ? (
                   <div className="grid grid-cols-3 gap-2">
-                    {photos.map((p: any) => (
-                      <div key={p.id} className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                    {photos.map((p: any, index: number) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => openPhoto(index)}
+                        aria-label={`Abrir fotografía ${index + 1} de ${photos.length}`}
+                        className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                      >
                         {p.signedUrl ? (
                           <img
                             src={p.signedUrl}
-                            alt={`Foto ${p.photo_type || 'mantenimiento'}`}
+                            alt={`Fotografía del mantenimiento ${index + 1}`}
                             className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              (e.target as HTMLImageElement).parentElement!.innerHTML = '<div class="flex items-center justify-center h-full text-xs text-gray-500">No disponible</div>';
-                            }}
                           />
                         ) : (
-                          <div className="flex items-center justify-center h-full text-xs text-gray-500">Cargando...</div>
+                          <div className="flex items-center justify-center h-full text-xs text-gray-500">No disponible</div>
                         )}
-                      </div>
+                      </button>
                     ))}
                   </div>
                 ) : <p className="text-gray-500 text-sm">Sin fotografías</p>}
@@ -423,6 +439,16 @@ export default function AdminServiceReviewDetailPage() {
             </div>
           </div>
         )}
+
+        {/* Photo Viewer Modal */}
+        <PhotoViewerModal
+          photos={photos}
+          currentIndex={photoViewerIndex}
+          isOpen={photoViewerOpen}
+          onClose={closePhoto}
+          onPrevious={showPrevious}
+          onNext={showNext}
+        />
       </div>
     </DashboardLayout>
   );
