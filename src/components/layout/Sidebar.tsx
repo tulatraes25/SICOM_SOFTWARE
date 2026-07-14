@@ -13,6 +13,7 @@ import {
   FileText,
   Search,
   FolderOpen,
+  FileSignature,
 } from 'lucide-react';
 import { ROUTES } from '@/config/constants';
 
@@ -29,18 +30,21 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Ascensores', path: ROUTES.ADMIN_ELEVATORS, icon: Wrench },
     { label: 'Expedientes', path: ROUTES.ADMIN_SERVICE_CASES, icon: FolderOpen },
     { label: 'Revisión de Servicios', path: '/admin/mantenimientos', icon: FileText },
+    { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
+    { label: 'Configuración documental', path: '/admin/configuracion/documentos', icon: Settings },
     { label: 'Usuarios', path: ROUTES.ADMIN_USERS, icon: Users, disabled: true },
-    { label: 'Configuración', path: ROUTES.ADMIN_SETTINGS, icon: Settings, disabled: true },
   ],
   technician: [
     { label: 'Dashboard', path: ROUTES.TECH_DASHBOARD, icon: LayoutDashboard },
     { label: 'Buscar Ascensor', path: '/tecnico/ascensores', icon: Search },
     { label: 'Mis Mantenimientos', path: '/tecnico/mantenimientos', icon: FileText },
+    { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
   ],
   supervisor: [
     { label: 'Dashboard', path: ROUTES.SUPERVISOR_DASHBOARD, icon: LayoutDashboard },
     { label: 'Revisiones', path: '/supervisor/revisiones', icon: FileText },
     { label: 'Informes Mensuales', path: '/supervisor/informes', icon: FileText },
+    { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
   ],
   responsible: [
     { label: 'Dashboard', path: ROUTES.RESPONSIBLE_DASHBOARD, icon: LayoutDashboard },
