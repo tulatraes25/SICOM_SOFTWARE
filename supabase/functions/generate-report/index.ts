@@ -141,6 +141,8 @@ DATOS DEL SERVICIO:
 - Tipo de servicio: ${serviceRecord.service_type}
 - Técnico: ${serviceRecord.technician?.full_name || "No informado"}
 
+IMPORTANTE: Usa EXACTAMENTE la fecha indicada arriba (formato: AAAA-MM-DD) en todo el informe. No uses la fecha actual ni inventes otra fecha.
+
 ESTADOS RESULTANTES:
 - Estado operativo: ${serviceRecord.operational_status_at_service || "No informado"}
 - Estado de conservación: ${serviceRecord.conservation_status_at_service || "No informado"}

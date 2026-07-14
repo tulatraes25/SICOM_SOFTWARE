@@ -31,7 +31,7 @@ interface ServiceRecordPDFProps {
   technician?: { full_name: string };
   approvedBy?: { full_name: string };
   checklist?: Array<{ item_name: string; status: string; notes?: string }>;
-  selectedPhotos?: Array<{ id: string; signedUrl?: string; photo_type?: string; report_order?: number }>;
+  selectedPhotos?: Array<{ id: string; signedUrl?: string; photo_type?: string; report_order?: number; imageData?: string | null }>;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -98,7 +98,16 @@ function getStatusStyle(status: string) {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return 'N/D';
-  try { return new Date(dateStr).toLocaleDateString('es-AR'); } catch { return dateStr; }
+  try {
+    // Parseo manual para evitar desplazamiento por timezone
+    const [year, month, day] = dateStr.split('-');
+    if (year && month && day) {
+      return `${parseInt(day)}/${parseInt(month)}/${year}`;
+    }
+    return dateStr;
+  } catch {
+    return dateStr;
+  }
 }
 
 function getMainReportText(record: any): string {
@@ -175,21 +184,16 @@ export default function ServiceRecordPDF({
         )}
 
         {/* Registro fotográfico */}
-        {selectedPhotos.length > 0 && (
+        {selectedPhotos.length > 0 && selectedPhotos.some(p => !!p.imageData) && (
           <View style={styles.photoSection}>
             <Text style={styles.sectionTitle}>REGISTRO FOTOGRÁFICO</Text>
             <View style={styles.photoGrid}>
               {selectedPhotos
+                .filter((p): p is typeof p & { imageData: string } => !!p.imageData)
                 .sort((a, b) => (a.report_order || 0) - (b.report_order || 0))
                 .map((photo, index) => (
                   <View key={photo.id} style={styles.photoContainer}>
-                    {photo.signedUrl ? (
-                      <Image src={photo.signedUrl} style={styles.photo} />
-                    ) : (
-                      <View style={[styles.photo, { justifyContent: 'center', alignItems: 'center' }]}>
-                        <Text style={{ fontSize: 8, color: '#999' }}>No disponible</Text>
-                      </View>
-                    )}
+                    <Image src={photo.imageData} style={styles.photo} />
                     <Text style={styles.photoCaption}>Fotografía {index + 1}</Text>
                   </View>
                 ))}

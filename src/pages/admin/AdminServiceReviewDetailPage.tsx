@@ -4,6 +4,7 @@ import { supabase } from '@/config/supabase';
 import { getServiceRecordForReview, approveServiceRecord, rejectServiceRecord } from '@/services/supervisor.service';
 import { listServiceReportSends, sendServiceReportByEmail } from '@/services/serviceReportSends.service';
 import { createAuditLog } from '@/services/audit.service';
+import { processPhotosForPDF } from '@/lib/photoUtils';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -41,6 +42,7 @@ export default function AdminServiceReviewDetailPage() {
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
   const [photos, setPhotos] = useState<any[]>([]);
+  const [processedPhotos, setProcessedPhotos] = useState<any[]>([]);
 
   useEffect(() => { loadData(); }, [id]);
   useEffect(() => {
@@ -94,6 +96,10 @@ export default function AdminServiceReviewDetailPage() {
           })
         );
         setPhotos(photosWithUrls);
+        
+        // Procesar fotos seleccionadas para PDF
+        const processed = await processPhotosForPDF(photosData);
+        setProcessedPhotos(processed);
       }
     } catch (err: any) {
       setError(err?.message || 'Error al cargar');
@@ -428,7 +434,7 @@ export default function AdminServiceReviewDetailPage() {
                             technician={technician}
                             approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Administrador' } : undefined}
                             checklist={checklist}
-                            selectedPhotos={photos.filter((p: any) => p.include_in_report)}
+                            selectedPhotos={processedPhotos}
                           />
                         }
                         fileName={fileName}
