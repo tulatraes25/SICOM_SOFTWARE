@@ -139,7 +139,7 @@ export async function getCaseEvents(caseId: string): Promise<ServiceCaseEvent[]>
     .from('service_case_events')
     .select(`
       *,
-      performer:profiles(performed_by, full_name)
+      performer:profiles!service_case_events_performed_by_fkey(id, full_name, email)
     `)
     .eq('service_case_id', caseId)
     .order('created_at', { ascending: true });
