@@ -136,11 +136,14 @@ END $$;
 -- 4. RPC: create_budget
 -- ============================================================
 
-CREATE OR REPLACE FUNCTION create_budget(
+DROP FUNCTION IF EXISTS public.create_budget(UUID, UUID, UUID, TEXT, DATE, DATE, UUID);
+DROP FUNCTION IF EXISTS public.create_budget(UUID, TEXT, UUID, UUID, DATE, DATE, UUID);
+
+CREATE OR REPLACE FUNCTION public.create_budget(
   p_client_id UUID,
+  p_subject TEXT,
   p_building_id UUID DEFAULT NULL,
   p_elevator_id UUID DEFAULT NULL,
-  p_subject TEXT,
   p_budget_date DATE DEFAULT CURRENT_DATE,
   p_valid_until DATE DEFAULT NULL,
   p_service_case_id UUID DEFAULT NULL
@@ -177,13 +180,18 @@ BEGIN
       RETURN jsonb_build_object('error', 'Expediente no encontrado o no es de tipo presupuesto');
     END IF;
   ELSE
-    -- Create new service case
+    -- Create new service case using named parameters
     DECLARE
       v_result JSONB;
     BEGIN
-      SELECT * INTO v_result FROM create_service_case(
-        'budget', p_client_id, p_building_id, p_elevator_id,
-        p_subject, NULL, NULL
+      SELECT * INTO v_result FROM public.create_service_case(
+        p_origin_type => 'budget',
+        p_client_id => p_client_id,
+        p_building_id => p_building_id,
+        p_elevator_id => p_elevator_id,
+        p_title => p_subject,
+        p_description => NULL,
+        p_assigned_to => NULL
       );
       IF v_result ? 'error' THEN
         RETURN v_result;
@@ -204,9 +212,13 @@ BEGIN
   )
   RETURNING * INTO v_budget;
 
-  -- Audit
-  INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_data)
-  VALUES (v_user_id, 'create', 'budgets', v_budget.id, to_jsonb(v_budget));
+  -- Audit (non-blocking)
+  BEGIN
+    INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_data)
+    VALUES (v_user_id, 'create', 'budgets', v_budget.id, to_jsonb(v_budget));
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
 
   RETURN jsonb_build_object(
     'budget_id', v_budget.id,
@@ -217,9 +229,9 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION create_budget(UUID, UUID, UUID, TEXT, DATE, DATE, UUID) FROM PUBLIC;
-REVOKE ALL ON FUNCTION create_budget(UUID, UUID, UUID, TEXT, DATE, DATE, UUID) FROM anon;
-GRANT EXECUTE ON FUNCTION create_budget(UUID, UUID, UUID, TEXT, DATE, DATE, UUID) TO authenticated;
+REVOKE ALL ON FUNCTION public.create_budget(UUID, TEXT, UUID, UUID, DATE, DATE, UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.create_budget(UUID, TEXT, UUID, UUID, DATE, DATE, UUID) FROM anon;
+GRANT EXECUTE ON FUNCTION public.create_budget(UUID, TEXT, UUID, UUID, DATE, DATE, UUID) TO authenticated;
 
 -- ============================================================
 -- 5. RPC: recalculate_budget_totals
