@@ -55,7 +55,13 @@ export default function UserSignaturePage() {
       setSuccess('Firma cargada correctamente');
       await loadSignatures();
     } catch (err: any) {
-      setError(err?.message || 'Error al cargar firma');
+      const msg = err?.message || 'Error al cargar firma';
+      // Hide technical RLS/storage errors from user
+      if (msg.includes('row-level') || msg.includes('policy') || msg.includes('RLS')) {
+        setError('No se pudo cargar la firma. Verificá tu sesión e intentá nuevamente.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

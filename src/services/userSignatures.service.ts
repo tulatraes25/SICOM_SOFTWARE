@@ -52,48 +52,57 @@ export async function uploadSignature(
     throw new Error('Solo se permiten archivos PNG o JPEG');
   }
 
-  // Deactivate existing signature of same type
-  const existing = await getMyActiveSignature(signatureType);
-  if (existing) {
-    await supabase
-      .from('user_signatures')
-      .update({ is_active: false, revoked_at: new Date().toISOString(), revoked_by: user.id })
-      .eq('id', existing.id);
-  }
-
-  // Upload file
+  // Generate storage path using auth.uid()
   const ext = file.type === 'image/png' ? 'png' : 'jpg';
   const signatureId = crypto.randomUUID();
   const storagePath = `users/${user.id}/${signatureId}.${ext}`;
 
+  // Step 1: Upload file to storage
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
     .upload(storagePath, file, { contentType: file.type });
 
-  if (uploadError) throw uploadError;
-
-  // Create record
-  const { data, error: insertError } = await supabase
-    .from('user_signatures')
-    .insert({
-      user_id: user.id,
-      signature_type: signatureType,
-      storage_path: storagePath,
-      original_filename: file.name,
-      mime_type: file.type,
-      file_size: file.size,
-      is_active: true,
-      uploaded_by: user.id,
-    })
-    .select()
-    .single();
-
-  if (insertError) {
-    await supabase.storage.from(BUCKET).remove([storagePath]);
-    throw insertError;
+  if (uploadError) {
+    console.error('[uploadSignature] Storage upload error:', uploadError);
+    throw new Error('No se pudo subir el archivo. Verificá tu sesión e intentá nuevamente.');
   }
 
-  return data;
+  // Step 2: Create record via RPC (handles revocation of old signature + insert)
+  const { data: rpcData, error: rpcError } = await supabase.rpc('create_user_signature', {
+    p_signature_type: signatureType,
+    p_storage_path: storagePath,
+    p_original_filename: file.name,
+    p_mime_type: file.type,
+    p_file_size: file.size,
+  });
+
+  if (rpcError) {
+    console.error('[uploadSignature] RPC error:', rpcError);
+    // Rollback: remove uploaded file
+    await supabase.storage.from(BUCKET).remove([storagePath]);
+    throw new Error('No se pudo registrar la firma. Verificá tu sesión e intentá nuevamente.');
+  }
+
+  if (rpcData?.error) {
+    console.error('[uploadSignature] RPC business error:', rpcData.error);
+    // Rollback: remove uploaded file
+    await supabase.storage.from(BUCKET).remove([storagePath]);
+    throw new Error(rpcData.error);
+  }
+
+  // Return the created signature
+  return {
+    id: rpcData.id,
+    user_id: user.id,
+    signature_type: rpcData.signature_type,
+    storage_path: rpcData.storage_path,
+    mime_type: file.type,
+    file_size: file.size,
+    is_active: true,
+    uploaded_by: user.id,
+    created_at: rpcData.created_at,
+    updated_at: rpcData.created_at,
+  } as UserSignature;
 }
 
 export async function revokeSignature(signatureId: string): Promise<void> {
