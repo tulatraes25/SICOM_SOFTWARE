@@ -25,6 +25,8 @@ export const ROUTES = {
   ADMIN_SERVICE_CASE_NEW: '/admin/expedientes/nuevo',
   ADMIN_SERVICE_CASE_DETAIL: '/admin/expedientes/:id',
   ADMIN_NUMBERING_CONFIG: '/admin/configuracion/numeracion',
+  ADMIN_DOCUMENT_SETTINGS: '/admin/configuracion/documentos',
+  ADMIN_USER_SIGNATURE: '/perfil/firma',
   ADMIN_ELEVATOR_VISIT_BOOK: '/admin/ascensores/:elevatorId/libro',
   ADMIN_VISIT_ENTRY_NEW: '/admin/ascensores/:elevatorId/libro/nuevo',
   ADMIN_VISIT_ENTRY_DETAIL: '/admin/ascensores/:elevatorId/libro/:entryId',

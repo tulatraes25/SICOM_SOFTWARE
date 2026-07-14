@@ -369,3 +369,84 @@ export const VISIT_ENTRY_STATUS_LABELS: Record<VisitEntryStatus, string> = {
   rectified: 'Rectificado',
   cancelled: 'Anulado',
 };
+
+// ============================================================
+// Document Branding & Signatures
+// ============================================================
+
+export interface CompanyDocumentSettings {
+  company_name: string;
+  legal_name?: string;
+  tax_id?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  logo_path?: string;
+  header_text?: string;
+  footer_text?: string;
+  primary_color?: string;
+  secondary_color?: string;
+}
+
+export type SignatureType = 'technician' | 'administrator' | 'supervisor' | 'representative';
+
+export interface UserSignature {
+  id: string;
+  user_id: string;
+  signature_type: SignatureType;
+  storage_path: string;
+  original_filename?: string;
+  mime_type: string;
+  file_size?: number;
+  is_active: boolean;
+  uploaded_by: string;
+  created_at: string;
+  updated_at: string;
+  revoked_at?: string;
+  revoked_by?: string;
+  signedUrl?: string;
+}
+
+export type DocumentSignatureType =
+  | 'service_report'
+  | 'budget'
+  | 'service_order'
+  | 'visit_entry'
+  | 'visit_history'
+  | 'external_invoice_delivery'
+  | 'other';
+
+export interface DocumentSignature {
+  id: string;
+  document_type: DocumentSignatureType;
+  document_id: string;
+  service_case_id?: string;
+  signer_user_id: string;
+  signer_role: string;
+  signature_id?: string;
+  signature_storage_path?: string;
+  signer_name_snapshot: string;
+  signed_at: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  signer?: Profile;
+  signature?: UserSignature;
+}
+
+export const SIGNATURE_TYPE_LABELS: Record<SignatureType, string> = {
+  technician: 'Técnico',
+  administrator: 'Administrador',
+  supervisor: 'Supervisor',
+  representative: 'Representante',
+};
+
+export const DOC_SIGNATURE_TYPE_LABELS: Record<DocumentSignatureType, string> = {
+  service_report: 'Informe técnico',
+  budget: 'Presupuesto',
+  service_order: 'Orden de servicio',
+  visit_entry: 'Asiento del libro',
+  visit_history: 'Historial del libro',
+  external_invoice_delivery: 'Entrega de factura',
+  other: 'Otro',
+};

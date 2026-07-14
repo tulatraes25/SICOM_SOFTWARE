@@ -22,6 +22,8 @@ import NumberingConfigPage from '@/pages/admin/NumberingConfigPage';
 import ElevatorVisitBookPage from '@/pages/admin/ElevatorVisitBookPage';
 import VisitEntryDetailPage from '@/pages/admin/VisitEntryDetailPage';
 import VisitEntryCreatePage from '@/pages/admin/VisitEntryCreatePage';
+import UserSignaturePage from '@/pages/admin/UserSignaturePage';
+import DocumentSettingsPage from '@/pages/admin/DocumentSettingsPage';
 
 // Technician
 import TechDashboard from '@/pages/technician/TechDashboard';
@@ -149,6 +151,22 @@ export default function AppRouter() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
               <VisitEntryDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path={ROUTES.ADMIN_DOCUMENT_SETTINGS}
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <DocumentSettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path={ROUTES.ADMIN_USER_SIGNATURE}
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor', 'technician']}>
+              <UserSignaturePage />
             </ProtectedRoute>
           }
         />
