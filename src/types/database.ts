@@ -206,7 +206,7 @@ export interface AuditLog {
   user?: Profile;
 }
 
-export type BudgetStatus =
+export type BudgetEstimateStatus =
   | 'pending'
   | 'approved'
   | 'rejected'
@@ -220,7 +220,7 @@ export interface BudgetEstimate {
   description: string;
   amount?: number;
   currency: string;
-  status: BudgetStatus;
+  status: BudgetEstimateStatus;
   valid_until?: string;
   notes?: string;
   created_by?: string;
@@ -449,4 +449,88 @@ export const DOC_SIGNATURE_TYPE_LABELS: Record<DocumentSignatureType, string> = 
   visit_history: 'Historial del libro',
   external_invoice_delivery: 'Entrega de factura',
   other: 'Otro',
+};
+
+// ============================================================
+// Budgets
+// ============================================================
+
+export type BudgetStatus = 'draft' | 'ready' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'cancelled';
+
+export interface Budget {
+  id: string;
+  service_case_id: string;
+  client_id: string;
+  building_id?: string;
+  elevator_id?: string;
+  budget_date: string;
+  valid_until?: string;
+  subject: string;
+  introduction?: string;
+  notes?: string;
+  payment_terms?: string;
+  delivery_terms?: string;
+  currency: string;
+  subtotal: number;
+  tax_rate: number;
+  tax_amount: number;
+  total: number;
+  status: BudgetStatus;
+  created_by: string;
+  approved_by?: string;
+  approved_at?: string;
+  sent_at?: string;
+  accepted_at?: string;
+  rejected_at?: string;
+  expired_at?: string;
+  cancellation_reason?: string;
+  created_at: string;
+  updated_at: string;
+  // Relations
+  service_case?: ServiceCase;
+  client?: Client;
+  building?: Building;
+  elevator?: Elevator;
+  created_user?: Profile;
+  approved_user?: Profile;
+  items?: BudgetItem[];
+}
+
+export interface BudgetItem {
+  id: string;
+  budget_id: string;
+  item_order: number;
+  description: string;
+  quantity: number;
+  unit?: string;
+  unit_price: number;
+  line_subtotal: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetEmailSend {
+  id: string;
+  budget_id: string;
+  recipient_email: string;
+  recipient_name?: string;
+  subject: string;
+  status: 'sent' | 'failed';
+  provider_message_id?: string;
+  error_message?: string;
+  sent_by: string;
+  sent_at: string;
+  created_at: string;
+  sender?: Profile;
+}
+
+export const BUDGET_STATUS_LABELS: Record<BudgetStatus, string> = {
+  draft: 'Borrador',
+  ready: 'Listo',
+  sent: 'Enviado',
+  accepted: 'Aceptado',
+  rejected: 'Rechazado',
+  expired: 'Vencido',
+  cancelled: 'Cancelado',
 };

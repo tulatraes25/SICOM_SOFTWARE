@@ -24,6 +24,9 @@ import VisitEntryDetailPage from '@/pages/admin/VisitEntryDetailPage';
 import VisitEntryCreatePage from '@/pages/admin/VisitEntryCreatePage';
 import UserSignaturePage from '@/pages/admin/UserSignaturePage';
 import DocumentSettingsPage from '@/pages/admin/DocumentSettingsPage';
+import BudgetsPage from '@/pages/admin/BudgetsPage';
+import BudgetCreatePage from '@/pages/admin/BudgetCreatePage';
+import BudgetDetailPage from '@/pages/admin/BudgetDetailPage';
 
 // Technician
 import TechDashboard from '@/pages/technician/TechDashboard';
@@ -167,6 +170,30 @@ export default function AppRouter() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'supervisor', 'technician']}>
               <UserSignaturePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/presupuestos"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <BudgetsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/presupuestos/nuevo"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <BudgetCreatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/presupuestos/:id"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <BudgetDetailPage />
             </ProtectedRoute>
           }
         />

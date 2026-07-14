@@ -14,6 +14,7 @@ import {
   Search,
   FolderOpen,
   FileSignature,
+  Calculator,
 } from 'lucide-react';
 import { ROUTES } from '@/config/constants';
 
@@ -29,6 +30,7 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Edificios', path: ROUTES.ADMIN_BUILDINGS, icon: Building2 },
     { label: 'Ascensores', path: ROUTES.ADMIN_ELEVATORS, icon: Wrench },
     { label: 'Expedientes', path: ROUTES.ADMIN_SERVICE_CASES, icon: FolderOpen },
+    { label: 'Presupuestos', path: '/admin/presupuestos', icon: Calculator },
     { label: 'Revisión de Servicios', path: '/admin/mantenimientos', icon: FileText },
     { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
     { label: 'Configuración documental', path: '/admin/configuracion/documentos', icon: Settings },
@@ -44,6 +46,7 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Dashboard', path: ROUTES.SUPERVISOR_DASHBOARD, icon: LayoutDashboard },
     { label: 'Revisiones', path: '/supervisor/revisiones', icon: FileText },
     { label: 'Informes Mensuales', path: '/supervisor/informes', icon: FileText },
+    { label: 'Presupuestos', path: '/admin/presupuestos', icon: Calculator },
     { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
   ],
   responsible: [
