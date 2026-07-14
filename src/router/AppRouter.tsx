@@ -15,6 +15,10 @@ import BuildingsPage from '@/pages/admin/BuildingsPage';
 import ElevatorsPage from '@/pages/admin/ElevatorsPage';
 import AdminServiceReviewPage from '@/pages/admin/AdminServiceReviewPage';
 import AdminServiceReviewDetailPage from '@/pages/admin/AdminServiceReviewDetailPage';
+import ServiceCasesPage from '@/pages/admin/ServiceCasesPage';
+import ServiceCaseDetailPage from '@/pages/admin/ServiceCaseDetailPage';
+import ServiceCaseCreatePage from '@/pages/admin/ServiceCaseCreatePage';
+import NumberingConfigPage from '@/pages/admin/NumberingConfigPage';
 
 // Technician
 import TechDashboard from '@/pages/technician/TechDashboard';
@@ -86,6 +90,38 @@ export default function AppRouter() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
               <AdminServiceReviewDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path={ROUTES.ADMIN_SERVICE_CASES}
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <ServiceCasesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path={ROUTES.ADMIN_SERVICE_CASE_NEW}
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <ServiceCaseCreatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path={ROUTES.ADMIN_SERVICE_CASE_DETAIL}
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <ServiceCaseDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path={ROUTES.ADMIN_NUMBERING_CONFIG}
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <NumberingConfigPage />
             </ProtectedRoute>
           }
         />

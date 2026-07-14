@@ -21,6 +21,10 @@ export const ROUTES = {
   ADMIN_ELEVATORS: '/admin/ascensores',
   ADMIN_USERS: '/admin/usuarios',
   ADMIN_SETTINGS: '/admin/configuracion',
+  ADMIN_SERVICE_CASES: '/admin/expedientes',
+  ADMIN_SERVICE_CASE_NEW: '/admin/expedientes/nuevo',
+  ADMIN_SERVICE_CASE_DETAIL: '/admin/expedientes/:id',
+  ADMIN_NUMBERING_CONFIG: '/admin/configuracion/numeracion',
 
   // Technician
   TECH_DASHBOARD: '/tecnico',

@@ -227,3 +227,71 @@ export interface BudgetEstimate {
   created_at: string;
   updated_at: string;
 }
+
+// ============================================================
+// Service Cases (Expediente Maestro)
+// ============================================================
+
+export type CaseOriginType = 'budget' | 'claim' | 'direct_report' | 'scheduled_service' | 'other';
+export type CaseStatus = 'open' | 'assigned' | 'in_progress' | 'completed' | 'closed' | 'cancelled';
+export type NumberingMode = 'test' | 'production';
+
+export interface ServiceCase {
+  id: string;
+  case_number: number;
+  numbering_mode: NumberingMode;
+  origin_type: CaseOriginType;
+  status: CaseStatus;
+  client_id?: string;
+  building_id?: string;
+  elevator_id?: string;
+  title?: string;
+  description?: string;
+  created_by: string;
+  assigned_to?: string;
+  created_at: string;
+  updated_at: string;
+  closed_at?: string;
+  cancelled_at?: string;
+  cancellation_reason?: string;
+  // Relations
+  client?: Client;
+  building?: Building;
+  elevator?: Elevator;
+  assigned_user?: Profile;
+  created_user?: Profile;
+}
+
+export interface ServiceCaseEvent {
+  id: string;
+  service_case_id: string;
+  event_type: 'case_created' | 'assigned' | 'closed' | 'cancelled' | 'production_numbering_activated';
+  performed_by?: string;
+  details: Record<string, unknown>;
+  created_at: string;
+  performer?: Profile;
+}
+
+export interface DocumentNumberingSettings {
+  current_mode: NumberingMode;
+  next_test_number: number;
+  next_production_number: number;
+  production_activated_at?: string;
+}
+
+export const CASE_ORIGIN_LABELS: Record<CaseOriginType, string> = {
+  budget: 'Presupuesto',
+  claim: 'Reclamo',
+  direct_report: 'Informe directo',
+  scheduled_service: 'Servicio programado',
+  other: 'Otro',
+};
+
+export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
+  open: 'Abierto',
+  assigned: 'Asignado',
+  in_progress: 'En curso',
+  completed: 'Completado',
+  closed: 'Cerrado',
+  cancelled: 'Anulado',
+};
