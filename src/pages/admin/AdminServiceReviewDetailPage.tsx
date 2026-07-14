@@ -40,6 +40,7 @@ export default function AdminServiceReviewDetailPage() {
   const [recipients, setRecipients] = useState<any[]>([]);
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
+  const [photos, setPhotos] = useState<any[]>([]);
 
   useEffect(() => { loadData(); }, [id]);
   useEffect(() => {
@@ -92,7 +93,7 @@ export default function AdminServiceReviewDetailPage() {
             return { ...photo, signedUrl: data?.signedUrl };
           })
         );
-        setRecord(prev => prev ? { ...prev, photos: photosWithUrls } : prev);
+        setPhotos(photosWithUrls);
       }
     } catch (err: any) {
       setError(err?.message || 'Error al cargar');
@@ -197,7 +198,6 @@ export default function AdminServiceReviewDetailPage() {
   const client = building?.client;
   const technician = (record as any).technician;
   const checklist = (record as any).checklist || [];
-  const photos = (record as any).photos || [];
   const canReview = record.status === 'submitted' || record.status === 'in_review';
   const isApproved = record.status === 'approved';
   const isRejected = record.status === 'rejected';
@@ -314,7 +314,6 @@ export default function AdminServiceReviewDetailPage() {
               <CardContent>
                 {photos.length > 0 ? (
                   <>
-                    {/* Photo selection info */}
                     <div className="mb-3 p-2 bg-gray-50 rounded text-sm text-gray-600">
                       Las fotografías son opcionales. Seleccione las que desea incluir en el informe PDF.
                     </div>
@@ -334,24 +333,31 @@ export default function AdminServiceReviewDetailPage() {
                               <div className="flex items-center justify-center h-full text-xs text-gray-500">No disponible</div>
                             )}
                           </button>
-                          <label className="flex items-center gap-1 mt-1 text-xs text-gray-600">
+                          <label
+                            className="flex items-center gap-1 mt-1 text-xs text-gray-600 cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <input
                               type="checkbox"
                               checked={p.include_in_report || false}
                               onChange={async (e) => {
-                                await supabase
-                                  .from('service_photos')
-                                  .update({ include_in_report: e.target.checked })
-                                  .eq('id', p.id);
-                                setRecord((prev: any) => {
-                                  if (!prev?.photos) return prev;
-                                  return {
-                                    ...prev,
-                                    photos: prev.photos.map((ph: any) =>
-                                      ph.id === p.id ? { ...ph, include_in_report: e.target.checked } : ph
-                                    ),
-                                  };
+                                const checked = e.target.checked;
+                                // Actualizar optimísticamente
+                                setPhotos((prev: any[]) => prev.map((ph: any) => 
+                                  ph.id === p.id ? { ...ph, include_in_report: checked } : ph
+                                ));
+                                // Guardar en Supabase
+                                const { error } = await supabase.rpc('set_service_photo_report_selection', {
+                                  p_photo_id: p.id,
+                                  p_include: checked,
                                 });
+                                if (error) {
+                                  // Revertir en caso de error
+                                  setPhotos((prev: any[]) => prev.map((ph: any) => 
+                                    ph.id === p.id ? { ...ph, include_in_report: !checked } : ph
+                                  ));
+                                  console.error('Error updating photo selection:', error);
+                                }
                               }}
                               className="rounded"
                             />
