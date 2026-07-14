@@ -12,9 +12,15 @@ interface ServicePhotoUploadProps {
   readOnly?: boolean;
 }
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const ALLOWED_MIME = 'image/jpeg';
 const MAX_SIZE = 10 * 1024 * 1024;
 const MAX_PHOTOS = 10;
+
+function isJpegFile(file: File): boolean {
+  if (file.type === ALLOWED_MIME) return true;
+  const name = file.name.toLowerCase();
+  return name.endsWith('.jpg') || name.endsWith('.jpeg');
+}
 
 export default function ServicePhotoUpload({
   serviceRecordId,
@@ -67,11 +73,48 @@ export default function ServicePhotoUpload({
     setUploading(true);
 
     const filesArray = Array.from(files);
-    const filesToUpload = filesArray.slice(0, remainingSlots);
-    const skipped = filesArray.length - filesToUpload.length;
 
-    if (skipped > 0) {
-      setError(`Solo se agregaron ${filesToUpload.length} fotos. Se alcanzó el límite de ${MAX_PHOTOS}.`);
+    // Validar MIME y tamaño
+    const validFiles: File[] = [];
+    let rejectedCount = 0;
+    let oversizedCount = 0;
+
+    for (const file of filesArray) {
+      if (!isJpegFile(file)) {
+        rejectedCount++;
+        continue;
+      }
+      if (file.size > MAX_SIZE) {
+        oversizedCount++;
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    // Limitar por slots disponibles
+    const filesToUpload = validFiles.slice(0, remainingSlots);
+    const skippedSlots = validFiles.length - filesToUpload.length;
+
+    // Construir mensajes
+    const messages: string[] = [];
+    if (rejectedCount > 0) {
+      messages.push(`${rejectedCount} archivo(s) rechazado(s) porque no eran JPG/JPEG`);
+    }
+    if (oversizedCount > 0) {
+      messages.push(`${oversizedCount} archivo(s) superan 10 MB`);
+    }
+    if (skippedSlots > 0) {
+      messages.push(`Solo se agregaron ${filesToUpload.length} fotos (límite: ${MAX_PHOTOS})`);
+    }
+
+    if (messages.length > 0) {
+      setError(messages.join('. ') + '.');
+    }
+
+    if (filesToUpload.length === 0) {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
     }
 
     setUploadProgress({ current: 0, total: filesToUpload.length });
@@ -81,26 +124,11 @@ export default function ServicePhotoUpload({
       const file = filesToUpload[i];
       setUploadProgress({ current: i + 1, total: filesToUpload.length });
 
-      // Validate MIME
-      if (!ALLOWED_TYPES.includes(file.type)) {
-        setError(`El archivo ${file.name} debe ser JPG, PNG o WebP`);
-        continue;
-      }
+      const storagePath = buildServicePhotoPath(serviceRecordId, 'jpg');
 
-      // Validate size
-      if (file.size > MAX_SIZE) {
-        setError(`El archivo ${file.name} supera el tamaño máximo de 10 MB`);
-        continue;
-      }
-
-      // Generate path
-      const ext = file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/png' ? 'png' : 'webp';
-      const storagePath = buildServicePhotoPath(serviceRecordId, ext);
-
-      // Upload
       const { error: uploadError } = await supabase.storage
         .from(BUCKET_NAME)
-        .upload(storagePath, file);
+        .upload(storagePath, file, { contentType: 'image/jpeg' });
 
       if (uploadError) {
         console.error('[ServicePhotoUpload] Storage error:', uploadError);
@@ -108,7 +136,6 @@ export default function ServicePhotoUpload({
         continue;
       }
 
-      // Insert record
       const { data, error: insertError } = await supabase
         .from('service_photos')
         .insert({
@@ -121,7 +148,6 @@ export default function ServicePhotoUpload({
 
       if (insertError) {
         console.error('[ServicePhotoUpload] Insert error:', insertError);
-        // Rollback
         await supabase.storage.from(BUCKET_NAME).remove([storagePath]);
         setError(`No se pudo registrar ${file.name}`);
         continue;
@@ -213,7 +239,7 @@ export default function ServicePhotoUpload({
         )}
       </div>
 
-      <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handleFilesSelected} className="hidden" />
+      <input ref={fileInputRef} type="file" accept="image/jpeg,.jpg,.jpeg" multiple onChange={handleFilesSelected} className="hidden" />
 
       {selectedPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setSelectedPreview(null)}>
