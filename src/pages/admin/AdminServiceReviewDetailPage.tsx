@@ -304,33 +304,70 @@ export default function AdminServiceReviewDetailPage() {
 
             {/* Photos */}
             <Card>
-              <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Image size={18} /> Fotografías ({photos.length})</h3></CardHeader>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                    <Image size={18} /> Fotografías ({photos.length})
+                  </h3>
+                </div>
+              </CardHeader>
               <CardContent>
                 {photos.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-2">
-                    {photos.map((p: any, index: number) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => openPhoto(index)}
-                        aria-label={`Abrir fotografía ${index + 1} de ${photos.length}`}
-                        className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary transition-all"
-                      >
-                        {p.signedUrl ? (
-                          <img
-                            src={p.signedUrl}
-                            alt={`Fotografía del mantenimiento ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full text-xs text-gray-500">No disponible</div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
+                  <>
+                    {/* Photo selection info */}
+                    <div className="mb-3 p-2 bg-gray-50 rounded text-sm text-gray-600">
+                      Las fotografías son opcionales. Seleccione las que desea incluir en el informe PDF.
+                    </div>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {photos.map((p: any, index: number) => (
+                        <div key={p.id} className="relative">
+                          <button
+                            type="button"
+                            onClick={() => openPhoto(index)}
+                            aria-label={`Abrir fotografía ${index + 1} de ${photos.length}`}
+                            className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                          >
+                            {p.signedUrl ? (
+                              <img src={p.signedUrl} alt={`Fotografía ${index + 1}`} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="flex items-center justify-center h-full text-xs text-gray-500">No disponible</div>
+                            )}
+                          </button>
+                          <label className="flex items-center gap-1 mt-1 text-xs text-gray-600">
+                            <input
+                              type="checkbox"
+                              checked={p.include_in_report || false}
+                              onChange={async (e) => {
+                                await supabase
+                                  .from('service_photos')
+                                  .update({ include_in_report: e.target.checked })
+                                  .eq('id', p.id);
+                                setRecord((prev: any) => {
+                                  if (!prev?.photos) return prev;
+                                  return {
+                                    ...prev,
+                                    photos: prev.photos.map((ph: any) =>
+                                      ph.id === p.id ? { ...ph, include_in_report: e.target.checked } : ph
+                                    ),
+                                  };
+                                });
+                              }}
+                              className="rounded"
+                            />
+                            Incluir
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      {photos.filter((p: any) => p.include_in_report).length} de {photos.length} seleccionadas para el informe
+                    </p>
+                  </>
                 ) : <p className="text-gray-500 text-sm">Sin fotografías</p>}
               </CardContent>
             </Card>
+
           </div>
 
           {/* Right column */}

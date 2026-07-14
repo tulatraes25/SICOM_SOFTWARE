@@ -142,7 +142,10 @@ export interface ServicePhoto {
   storage_path: string;
   photo_type: 'before' | 'after' | 'general';
   caption?: string;
+  include_in_report: boolean;
+  report_order: number;
   created_at: string;
+  signedUrl?: string;
 }
 
 export type MonthlyReportStatus =
