@@ -295,3 +295,77 @@ export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
   closed: 'Cerrado',
   cancelled: 'Anulado',
 };
+
+// ============================================================
+// Elevator Visit Book (Libro Digital de Visitas)
+// ============================================================
+
+export type VisitEntryType =
+  | 'scheduled_service'
+  | 'preventive_maintenance'
+  | 'corrective_maintenance'
+  | 'claim_visit'
+  | 'inspection'
+  | 'emergency'
+  | 'verification'
+  | 'other';
+
+export type VisitEntryStatus = 'draft' | 'submitted' | 'approved' | 'rectified' | 'cancelled';
+
+export interface ElevatorVisitEntry {
+  id: string;
+  elevator_id: string;
+  service_case_id?: string;
+  service_record_id?: string;
+  entry_number: number;
+  visit_date: string;
+  registered_at: string;
+  entry_type: VisitEntryType;
+  origin_type?: string;
+  title?: string;
+  description: string;
+  work_performed?: string;
+  observations?: string;
+  recommendations?: string;
+  operational_status?: string;
+  conservation_status?: string;
+  technician_id?: string;
+  registered_by: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  status: VisitEntryStatus;
+  is_rectification: boolean;
+  rectifies_entry_id?: string;
+  cancellation_reason?: string;
+  technician_signature_id?: string;
+  reviewer_signature_id?: string;
+  created_at: string;
+  updated_at: string;
+  // Relations
+  elevator?: Elevator;
+  technician?: Profile;
+  registered_user?: Profile;
+  reviewer?: Profile;
+  service_case?: ServiceCase;
+  service_record?: ServiceRecord;
+  rectified_entry?: ElevatorVisitEntry;
+}
+
+export const VISIT_ENTRY_TYPE_LABELS: Record<VisitEntryType, string> = {
+  scheduled_service: 'Servicio programado',
+  preventive_maintenance: 'Mantenimiento preventivo',
+  corrective_maintenance: 'Mantenimiento correctivo',
+  claim_visit: 'Visita por reclamo',
+  inspection: 'Inspección',
+  emergency: 'Emergencia',
+  verification: 'Verificación',
+  other: 'Otro',
+};
+
+export const VISIT_ENTRY_STATUS_LABELS: Record<VisitEntryStatus, string> = {
+  draft: 'Borrador',
+  submitted: 'Enviado',
+  approved: 'Aprobado',
+  rectified: 'Rectificado',
+  cancelled: 'Anulado',
+};

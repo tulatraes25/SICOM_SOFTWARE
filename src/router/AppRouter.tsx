@@ -19,6 +19,9 @@ import ServiceCasesPage from '@/pages/admin/ServiceCasesPage';
 import ServiceCaseDetailPage from '@/pages/admin/ServiceCaseDetailPage';
 import ServiceCaseCreatePage from '@/pages/admin/ServiceCaseCreatePage';
 import NumberingConfigPage from '@/pages/admin/NumberingConfigPage';
+import ElevatorVisitBookPage from '@/pages/admin/ElevatorVisitBookPage';
+import VisitEntryDetailPage from '@/pages/admin/VisitEntryDetailPage';
+import VisitEntryCreatePage from '@/pages/admin/VisitEntryCreatePage';
 
 // Technician
 import TechDashboard from '@/pages/technician/TechDashboard';
@@ -122,6 +125,30 @@ export default function AppRouter() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <NumberingConfigPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/ascensores/:elevatorId/libro"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <ElevatorVisitBookPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/ascensores/:elevatorId/libro/nuevo"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <VisitEntryCreatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/ascensores/:elevatorId/libro/:entryId"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <VisitEntryDetailPage />
             </ProtectedRoute>
           }
         />
