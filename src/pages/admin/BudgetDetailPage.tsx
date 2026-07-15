@@ -46,6 +46,7 @@ export default function BudgetDetailPage() {
   const [emailResult, setEmailResult] = useState('');
   const [recipients, setRecipients] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [extraRecipients, setExtraRecipients] = useState<Array<{ name: string; email: string }>>([]);
+  const [extraError, setExtraError] = useState('');
   const [emailSends, setEmailSends] = useState<BudgetEmailSend[]>([]);
 
   // Item editing
@@ -359,19 +360,35 @@ SICOM Patagonia SRL`);
                   </div>
                 )}
 
-                <div className="flex gap-2">
-                  <input className="flex-1 border rounded px-3 py-2 text-sm" placeholder="Nombre" id="extra-name" />
-                  <input className="flex-1 border rounded px-3 py-2 text-sm" placeholder="Correo" id="extra-email" type="email" />
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <input className="w-full border rounded px-3 py-2 text-sm" placeholder="Nombre" id="extra-name" />
+                  </div>
+                  <div className="flex-1">
+                    <input className="w-full border rounded px-3 py-2 text-sm" placeholder="Correo" id="extra-email" type="email" />
+                  </div>
                   <Button size="sm" variant="outline" onClick={() => {
+                    setExtraError('');
                     const nameEl = document.getElementById('extra-name') as HTMLInputElement;
                     const emailEl = document.getElementById('extra-email') as HTMLInputElement;
-                    if (nameEl?.value && emailEl?.value && emailEl.value.includes('@')) {
-                      setExtraRecipients([...extraRecipients, { name: nameEl.value, email: emailEl.value }]);
-                      nameEl.value = '';
-                      emailEl.value = '';
-                    }
+                    const name = nameEl?.value?.trim();
+                    const email = emailEl?.value?.trim().toLowerCase();
+                    if (!name || !email) { setExtraError('Ingresá nombre y correo'); return; }
+                    if (!email.includes('@') || !email.includes('.')) { setExtraError('Ingresá un correo válido'); return; }
+                    const allEmails = [...emailRecipients, ...extraRecipients.map(r => r.email)];
+                    if (allEmails.includes(email)) { setExtraError('Ese correo ya fue agregado'); return; }
+                    setExtraRecipients([...extraRecipients, { name, email }]);
+                    nameEl.value = '';
+                    emailEl.value = '';
                   }}>Agregar</Button>
                 </div>
+                {extraError && <p className="text-xs text-danger">{extraError}</p>}
+                {recipients.length === 0 && extraRecipients.length === 0 && (
+                  <p className="text-xs text-gray-500">No hay contactos guardados con presupuestos. Agregá un destinatario adicional.</p>
+                )}
+                {recipients.length === 0 && extraRecipients.length > 0 && (
+                  <p className="text-xs text-success">Se enviará a {extraRecipients.length} destinatario(s) adicional(es).</p>
+                )}
                 <div>
                   <label className="block text-sm font-medium mb-1">Asunto</label>
                   <input className="w-full border rounded px-3 py-2 text-sm" value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />
@@ -380,11 +397,19 @@ SICOM Patagonia SRL`);
                   <label className="block text-sm font-medium mb-1">Cuerpo</label>
                   <textarea className="w-full border rounded px-3 py-2 text-sm resize-none" rows={8} value={emailBody} onChange={(e) => setEmailBody(e.target.value)} />
                 </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setShowEmailModal(false)}>Cancelar</Button>
-                  <Button onClick={handleSendEmail} disabled={emailSending || emailRecipients.length === 0}>
-                    {emailSending ? 'Enviando...' : 'Enviar'}
-                  </Button>
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-gray-500">
+                    Destinatarios: {emailRecipients.length + extraRecipients.length}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setShowEmailModal(false)}>Cancelar</Button>
+                    <Button
+                      onClick={handleSendEmail}
+                      disabled={emailSending || (emailRecipients.length === 0 && extraRecipients.length === 0) || !emailSubject.trim() || !emailBody.trim()}
+                    >
+                      {emailSending ? 'Enviando...' : 'Enviar'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
