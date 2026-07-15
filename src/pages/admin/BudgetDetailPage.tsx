@@ -330,66 +330,79 @@ SICOM Patagonia SRL`);
                 <Button onClick={() => { setShowEmailModal(false); setEmailResult(''); }}>Cerrar</Button>
               </div>
             ) : (
-              <div className="space-y-3">
-                {recipients.length === 0 ? (
-                  <p className="text-gray-500 text-sm">No hay destinatarios configurados para este edificio.</p>
-                ) : (
-                  <>
-                    <p className="text-sm font-medium">Destinatarios del edificio:</p>
-                    {recipients.map((r) => (
-                      <label key={r.id} className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" checked={emailRecipients.includes(r.email)} onChange={(e) => {
-                          if (e.target.checked) setEmailRecipients([...emailRecipients, r.email]);
-                          else setEmailRecipients(emailRecipients.filter(x => x !== r.email));
-                        }} />
-                        {r.name} ({r.email})
-                      </label>
-                    ))}
-                  </>
-                )}
+              <div className="space-y-4">
+                {/* Saved contacts */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium">Contactos del edificio:</p>
+                    {recipients.length > 0 && (
+                      <div className="flex gap-2">
+                        <button type="button" className="text-xs text-primary hover:underline" onClick={() => setEmailRecipients(recipients.map(r => r.email))}>Seleccionar todos</button>
+                        <button type="button" className="text-xs text-gray-500 hover:underline" onClick={() => setEmailRecipients([])}>Deseleccionar</button>
+                      </div>
+                    )}
+                  </div>
+                  {recipients.length === 0 ? (
+                    <p className="text-gray-400 text-xs">No hay contactos guardados para presupuestos.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {recipients.map((r) => (
+                        <label key={r.id} className="flex items-center gap-2 text-sm p-1 rounded hover:bg-gray-50">
+                          <input type="checkbox" checked={emailRecipients.includes(r.email)} onChange={(e) => {
+                            if (e.target.checked) setEmailRecipients([...emailRecipients, r.email]);
+                            else setEmailRecipients(emailRecipients.filter(x => x !== r.email));
+                          }} />
+                          <span className="flex-1">{r.name}</span>
+                          <span className="text-gray-400 text-xs">{r.email}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* Extra recipients */}
-                {extraRecipients.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium">Destinatarios adicionales:</p>
-                    {extraRecipients.map((r, i) => (
-                      <div key={i} className="flex items-center gap-2 text-sm">
-                        <span className="flex-1">{r.name} ({r.email})</span>
-                        <button onClick={() => setExtraRecipients(extraRecipients.filter((_, idx) => idx !== i))} className="text-danger"><X size={14} /></button>
-                      </div>
-                    ))}
+                <div>
+                  <p className="text-sm font-medium mb-2">Destinatarios adicionales:</p>
+                  {extraRecipients.length > 0 && (
+                    <div className="space-y-1 mb-2">
+                      {extraRecipients.map((r, i) => (
+                        <div key={i} className="flex items-center gap-2 text-sm p-1 bg-gray-50 rounded">
+                          <span className="flex-1">{r.name ? `${r.name} (${r.email})` : r.email}</span>
+                          <button onClick={() => setExtraRecipients(extraRecipients.filter((_, idx) => idx !== i))} className="text-danger hover:text-danger/80"><X size={14} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <input className="w-full border rounded px-3 py-2 text-sm" placeholder="Nombre (opcional)" id="extra-name" />
+                    </div>
+                    <div className="flex-1">
+                      <input className="w-full border rounded px-3 py-2 text-sm" placeholder="Correo *" id="extra-email" type="email" />
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => {
+                      setExtraError('');
+                      const nameEl = document.getElementById('extra-name') as HTMLInputElement;
+                      const emailEl = document.getElementById('extra-email') as HTMLInputElement;
+                      const name = nameEl?.value?.trim() || '';
+                      const email = emailEl?.value?.trim().toLowerCase();
+                      if (!email || !email.includes('@') || !email.includes('.')) { setExtraError('Ingresá un correo válido'); return; }
+                      const allEmails = [...emailRecipients, ...extraRecipients.map(r => r.email)];
+                      if (allEmails.includes(email)) { setExtraError('Este correo ya está incluido'); return; }
+                      setExtraRecipients([...extraRecipients, { name, email }]);
+                      nameEl.value = '';
+                      emailEl.value = '';
+                    }}>Agregar</Button>
                   </div>
-                )}
-
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <input className="w-full border rounded px-3 py-2 text-sm" placeholder="Nombre" id="extra-name" />
-                  </div>
-                  <div className="flex-1">
-                    <input className="w-full border rounded px-3 py-2 text-sm" placeholder="Correo" id="extra-email" type="email" />
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => {
-                    setExtraError('');
-                    const nameEl = document.getElementById('extra-name') as HTMLInputElement;
-                    const emailEl = document.getElementById('extra-email') as HTMLInputElement;
-                    const name = nameEl?.value?.trim();
-                    const email = emailEl?.value?.trim().toLowerCase();
-                    if (!name || !email) { setExtraError('Ingresá nombre y correo'); return; }
-                    if (!email.includes('@') || !email.includes('.')) { setExtraError('Ingresá un correo válido'); return; }
-                    const allEmails = [...emailRecipients, ...extraRecipients.map(r => r.email)];
-                    if (allEmails.includes(email)) { setExtraError('Ese correo ya fue agregado'); return; }
-                    setExtraRecipients([...extraRecipients, { name, email }]);
-                    nameEl.value = '';
-                    emailEl.value = '';
-                  }}>Agregar</Button>
+                  {extraError && <p className="text-xs text-danger mt-1">{extraError}</p>}
                 </div>
-                {extraError && <p className="text-xs text-danger">{extraError}</p>}
-                {recipients.length === 0 && extraRecipients.length === 0 && (
-                  <p className="text-xs text-gray-500">No hay contactos guardados con presupuestos. Agregá un destinatario adicional.</p>
-                )}
-                {recipients.length === 0 && extraRecipients.length > 0 && (
-                  <p className="text-xs text-success">Se enviará a {extraRecipients.length} destinatario(s) adicional(es).</p>
-                )}
+
+                {/* Summary */}
+                <div className="text-xs text-gray-500">
+                  Destinatarios seleccionados: {emailRecipients.length + extraRecipients.length}
+                </div>
+
+                {/* Subject & Body */}
                 <div>
                   <label className="block text-sm font-medium mb-1">Asunto</label>
                   <input className="w-full border rounded px-3 py-2 text-sm" value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />
