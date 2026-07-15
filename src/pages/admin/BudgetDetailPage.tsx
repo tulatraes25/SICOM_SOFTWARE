@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { getBudget, markBudgetReady, markBudgetSent, acceptBudget, rejectBudget, cancelBudget, recalculateBudget, addBudgetItem, updateBudgetItem, deleteBudgetItem } from '@/services/budgets.service';
-import { getBudgetRecipients, sendBudgetEmail, listBudgetEmailSends } from '@/services/budgetEmail.service';
+import { sendBudgetEmail, listBudgetEmailSends } from '@/services/budgetEmail.service';
+import { listActiveContactsByType } from '@/services/buildingContacts.service';
 import { getUserSignatureForPDF } from '@/services/userSignatures.service';
 import BudgetPDF from '@/components/pdf/BudgetPDF';
 import { BUDGET_STATUS_LABELS } from '@/types/database';
@@ -44,6 +45,7 @@ export default function BudgetDetailPage() {
   const [emailSending, setEmailSending] = useState(false);
   const [emailResult, setEmailResult] = useState('');
   const [recipients, setRecipients] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [extraRecipients, setExtraRecipients] = useState<Array<{ name: string; email: string }>>([]);
   const [emailSends, setEmailSends] = useState<BudgetEmailSend[]>([]);
 
   // Item editing
@@ -137,17 +139,18 @@ Quedamos a disposición ante cualquier consulta.
 Saludos cordiales,
 SICOM Patagonia SRL`);
 
-    // Load recipients
+    // Load recipients from building_contacts
     if (budget.building_id) {
       try {
-        const recs = await getBudgetRecipients(budget.building_id);
-        setRecipients(recs);
-        setEmailRecipients(recs.map(r => r.email));
+        const contacts = await listActiveContactsByType(budget.building_id, 'budgets');
+        setRecipients(contacts.map(c => ({ id: c.id, name: c.name, email: c.email })));
+        setEmailRecipients(contacts.map(c => c.email));
       } catch { setRecipients([]); setEmailRecipients([]); }
     } else {
       setRecipients([]);
       setEmailRecipients([]);
     }
+    setExtraRecipients([]);
     setEmailResult('');
     setShowEmailModal(true);
   };
@@ -167,7 +170,8 @@ SICOM Patagonia SRL`);
       ).toBlob();
 
       let sent = 0, failed = 0;
-      for (const email of emailRecipients) {
+      const allEmails = [...emailRecipients, ...extraRecipients.map(r => r.email)];
+      for (const email of allEmails) {
         try {
           await sendBudgetEmail(budget.id, email, undefined, emailSubject, emailBody);
           sent++;
@@ -329,7 +333,7 @@ SICOM Patagonia SRL`);
                   <p className="text-gray-500 text-sm">No hay destinatarios configurados para este edificio.</p>
                 ) : (
                   <>
-                    <p className="text-sm font-medium">Destinatarios:</p>
+                    <p className="text-sm font-medium">Destinatarios del edificio:</p>
                     {recipients.map((r) => (
                       <label key={r.id} className="flex items-center gap-2 text-sm">
                         <input type="checkbox" checked={emailRecipients.includes(r.email)} onChange={(e) => {
@@ -341,6 +345,33 @@ SICOM Patagonia SRL`);
                     ))}
                   </>
                 )}
+
+                {/* Extra recipients */}
+                {extraRecipients.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium">Destinatarios adicionales:</p>
+                    {extraRecipients.map((r, i) => (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        <span className="flex-1">{r.name} ({r.email})</span>
+                        <button onClick={() => setExtraRecipients(extraRecipients.filter((_, idx) => idx !== i))} className="text-danger"><X size={14} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <input className="flex-1 border rounded px-3 py-2 text-sm" placeholder="Nombre" id="extra-name" />
+                  <input className="flex-1 border rounded px-3 py-2 text-sm" placeholder="Correo" id="extra-email" type="email" />
+                  <Button size="sm" variant="outline" onClick={() => {
+                    const nameEl = document.getElementById('extra-name') as HTMLInputElement;
+                    const emailEl = document.getElementById('extra-email') as HTMLInputElement;
+                    if (nameEl?.value && emailEl?.value && emailEl.value.includes('@')) {
+                      setExtraRecipients([...extraRecipients, { name: nameEl.value, email: emailEl.value }]);
+                      nameEl.value = '';
+                      emailEl.value = '';
+                    }
+                  }}>Agregar</Button>
+                </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Asunto</label>
                   <input className="w-full border rounded px-3 py-2 text-sm" value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />

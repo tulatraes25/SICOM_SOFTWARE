@@ -542,3 +542,28 @@ export const BUDGET_STATUS_LABELS: Record<BudgetStatus, string> = {
   expired: 'Vencido',
   cancelled: 'Cancelado',
 };
+
+// ============================================================
+// Building Contacts
+// ============================================================
+
+export interface BuildingContact {
+  id: string;
+  building_id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  position?: string;
+  organization?: string;
+  notes?: string;
+  is_active: boolean;
+  receives_reports: boolean;
+  receives_budgets: boolean;
+  receives_invoices: boolean;
+  receives_service_orders: boolean;
+  receives_claim_updates: boolean;
+  receives_general_notices: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
