@@ -1,5 +1,6 @@
 -- 035: Building contacts by document type
 -- Migrates data from building_report_recipients to building_contacts.
+-- Idempotent: safe to re-run. Does NOT delete existing contacts.
 
 -- ============================================================
 -- 1. TABLE
@@ -35,9 +36,16 @@ CREATE INDEX IF NOT EXISTS idx_building_contacts_email ON building_contacts(emai
 CREATE INDEX IF NOT EXISTS idx_building_contacts_active ON building_contacts(building_id, is_active);
 
 -- Unique: one active contact per email per building
-CREATE UNIQUE INDEX IF NOT EXISTS idx_building_contacts_unique_active
-  ON building_contacts(building_id, lower(email))
-  WHERE is_active = true;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes WHERE indexname = 'idx_building_contacts_unique_active'
+  ) THEN
+    CREATE UNIQUE INDEX idx_building_contacts_unique_active
+      ON building_contacts(building_id, lower(email))
+      WHERE is_active = true;
+  END IF;
+END $$;
 
 -- ============================================================
 -- 3. MIGRATE DATA FROM building_report_recipients
@@ -45,30 +53,62 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_building_contacts_unique_active
 
 DO $$
 DECLARE
-  v_rec record;
-  v_count integer := 0;
+  v_fallback_admin_id UUID;
+  v_count INTEGER := 0;
 BEGIN
-  FOR v_rec IN
-    SELECT br.id, br.building_id, br.name, br.email, br.active,
-           p.id as created_by_id
-    FROM building_report_recipients br
-    LEFT JOIN profiles p ON p.role = 'admin'
-    WHERE NOT EXISTS (
+  -- Get a single admin ID (no JOIN that multiplies rows)
+  SELECT id INTO v_fallback_admin_id
+  FROM profiles
+  WHERE role = 'admin' AND active = true
+  ORDER BY created_at
+  LIMIT 1;
+
+  IF v_fallback_admin_id IS NULL THEN
+    SELECT id INTO v_fallback_admin_id
+    FROM profiles
+    WHERE role = 'admin'
+    ORDER BY created_at
+    LIMIT 1;
+  END IF;
+
+  IF v_fallback_admin_id IS NULL THEN
+    RAISE EXCEPTION 'No existe un perfil administrador para asignar created_by';
+  END IF;
+
+  -- Insert deduplicated contacts using DISTINCT ON
+  INSERT INTO building_contacts (
+    building_id, name, email, is_active,
+    receives_reports, created_by
+  )
+  SELECT DISTINCT ON (br.building_id, lower(trim(br.email)))
+    br.building_id,
+    COALESCE(NULLIF(trim(br.name), ''), trim(br.email)),
+    lower(trim(br.email)),
+    COALESCE(br.active, true),
+    true,
+    v_fallback_admin_id
+  FROM building_report_recipients br
+  WHERE br.email IS NOT NULL
+    AND trim(br.email) <> ''
+    -- Skip if already migrated (active contact exists)
+    AND NOT EXISTS (
       SELECT 1 FROM building_contacts bc
       WHERE bc.building_id = br.building_id
-        AND lower(bc.email) = lower(br.email)
+        AND lower(bc.email) = lower(trim(br.email))
         AND bc.is_active = true
     )
-  LOOP
-    INSERT INTO building_contacts (
-      building_id, name, email, is_active,
-      receives_reports, created_by
-    ) VALUES (
-      v_rec.building_id, v_rec.name, v_rec.email, v_rec.active,
-      true, COALESCE(v_rec.created_by_id, (SELECT id FROM profiles WHERE role = 'admin' LIMIT 1))
-    );
-    v_count := v_count + 1;
-  END LOOP;
+  ORDER BY
+    br.building_id,
+    lower(trim(br.email)),
+    br.active DESC,
+    br.id
+  ON CONFLICT (building_id, lower(email))
+  WHERE is_active = true
+  DO UPDATE SET
+    receives_reports = true,
+    updated_at = now();
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
   RAISE NOTICE 'Migrated % contacts from building_report_recipients', v_count;
 END $$;
 
