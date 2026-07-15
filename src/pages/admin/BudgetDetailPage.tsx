@@ -157,7 +157,9 @@ SICOM Patagonia SRL`);
   };
 
   const handleSendEmail = async () => {
-    if (!budget || emailRecipients.length === 0) return;
+    if (!budget) return;
+    const allEmails = [...emailRecipients, ...extraRecipients.map(r => r.email)];
+    if (allEmails.length === 0) return;
     setEmailSending(true); setEmailResult('');
     try {
       // Generate PDF blob
@@ -171,7 +173,6 @@ SICOM Patagonia SRL`);
       ).toBlob();
 
       let sent = 0, failed = 0;
-      const allEmails = [...emailRecipients, ...extraRecipients.map(r => r.email)];
       for (const email of allEmails) {
         try {
           await sendBudgetEmail(budget.id, email, undefined, emailSubject, emailBody);
