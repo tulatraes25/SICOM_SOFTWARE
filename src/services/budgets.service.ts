@@ -198,8 +198,12 @@ export async function markBudgetSent(budgetId: string): Promise<void> {
   if (data?.error) throw new Error(data.error);
 }
 
-export async function acceptBudget(budgetId: string): Promise<void> {
-  const { data, error } = await supabase.rpc('accept_budget', { p_budget_id: budgetId });
+export async function acceptBudget(budgetId: string, responseNotes?: string, responseContact?: string): Promise<void> {
+  const { data, error } = await supabase.rpc('accept_budget', {
+    p_budget_id: budgetId,
+    p_response_notes: responseNotes || null,
+    p_response_contact: responseContact || null,
+  });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
 }

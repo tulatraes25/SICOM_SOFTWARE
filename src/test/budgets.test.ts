@@ -70,7 +70,11 @@ describe('Budgets - RPC calls', () => {
     mockRpc.mockResolvedValue({ data: { success: true, status: 'accepted' }, error: null });
     const { acceptBudget } = await import('@/services/budgets.service');
     await acceptBudget('b-1');
-    expect(mockRpc).toHaveBeenCalledWith('accept_budget', { p_budget_id: 'b-1' });
+    expect(mockRpc).toHaveBeenCalledWith('accept_budget', {
+      p_budget_id: 'b-1',
+      p_response_notes: null,
+      p_response_contact: null,
+    });
   });
 
   it('rejectBudget calls RPC with reason', async () => {

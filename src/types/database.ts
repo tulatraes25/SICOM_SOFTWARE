@@ -479,9 +479,17 @@ export interface Budget {
   created_by: string;
   approved_by?: string;
   approved_at?: string;
+  ready_by?: string;
+  ready_at?: string;
+  sent_by?: string;
   sent_at?: string;
   accepted_at?: string;
+  accepted_registered_by?: string;
   rejected_at?: string;
+  rejected_registered_by?: string;
+  rejection_reason?: string;
+  client_response_notes?: string;
+  client_response_contact?: string;
   expired_at?: string;
   cancellation_reason?: string;
   created_at: string;
