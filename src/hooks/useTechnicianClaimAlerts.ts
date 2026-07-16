@@ -18,15 +18,19 @@ export function useTechnicianClaimAlerts(): ClaimAlertData {
   const refresh = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setNewCount(0); setLoading(false); return; }
+      if (!user) { console.log('[ClaimAlert] No user'); setNewCount(0); setLoading(false); return; }
+
+      console.log('[ClaimAlert] Querying for user:', user.id);
 
       const { data, error } = await supabase
         .from('claims')
-        .select('id, priority')
+        .select('id, priority, assigned_to, status')
         .eq('assigned_to', user.id)
         .eq('status', 'assigned');
 
-      if (error) { console.error(error); setLoading(false); return; }
+      if (error) { console.error('[ClaimAlert] Query error:', error); setLoading(false); return; }
+
+      console.log('[ClaimAlert] Results:', JSON.stringify(data));
 
       const count = data?.length || 0;
       setNewCount(count);
