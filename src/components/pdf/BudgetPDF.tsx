@@ -13,7 +13,7 @@ const s = StyleSheet.create({
   // HEADER
   header: { paddingHorizontal: 35, paddingTop: 25, paddingBottom: 12, backgroundColor: C.white },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  logo: { width: 140, height: 50 },
+  logo: { width: 120, height: 91 },
   headerRight: { alignItems: 'flex-end', gap: 2, paddingTop: 5 },
   headerText: { fontSize: 7.5, color: C.gray600 },
   greenLine: { height: 3, backgroundColor: C.green, marginTop: 10 },
