@@ -47,7 +47,20 @@ export default function ClaimDetailPage() {
     try { await action(); await loadData(); } catch (err: any) { setError(err?.message || 'Error'); } finally { setActionLoading(false); }
   };
 
-  const handleAssign = () => handleAction(() => assignTechnician(id!, assignTo)).then(() => { setShowAssignModal(false); setAssignTo(''); });
+  const handleAssign = async () => {
+    setActionLoading(true); setError('');
+    try {
+      await assignTechnician(id!, assignTo);
+      // Send email notification
+      try {
+        await supabase.functions.invoke('send-technician-assignment-email', { body: { claim_id: id } });
+      } catch (emailErr) {
+        console.warn('Email notification failed:', emailErr);
+      }
+      await loadData();
+      setShowAssignModal(false); setAssignTo('');
+    } catch (err: any) { setError(err?.message || 'Error'); } finally { setActionLoading(false); }
+  };
   const handleStartWork = () => { if (!confirm('¿Iniciar atención del reclamo?')) return; handleAction(() => startWork(id!)); };
   const handleResolve = () => handleAction(() => resolveClaim(id!, resolution)).then(() => { setShowResolveModal(false); setResolution(''); });
   const handleClose = () => { if (!confirm('¿Cerrar este reclamo?')) return; handleAction(() => closeClaim(id!)); };

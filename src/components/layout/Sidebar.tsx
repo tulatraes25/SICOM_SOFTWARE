@@ -42,7 +42,7 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Dashboard', path: ROUTES.TECH_DASHBOARD, icon: LayoutDashboard },
     { label: 'Buscar Ascensor', path: '/tecnico/ascensores', icon: Search },
     { label: 'Mis Mantenimientos', path: '/tecnico/mantenimientos', icon: FileText },
-    { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
+    { label: 'Mis Reclamos', path: '/tecnico/reclamos', icon: AlertTriangle },
   ],
   supervisor: [
     { label: 'Dashboard', path: ROUTES.SUPERVISOR_DASHBOARD, icon: LayoutDashboard },

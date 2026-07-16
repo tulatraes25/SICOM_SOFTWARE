@@ -36,6 +36,8 @@ import TechDashboard from '@/pages/technician/TechDashboard';
 import TechnicianElevatorSearch from '@/pages/technician/TechnicianElevatorSearch';
 import ServiceRecordForm from '@/pages/technician/ServiceRecordForm';
 import ServiceRecordDetail from '@/pages/technician/ServiceRecordDetail';
+import TechClaimsPage from '@/pages/technician/TechClaimsPage';
+import TechClaimDetailPage from '@/pages/technician/TechClaimDetailPage';
 
 // Supervisor
 import SupervisorDashboard from '@/pages/supervisor/SupervisorDashboard';
@@ -253,6 +255,8 @@ export default function AppRouter() {
             </ProtectedRoute>
           }
         />
+        <Route path="/tecnico/reclamos" element={<ProtectedRoute allowedRoles={['technician', 'admin']}><TechClaimsPage /></ProtectedRoute>} />
+        <Route path="/tecnico/reclamos/:id" element={<ProtectedRoute allowedRoles={['technician', 'admin']}><TechClaimDetailPage /></ProtectedRoute>} />
 
         {/* Supervisor routes */}
         <Route
