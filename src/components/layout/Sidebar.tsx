@@ -17,8 +17,6 @@ import {
   FileSignature,
   Calculator,
   AlertTriangle,
-  AlertCircle,
-  Bell,
 } from 'lucide-react';
 import { ROUTES } from '@/config/constants';
 
@@ -73,13 +71,12 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
   return (
     <>
       <style>{`
-        @keyframes claim-pulse {
-          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-          50% { transform: scale(1.02); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+        @keyframes claim-alarm {
+          0%, 100% { background-color: rgb(220 38 38); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+          50% { background-color: rgb(153 27 27); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
         }
-        @media (prefers-reduced-motion: reduce) {
-          .claim-pulse { animation: none !important; }
-        }
+        .claim-alarm { animation: claim-alarm 1.1s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .claim-alarm { animation: none; background-color: rgb(220 38 38) !important; } }
       `}</style>
       {/* Mobile overlay */}
       {!collapsed && (
@@ -122,50 +119,38 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
             const Icon = item.icon;
             const badge = item.badgeKey ? badgeCounts[item.badgeKey] || 0 : 0;
 
-            // Technician claim alert — replace normal link with alert card
+            // Technician claim alarm — replace normal link
             if (item.badgeKey === 'claims' && showClaimAlert && !collapsed) {
-              const isUrgent = claimAlerts.highestPriority === 'urgent';
-              const isHigh = claimAlerts.highestPriority === 'high';
-              const alertBg = isUrgent ? 'bg-red-600' : isHigh ? 'bg-orange-500' : 'bg-amber-500';
-              const alertBorder = isUrgent ? 'border-red-700' : isHigh ? 'border-orange-600' : 'border-amber-600';
-              const alertText = isUrgent ? 'RECLAMO URGENTE' : isHigh ? 'RECLAMO DE ALTA PRIORIDAD' : 'NUEVO RECLAMO';
-              const alertSubtext = claimAlerts.newCount === 1 ? '1 tarea pendiente' : `${claimAlerts.newCount} tareas pendientes`;
-
               return (
                 <Link key={item.path} to="/tecnico/reclamos"
-                  className={cn(
-                    'block rounded-lg border-2 p-3 mb-2 transition-all',
-                    alertBg, alertBorder, 'text-white shadow-lg',
-                    'animate-[claim-pulse_1.5s_ease-in-out_infinite]'
-                  )}
-                  style={{ animation: 'claim-pulse 1.5s ease-in-out infinite' }}
+                  className="claim-alarm flex items-center gap-3 px-3 py-2.5 rounded-lg text-white font-bold border border-red-800 shadow-lg shadow-red-500/50"
                   onClick={() => setCollapsed(true)}
-                  aria-label={`Tenés ${claimAlerts.newCount} nuevo(s) reclamo(s) que requiere(n) atención`}
+                  title={`Tenés ${claimAlerts.newCount} reclamo(s) nuevo(s) que requiere(n) atención`}
+                  aria-label={`Tenés ${claimAlerts.newCount} reclamo(s) nuevo(s) que requiere(n) atención`}
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    <AlertCircle size={18} />
-                    <span className="font-bold text-sm">{alertText}</span>
-                  </div>
-                  <p className="text-xs opacity-90 mb-1">Requiere atención</p>
-                  <p className="text-xs font-medium opacity-80">{alertSubtext}</p>
-                  <p className="text-xs mt-2 font-bold underline">Ver ahora →</p>
+                  <span className="relative flex h-5 w-5 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-300 opacity-75" />
+                    <span className="relative inline-flex h-5 w-5 rounded-full bg-red-600 border-2 border-red-400" />
+                  </span>
+                  <span className="flex-1">Mis Reclamos</span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-sm font-extrabold text-red-700">{claimAlerts.newCount}</span>
                 </Link>
               );
             }
 
-            // Collapsed alert icon
+            // Collapsed alarm
             if (item.badgeKey === 'claims' && showClaimAlert && collapsed) {
               return (
                 <Link key={item.path} to="/tecnico/reclamos"
-                  className={cn(
-                    'flex items-center justify-center px-3 py-2.5 rounded-lg transition-colors',
-                    'bg-red-500 text-white animate-[claim-pulse_1.5s_ease-in-out_infinite]'
-                  )}
-                  style={{ animation: 'claim-pulse 1.5s ease-in-out infinite' }}
+                  className="claim-alarm flex items-center justify-center px-3 py-2.5 rounded-lg text-white border border-red-800 shadow-lg shadow-red-500/50"
                   onClick={() => setCollapsed(true)}
-                  aria-label={`Tenés ${claimAlerts.newCount} nuevo(s) reclamo(s)`}
+                  title={`Tenés ${claimAlerts.newCount} reclamo(s) nuevo(s)`}
+                  aria-label={`Tenés ${claimAlerts.newCount} reclamo(s) nuevo(s)`}
                 >
-                  <Bell size={20} />
+                  <span className="relative flex h-5 w-5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-300 opacity-75" />
+                    <span className="relative inline-flex h-5 w-5 rounded-full bg-red-600 border-2 border-red-400" />
+                  </span>
                 </Link>
               );
             }
