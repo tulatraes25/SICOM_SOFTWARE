@@ -15,9 +15,9 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const resendApiKey = Deno.env.get("RESEND_API_KEY") ?? "";
-    const fromEmail = Deno.env.get("BUDGET_FROM_EMAIL") ?? "sistema@sicompatagonia.com";
-    const fromName = Deno.env.get("BUDGET_FROM_NAME") ?? "SICOM Patagonia SRL";
-    const replyTo = Deno.env.get("BUDGET_REPLY_TO") ?? "adriana@sicompatagonia.com";
+    const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "sistema@sicompatagonia.com";
+    const fromName = "SICOM Patagonia SRL";
+    const replyTo = Deno.env.get("RESEND_REPLY_TO") ?? "adriana@sicompatagonia.com";
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
