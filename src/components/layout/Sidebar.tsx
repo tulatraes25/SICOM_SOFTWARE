@@ -15,6 +15,7 @@ import {
   FolderOpen,
   FileSignature,
   Calculator,
+  AlertTriangle,
 } from 'lucide-react';
 import { ROUTES } from '@/config/constants';
 
@@ -31,6 +32,7 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Ascensores', path: ROUTES.ADMIN_ELEVATORS, icon: Wrench },
     { label: 'Expedientes', path: ROUTES.ADMIN_SERVICE_CASES, icon: FolderOpen },
     { label: 'Presupuestos', path: '/admin/presupuestos', icon: Calculator },
+    { label: 'Reclamos', path: '/admin/reclamos', icon: AlertTriangle },
     { label: 'Revisión de Servicios', path: '/admin/mantenimientos', icon: FileText },
     { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
     { label: 'Configuración documental', path: '/admin/configuracion/documentos', icon: Settings },

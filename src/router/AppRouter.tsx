@@ -27,6 +27,9 @@ import DocumentSettingsPage from '@/pages/admin/DocumentSettingsPage';
 import BudgetsPage from '@/pages/admin/BudgetsPage';
 import BudgetCreatePage from '@/pages/admin/BudgetCreatePage';
 import BudgetDetailPage from '@/pages/admin/BudgetDetailPage';
+import ClaimsPage from '@/pages/admin/ClaimsPage';
+import ClaimCreatePage from '@/pages/admin/ClaimCreatePage';
+import ClaimDetailPage from '@/pages/admin/ClaimDetailPage';
 
 // Technician
 import TechDashboard from '@/pages/technician/TechDashboard';
@@ -197,6 +200,9 @@ export default function AppRouter() {
             </ProtectedRoute>
           }
         />
+        <Route path="/admin/reclamos" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ClaimsPage /></ProtectedRoute>} />
+        <Route path="/admin/reclamos/nuevo" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ClaimCreatePage /></ProtectedRoute>} />
+        <Route path="/admin/reclamos/:id" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ClaimDetailPage /></ProtectedRoute>} />
 
         {/* Technician routes */}
         <Route

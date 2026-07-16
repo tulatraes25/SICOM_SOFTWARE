@@ -543,4 +543,73 @@ export const BUDGET_STATUS_LABELS: Record<BudgetStatus, string> = {
   cancelled: 'Cancelado',
 };
 
+// ============================================================
+// Claims
+// ============================================================
+
+export type ClaimChannel = 'phone' | 'email' | 'whatsapp' | 'in_person' | 'website' | 'internal' | 'other';
+export type ClaimCategory = 'operational_failure' | 'unusual_noise' | 'door_problem' | 'leveling' | 'lighting' | 'service_interruption' | 'safety_concern' | 'maintenance_request' | 'administrative' | 'other';
+export type ClaimPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type ClaimStatus = 'open' | 'assigned' | 'in_progress' | 'visited' | 'resolved' | 'closed' | 'cancelled';
+
+export interface Claim {
+  id: string;
+  service_case_id: string;
+  client_id: string;
+  building_id: string;
+  elevator_id?: string;
+  claim_date: string;
+  claim_time?: string;
+  received_at: string;
+  received_by: string;
+  claimant_name?: string;
+  claimant_email?: string;
+  claimant_phone?: string;
+  claimant_role?: string;
+  channel: ClaimChannel;
+  category: ClaimCategory;
+  priority: ClaimPriority;
+  subject: string;
+  description: string;
+  internal_notes?: string;
+  assigned_to?: string;
+  assigned_at?: string;
+  status: ClaimStatus;
+  resolved_at?: string;
+  resolved_by?: string;
+  resolution_summary?: string;
+  cancellation_reason?: string;
+  created_at: string;
+  updated_at: string;
+  // Relations
+  service_case?: ServiceCase;
+  client?: Client;
+  building?: Building;
+  elevator?: Elevator;
+  assigned_user?: Profile;
+  created_user?: Profile;
+}
+
+export const CLAIM_CHANNEL_LABELS: Record<ClaimChannel, string> = {
+  phone: 'Teléfono', email: 'Correo', whatsapp: 'WhatsApp',
+  in_person: 'Presencial', website: 'Sitio web', internal: 'Interno', other: 'Otro',
+};
+
+export const CLAIM_CATEGORY_LABELS: Record<ClaimCategory, string> = {
+  operational_failure: 'Falla operativa', unusual_noise: 'Ruido inusual',
+  door_problem: 'Problema de puertas', leveling: 'Nivelación',
+  lighting: 'Iluminación', service_interruption: 'Interrupción de servicio',
+  safety_concern: 'Preocupación de seguridad', maintenance_request: 'Solicitud de mantenimiento',
+  administrative: 'Administrativo', other: 'Otro',
+};
+
+export const CLAIM_PRIORITY_LABELS: Record<ClaimPriority, string> = {
+  low: 'Baja', normal: 'Normal', high: 'Alta', urgent: 'Urgente',
+};
+
+export const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
+  open: 'Abierto', assigned: 'Asignado', in_progress: 'En atención',
+  visited: 'Visitado', resolved: 'Resuelto', closed: 'Cerrado', cancelled: 'Cancelado',
+};
+
 
