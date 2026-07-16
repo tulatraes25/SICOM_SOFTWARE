@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useTechnicianClaimAlerts } from '@/hooks/useTechnicianClaimAlerts';
 import {
   LayoutDashboard,
   Building2,
@@ -16,6 +17,8 @@ import {
   FileSignature,
   Calculator,
   AlertTriangle,
+  AlertCircle,
+  Bell,
 } from 'lucide-react';
 import { ROUTES } from '@/config/constants';
 
@@ -64,9 +67,20 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const items = menuItems[role] || [];
+  const claimAlerts = useTechnicianClaimAlerts();
+  const showClaimAlert = role === 'technician' && claimAlerts.newCount > 0 && !claimAlerts.loading;
 
   return (
     <>
+      <style>{`
+        @keyframes claim-pulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+          50% { transform: scale(1.02); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .claim-pulse { animation: none !important; }
+        }
+      `}</style>
       {/* Mobile overlay */}
       {!collapsed && (
         <div
@@ -107,6 +121,54 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
             const badge = item.badgeKey ? badgeCounts[item.badgeKey] || 0 : 0;
+
+            // Technician claim alert — replace normal link with alert card
+            if (item.badgeKey === 'claims' && showClaimAlert && !collapsed) {
+              const isUrgent = claimAlerts.highestPriority === 'urgent';
+              const isHigh = claimAlerts.highestPriority === 'high';
+              const alertBg = isUrgent ? 'bg-red-600' : isHigh ? 'bg-orange-500' : 'bg-amber-500';
+              const alertBorder = isUrgent ? 'border-red-700' : isHigh ? 'border-orange-600' : 'border-amber-600';
+              const alertText = isUrgent ? 'RECLAMO URGENTE' : isHigh ? 'RECLAMO DE ALTA PRIORIDAD' : 'NUEVO RECLAMO';
+              const alertSubtext = claimAlerts.newCount === 1 ? '1 tarea pendiente' : `${claimAlerts.newCount} tareas pendientes`;
+
+              return (
+                <Link key={item.path} to="/tecnico/reclamos"
+                  className={cn(
+                    'block rounded-lg border-2 p-3 mb-2 transition-all',
+                    alertBg, alertBorder, 'text-white shadow-lg',
+                    'animate-[claim-pulse_1.5s_ease-in-out_infinite]'
+                  )}
+                  style={{ animation: 'claim-pulse 1.5s ease-in-out infinite' }}
+                  onClick={() => setCollapsed(true)}
+                  aria-label={`Tenés ${claimAlerts.newCount} nuevo(s) reclamo(s) que requiere(n) atención`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertCircle size={18} />
+                    <span className="font-bold text-sm">{alertText}</span>
+                  </div>
+                  <p className="text-xs opacity-90 mb-1">Requiere atención</p>
+                  <p className="text-xs font-medium opacity-80">{alertSubtext}</p>
+                  <p className="text-xs mt-2 font-bold underline">Ver ahora →</p>
+                </Link>
+              );
+            }
+
+            // Collapsed alert icon
+            if (item.badgeKey === 'claims' && showClaimAlert && collapsed) {
+              return (
+                <Link key={item.path} to="/tecnico/reclamos"
+                  className={cn(
+                    'flex items-center justify-center px-3 py-2.5 rounded-lg transition-colors',
+                    'bg-red-500 text-white animate-[claim-pulse_1.5s_ease-in-out_infinite]'
+                  )}
+                  style={{ animation: 'claim-pulse 1.5s ease-in-out infinite' }}
+                  onClick={() => setCollapsed(true)}
+                  aria-label={`Tenés ${claimAlerts.newCount} nuevo(s) reclamo(s)`}
+                >
+                  <Bell size={20} />
+                </Link>
+              );
+            }
 
             if (item.disabled) {
               return (
