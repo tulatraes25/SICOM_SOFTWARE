@@ -18,28 +18,24 @@ export function useTechnicianClaimAlerts(): ClaimAlertData {
   const refresh = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { console.log('[ClaimAlert] No user'); setNewCount(0); setLoading(false); return; }
+      if (!user) { setNewCount(0); setLoading(false); return; }
 
-      console.log('[ClaimAlert] Querying for user:', user.id);
+      // Use the same approach that works in TechClaimsPage:
+      // query via the service layer which handles RLS correctly
+      const { listClaims } = await import('@/services/claims.service');
+      const result = await listClaims({
+        assigned_to: user.id,
+        status: 'assigned',
+      });
 
-      const { data, error } = await supabase
-        .from('claims')
-        .select('id, priority, assigned_to, status')
-        .eq('assigned_to', user.id)
-        .eq('status', 'assigned');
-
-      if (error) { console.error('[ClaimAlert] Query error:', error); setLoading(false); return; }
-
-      console.log('[ClaimAlert] Results:', JSON.stringify(data));
-
-      const count = data?.length || 0;
+      const count = result.count || 0;
       setNewCount(count);
 
       if (count === 0) {
         setUrgentCount(0);
         setHighestPriority(null);
       } else {
-        const priorities = data!.map(c => c.priority);
+        const priorities = result.data.map(c => c.priority);
         const urgent = priorities.filter(p => p === 'urgent').length;
         setUrgentCount(urgent);
 
@@ -49,7 +45,8 @@ export function useTechnicianClaimAlerts(): ClaimAlertData {
         else setHighestPriority('low');
       }
     } catch (err) {
-      console.error(err);
+      console.error('[ClaimAlert]', err);
+      setNewCount(0);
     } finally {
       setLoading(false);
     }

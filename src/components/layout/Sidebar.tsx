@@ -67,7 +67,6 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
   const items = menuItems[role] || [];
   const claimAlerts = useTechnicianClaimAlerts();
   const showClaimAlert = role === 'technician' && claimAlerts.newCount > 0 && !claimAlerts.loading;
-  console.log('[Sidebar] role:', role, 'newCount:', claimAlerts.newCount, 'loading:', claimAlerts.loading, 'showClaimAlert:', showClaimAlert);
 
   return (
     <>
