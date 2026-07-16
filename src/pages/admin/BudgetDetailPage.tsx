@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { getBudget, markBudgetReady, markBudgetSent, acceptBudget, rejectBudget, cancelBudget, recalculateBudget, addBudgetItem, updateBudgetItem, deleteBudgetItem } from '@/services/budgets.service';
-import { sendBudgetEmail, listBudgetEmailSends } from '@/services/budgetEmail.service';
+import { sendBudgetEmails, listBudgetEmailSends } from '@/services/budgetEmail.service';
 import { listBudgetRecipients as listBuildingBudgetRecipients } from '@/services/buildingBudgetRecipients.service';
 import { getUserSignatureForPDF } from '@/services/userSignatures.service';
 import BudgetPDF from '@/components/pdf/BudgetPDF';
@@ -162,9 +162,9 @@ SICOM Patagonia SRL`);
     if (allEmails.length === 0) return;
     setEmailSending(true); setEmailResult('');
     try {
-      // Generate PDF blob
+      // Generate PDF and convert to base64
       const sigData = await getUserSignatureForPDF(budget.created_by, 'administrator');
-      await pdf(
+      const pdfBlob = await pdf(
         <BudgetPDF
           budget={budget}
           signatureUrl={sigData?.signedUrl || undefined}
@@ -172,20 +172,54 @@ SICOM Patagonia SRL`);
         />
       ).toBlob();
 
-      let sent = 0, failed = 0;
-      for (const email of allEmails) {
-        try {
-          await sendBudgetEmail(budget.id, email, undefined, emailSubject, emailBody);
-          sent++;
-        } catch { failed++; }
+      // Convert blob to base64
+      const arrayBuffer = await pdfBlob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const pdfBase64 = btoa(
+        uint8Array.reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+
+      const caseNum = (budget.service_case as any)?.case_number;
+      const pdfFilename = `presupuesto-${caseNum || 'borrador'}.pdf`;
+
+      // Build recipients list (deduplicated)
+      const recipientsMap = new Map<string, { email: string; name?: string }>();
+      // Saved contacts
+      for (const r of recipients) {
+        if (emailRecipients.includes(r.email)) {
+          recipientsMap.set(r.email.toLowerCase(), { email: r.email.toLowerCase(), name: r.name });
+        }
+      }
+      // Extra recipients
+      for (const r of extraRecipients) {
+        const email = r.email.toLowerCase();
+        if (!recipientsMap.has(email)) {
+          recipientsMap.set(email, { email, name: r.name || undefined });
+        }
       }
 
-      if (sent > 0) {
+      const recipientsList = Array.from(recipientsMap.values());
+
+      // Send all at once via Edge Function
+      const result = await sendBudgetEmails({
+        budgetId: budget.id,
+        recipients: recipientsList,
+        subject: emailSubject,
+        body: emailBody,
+        pdfBase64,
+        pdfFilename,
+      });
+
+      if (result.success > 0) {
         await markBudgetSent(budget.id);
-        setEmailResult(`Enviados: ${sent}${failed > 0 ? ` | Fallidos: ${failed}` : ''}`);
+        setEmailResult(
+          result.failed > 0
+            ? `Enviados: ${result.success} | Fallidos: ${result.failed}`
+            : `Presupuesto enviado a ${result.success} destinatario(s).`
+        );
         await loadBudget();
       } else {
-        setEmailResult('No se pudo enviar a ningún destinatario');
+        setEmailResult('No se pudo enviar el presupuesto. Verificá la configuración de correo.');
       }
     } catch (err: any) {
       setEmailResult('Error: ' + (err?.message || ''));

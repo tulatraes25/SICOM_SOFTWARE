@@ -15,24 +15,39 @@ export async function listBudgetEmailSends(budgetId: string): Promise<BudgetEmai
   return data || [];
 }
 
-export async function sendBudgetEmail(
-  budgetId: string,
-  recipientEmail: string,
-  recipientName?: string,
-  subject?: string,
-  body?: string
-): Promise<BudgetEmailSend> {
+export interface EmailRecipient {
+  email: string;
+  name?: string;
+}
+
+export interface SendBudgetEmailParams {
+  budgetId: string;
+  recipients: EmailRecipient[];
+  subject: string;
+  body: string;
+  pdfBase64?: string;
+  pdfFilename?: string;
+}
+
+export interface SendBudgetEmailResult {
+  success: number;
+  failed: number;
+  mock: boolean;
+  results: Array<{ email: string; name?: string; status: string; provider_message_id?: string; error?: string }>;
+}
+
+export async function sendBudgetEmails(params: SendBudgetEmailParams): Promise<SendBudgetEmailResult> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('No autenticado');
 
-  // Call Edge Function
   const { data, error } = await supabase.functions.invoke('send-budget-email', {
     body: {
-      budget_id: budgetId,
-      recipient_email: recipientEmail,
-      recipient_name: recipientName,
-      subject,
-      body,
+      budget_id: params.budgetId,
+      recipients: params.recipients,
+      subject: params.subject,
+      body: params.body,
+      pdf_base64: params.pdfBase64 || null,
+      pdf_filename: params.pdfFilename || 'presupuesto.pdf',
     },
   });
 
