@@ -22,9 +22,10 @@ import { ROUTES } from '@/config/constants';
 interface SidebarProps {
   role: 'admin' | 'technician' | 'supervisor' | 'responsible';
   onLogout?: () => void;
+  badgeCounts?: Record<string, number>;
 }
 
-const menuItems: Record<string, { label: string; path: string; icon: React.ElementType; disabled?: boolean }[]> = {
+const menuItems: Record<string, { label: string; path: string; icon: React.ElementType; disabled?: boolean; badgeKey?: string }[]> = {
   admin: [
     { label: 'Dashboard', path: ROUTES.ADMIN_DASHBOARD, icon: LayoutDashboard },
     { label: 'Clientes', path: ROUTES.ADMIN_CLIENTS, icon: Users },
@@ -42,13 +43,15 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Dashboard', path: ROUTES.TECH_DASHBOARD, icon: LayoutDashboard },
     { label: 'Buscar Ascensor', path: '/tecnico/ascensores', icon: Search },
     { label: 'Mis Mantenimientos', path: '/tecnico/mantenimientos', icon: FileText },
-    { label: 'Mis Reclamos', path: '/tecnico/reclamos', icon: AlertTriangle },
+    { label: 'Mis Reclamos', path: '/tecnico/reclamos', icon: AlertTriangle, badgeKey: 'claims' },
+    { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
   ],
   supervisor: [
     { label: 'Dashboard', path: ROUTES.SUPERVISOR_DASHBOARD, icon: LayoutDashboard },
-    { label: 'Revisiones', path: '/supervisor/revisiones', icon: FileText },
+    { label: 'Expedientes', path: ROUTES.ADMIN_SERVICE_CASES, icon: FolderOpen },
+    { label: 'Reclamos', path: '/admin/reclamos', icon: AlertTriangle },
+    { label: 'Revisión de Servicios', path: '/admin/mantenimientos', icon: FileText },
     { label: 'Informes Mensuales', path: '/supervisor/informes', icon: FileText },
-    { label: 'Presupuestos', path: '/admin/presupuestos', icon: Calculator },
     { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
   ],
   responsible: [
@@ -57,7 +60,7 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
   ],
 };
 
-export default function Sidebar({ role, onLogout }: SidebarProps) {
+export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const items = menuItems[role] || [];
@@ -103,13 +106,11 @@ export default function Sidebar({ role, onLogout }: SidebarProps) {
           {items.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
+            const badge = item.badgeKey ? badgeCounts[item.badgeKey] || 0 : 0;
 
             if (item.disabled) {
               return (
-                <div
-                  key={item.path}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 cursor-not-allowed"
-                >
+                <div key={item.path} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 cursor-not-allowed">
                   <Icon size={20} />
                   {!collapsed && (
                     <>
@@ -122,19 +123,17 @@ export default function Sidebar({ role, onLogout }: SidebarProps) {
             }
 
             return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                  isActive
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                )}
+              <Link key={item.path} to={item.path}
+                className={cn('flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors', isActive ? 'bg-primary/10 text-primary font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')}
                 onClick={() => setCollapsed(true)}
               >
                 <Icon size={20} />
-                {!collapsed && <span>{item.label}</span>}
+                {!collapsed && (
+                  <>
+                    <span className="flex-1">{item.label}</span>
+                    {badge > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-danger text-white">{badge}</span>}
+                  </>
+                )}
               </Link>
             );
           })}
