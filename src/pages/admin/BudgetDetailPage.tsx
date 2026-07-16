@@ -7,7 +7,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { getBudget, markBudgetReady, markBudgetSent, acceptBudget, rejectBudget, cancelBudget, recalculateBudget, addBudgetItem, updateBudgetItem, deleteBudgetItem } from '@/services/budgets.service';
 import { sendBudgetEmail, listBudgetEmailSends } from '@/services/budgetEmail.service';
-import { listActiveContactsByType } from '@/services/buildingContacts.service';
+import { listBudgetRecipients as listBuildingBudgetRecipients } from '@/services/buildingBudgetRecipients.service';
 import { getUserSignatureForPDF } from '@/services/userSignatures.service';
 import BudgetPDF from '@/components/pdf/BudgetPDF';
 import { BUDGET_STATUS_LABELS } from '@/types/database';
@@ -140,12 +140,12 @@ Quedamos a disposición ante cualquier consulta.
 Saludos cordiales,
 SICOM Patagonia SRL`);
 
-    // Load recipients from building_contacts
+    // Load recipients from building_budget_recipients
     if (budget.building_id) {
       try {
-        const contacts = await listActiveContactsByType(budget.building_id, 'budgets');
-        setRecipients(contacts.map(c => ({ id: c.id, name: c.name, email: c.email })));
-        setEmailRecipients(contacts.map(c => c.email));
+        const bRecipients = await listBuildingBudgetRecipients(budget.building_id);
+        setRecipients(bRecipients.map(r => ({ id: r.id, name: r.name, email: r.email })));
+        setEmailRecipients(bRecipients.map(r => r.email));
       } catch { setRecipients([]); setEmailRecipients([]); }
     } else {
       setRecipients([]);

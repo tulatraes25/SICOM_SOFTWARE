@@ -41,14 +41,3 @@ export async function sendBudgetEmail(
 
   return data;
 }
-
-export async function getBudgetRecipients(buildingId: string): Promise<Array<{ id: string; name: string; email: string }>> {
-  const { data, error } = await supabase
-    .from('building_report_recipients')
-    .select('id, name, email')
-    .eq('building_id', buildingId)
-    .eq('active', true);
-
-  if (error) throw error;
-  return data || [];
-}
