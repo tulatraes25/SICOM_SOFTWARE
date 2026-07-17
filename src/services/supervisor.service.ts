@@ -1,5 +1,5 @@
 import { supabase } from '@/config/supabase';
-import type { ServiceRecord } from '@/types/database';
+import type { ServiceRecord, MonthlyReport } from '@/types/database';
 
 // Listar registros pendientes de revisión
 export async function listPendingServiceRecords(): Promise<ServiceRecord[]> {
@@ -111,7 +111,7 @@ export async function listMonthlyReports(filters?: {
   elevator_id?: string;
   period?: string;
   status?: string;
-}): Promise<any[]> {
+}): Promise<MonthlyReport[]> {
   let query = supabase
     .from('monthly_reports')
     .select(`
