@@ -34,9 +34,9 @@ export function useTechnicianOrderAlerts(): OrderAlertData {
 
       const { data: orders, error: ordersError } = await supabase
         .from('service_orders')
-        .select('id, priority')
+        .select('id, priority, status')
         .in('id', orderIds)
-        .eq('status', 'assigned');
+        .in('status', ['assigned', 'changes_requested']);
 
       if (ordersError) { setLoading(false); return; }
 

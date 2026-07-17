@@ -32,6 +32,8 @@ export default function TechServiceOrdersPage() {
 
   const assigned = orders.filter(o => o.status === 'assigned');
   const inProgress = orders.filter(o => o.status === 'in_progress');
+  const changesRequested = orders.filter(o => o.status === 'changes_requested');
+  const pending = assigned.length + inProgress.length + changesRequested.length;
 
   const renderCard = (order: ServiceOrder) => {
     const p = PRIORITY_STYLE[order.priority] || PRIORITY_STYLE.normal;
@@ -44,10 +46,17 @@ export default function TechServiceOrdersPage() {
         <div className="flex items-start justify-between mb-2">
           <div>
             {order.status === 'assigned' && <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded mr-2">NUEVA</span>}
+            {order.status === 'changes_requested' && <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded mr-2">CORRECCIONES</span>}
             <span className="font-mono font-bold text-gray-900">{numLabel}</span>
           </div>
-          <Badge variant={p.badge}>{CLAIM_PRIORITY_LABELS[order.priority as keyof typeof CLAIM_PRIORITY_LABELS]}</Badge>
+          <Badge variant={order.status === 'changes_requested' ? 'danger' : p.badge}>{CLAIM_PRIORITY_LABELS[order.priority as keyof typeof CLAIM_PRIORITY_LABELS]}</Badge>
         </div>
+        {(order as any).reviewer_notes && (
+          <div className="p-2 bg-red-50 border border-red-200 rounded text-sm mb-2">
+            <p className="text-red-700 font-medium text-xs">Observación del revisor:</p>
+            <p className="text-red-600">{(order as any).reviewer_notes}</p>
+          </div>
+        )}
         <p className="text-sm font-medium text-gray-900 mb-1">{(order.building as any)?.name || 'Sin edificio'}</p>
         <p className="text-xs text-gray-500 mb-1">{(order.elevator as any)?.code ? `Ascensor ${(order.elevator as any).code}` : ''}</p>
         <p className="text-sm text-gray-700 mb-2">{order.subject}</p>
@@ -55,6 +64,9 @@ export default function TechServiceOrdersPage() {
         <div className="flex gap-2">
           {order.status === 'assigned' && (
             <Link to={`/tecnico/ordenes/${order.id}`}><Button size="sm"><Play size={14} className="mr-1" /> Comenzar trabajo</Button></Link>
+          )}
+          {order.status === 'changes_requested' && (
+            <Link to={`/tecnico/ordenes/${order.id}`}><Button size="sm"><Play size={14} className="mr-1" /> Retomar trabajo</Button></Link>
           )}
           {order.status === 'in_progress' && (
             <Link to={`/tecnico/ordenes/${order.id}`}><Button size="sm"><Play size={14} className="mr-1" /> Continuar</Button></Link>
@@ -67,8 +79,6 @@ export default function TechServiceOrdersPage() {
       </div>
     );
   };
-
-  const pending = assigned.length + inProgress.length;
 
   return (
     <DashboardLayout role="technician" title="Mis Órdenes">
@@ -91,6 +101,7 @@ export default function TechServiceOrdersPage() {
         {loading ? <div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" /></div>
         : pending === 0 ? <div className="text-center py-12"><CheckCircle size={48} className="mx-auto text-success mb-4" /><p className="text-lg font-medium text-gray-900">No tenés órdenes pendientes</p><p className="text-sm text-gray-500">Las nuevas asignaciones aparecerán aquí.</p></div>
         : <div className="space-y-6">
+            {changesRequested.length > 0 && <div><h3 className="text-sm font-bold text-red-700 uppercase tracking-wide mb-3">Correcciones Solicitadas ({changesRequested.length})</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-3">{changesRequested.map(renderCard)}</div></div>}
             {assigned.length > 0 && <div><h3 className="text-sm font-bold text-blue-700 uppercase tracking-wide mb-3">Nuevas Órdenes ({assigned.length})</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-3">{assigned.map(renderCard)}</div></div>}
             {inProgress.length > 0 && <div><h3 className="text-sm font-bold text-yellow-700 uppercase tracking-wide mb-3">En Ejecución ({inProgress.length})</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-3">{inProgress.map(renderCard)}</div></div>}
           </div>
