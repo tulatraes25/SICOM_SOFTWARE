@@ -7,9 +7,10 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { getServiceOrder, markReady, assignTechnicians, cancelOrder, approveOrder, requestCorrections, getOrderEvents, getOrderProgress, addProgress, generateOrderPDF, getOrderPDFUrl } from '@/services/serviceOrders.service';
 import ServiceOrderReportPDF from '@/components/pdf/ServiceOrderReportPDF';
+import SendOrderEmailModal from '@/components/serviceOrders/SendOrderEmailModal';
 import { SERVICE_ORDER_STATUS_LABELS, SERVICE_ORDER_TYPE_LABELS, CLAIM_PRIORITY_LABELS } from '@/types/database';
 import type { ServiceOrder } from '@/types/database';
-import { ArrowLeft, AlertCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Mail } from 'lucide-react';
 import { supabase } from '@/config/supabase';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
@@ -55,6 +56,7 @@ export default function ServiceOrderDetailPage() {
   const [showCorrectionsModal, setShowCorrectionsModal] = useState(false);
   const [correctionsNotes, setCorrectionsNotes] = useState('');
   const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
 
   useEffect(() => { if (id) loadData(); }, [id]);
 
@@ -149,6 +151,7 @@ export default function ServiceOrderDetailPage() {
                 <>
                   <Button variant="outline" onClick={handleDownloadPDF}>Descargar PDF</Button>
                   <Button onClick={handleGeneratePDF} disabled={pdfGenerating}>{pdfGenerating ? 'Regenerando...' : 'Regenerar PDF'}</Button>
+                  <Button onClick={() => setShowEmailModal(true)}><Mail size={16} className="mr-2" /> Enviar por correo</Button>
                 </>
               ) : (
                 <Button onClick={handleGeneratePDF} disabled={pdfGenerating}>{pdfGenerating ? 'Generando...' : 'Generar PDF final'}</Button>
@@ -261,6 +264,19 @@ export default function ServiceOrderDetailPage() {
         <textarea className="w-full border rounded px-3 py-2 text-sm resize-none" rows={3} value={progressNote} onChange={(e) => setProgressNote(e.target.value)} placeholder="Descripción..." />
         <div className="flex justify-end gap-2 mt-4"><Button variant="outline" onClick={() => setShowProgressModal(false)}>Cancelar</Button><Button onClick={() => handleAction(() => addProgress(id!, progressNote, progressType)).then(() => { setShowProgressModal(false); setProgressNote(''); })} disabled={!progressNote.trim() || actionLoading}>Registrar</Button></div>
       </div></div>}
+
+      {/* Email Modal */}
+      <SendOrderEmailModal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        orderId={id!}
+        caseNumber={(order.service_case as any)?.case_number || ''}
+        numberingMode={(order.service_case as any)?.numbering_mode || ''}
+        elevatorCode={(order.elevator as any)?.code || ''}
+        buildingName={(order.building as any)?.name || ''}
+        buildingId={(order.building as any)?.id}
+        onSent={() => { setShowEmailModal(false); loadData(); }}
+      />
     </DashboardLayout>
   );
 }
