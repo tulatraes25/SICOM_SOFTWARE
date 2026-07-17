@@ -104,7 +104,18 @@ export default function ServiceOrderDetailPage() {
   const handleDownloadPDF = async () => {
     if (!(order as any).final_pdf_path) return;
     const url = await getOrderPDFUrl((order as any).final_pdf_path);
-    if (url) window.open(url, '_blank');
+    if (!url) return;
+    // Fetch as blob and trigger download
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `orden-${caseNum}-v${(order as any).final_pdf_version || 1}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
   };
 
   if (loading) return <DashboardLayout role="admin" title="Orden"><div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
