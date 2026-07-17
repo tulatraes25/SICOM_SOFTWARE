@@ -10,7 +10,7 @@ export async function listServiceOrders(filters?: {
     *, service_case:service_cases(case_number, numbering_mode),
     client:clients(name, code), building:buildings(name, code),
     elevator:elevators(code),
-    technicians:service_order_technicians(technician:profiles(full_name), is_lead)
+    technicians:service_order_technicians(technician:profiles!service_order_technicians_technician_id_fkey(full_name), is_lead)
   `, { count: 'exact' }).order('created_at', { ascending: false });
 
   if (filters?.status) query = query.eq('status', filters.status);
@@ -33,7 +33,7 @@ export async function getServiceOrder(id: string): Promise<ServiceOrder | null> 
     client:clients(id, name, code, contact_name, contact_phone),
     building:buildings(id, name, code, address),
     elevator:elevators(id, code, manufacturer, model),
-    technicians:service_order_technicians(technician:profiles(id, full_name, email), is_lead, assigned_at),
+    technicians:service_order_technicians(technician:profiles!service_order_technicians_technician_id_fkey(id, full_name, email), is_lead, assigned_at),
     created_user:profiles!service_orders_created_by_fkey(full_name, email)
   `).eq('id', id).single();
   if (error) throw error;
