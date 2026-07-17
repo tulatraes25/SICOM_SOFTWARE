@@ -88,7 +88,7 @@ export default function ServiceOrderDetailPage() {
       const blob = await pdf(
         <ServiceOrderReportPDF order={order} progress={progress} events={events}
           isTest={(order.service_case as any)?.numbering_mode === 'test'}
-          signerName={(order as any).reviewed_by ? 'Administrador' : undefined} />
+          signerName={(order as any).reviewed_by ? ((order as any).approved_user?.full_name || 'Administrador') : undefined} />
       ).toBlob();
 
       const arrayBuffer = await blob.arrayBuffer();

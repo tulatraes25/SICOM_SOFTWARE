@@ -47,6 +47,7 @@ const s = StyleSheet.create({
   sigRole: { fontSize: 7, color: C.gray600 },
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: C.navy, paddingHorizontal: 35, paddingVertical: 10, flexDirection: 'row', justifyContent: 'space-between' },
   footerText: { fontSize: 7, color: C.white, opacity: 0.8 },
+  pageNumber: { position: 'absolute', bottom: 18, left: 0, right: 0, textAlign: 'center', fontSize: 7, color: C.white },
 });
 
 interface ServiceOrderReportPDFProps {
@@ -144,8 +145,9 @@ export default function ServiceOrderReportPDF({ order, progress, events, isTest,
         {/* Footer */}
         <View style={s.footer} fixed>
           <Text style={s.footerText}>SICOM Patagonia SRL — {numberLabel}</Text>
-          <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+          <Text style={s.footerText}>Documento generado por el sistema SICOM</Text>
         </View>
+        <Text style={s.pageNumber} fixed render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
       </Page>
 
       {/* Page 2+: Progress and History */}
@@ -216,8 +218,9 @@ export default function ServiceOrderReportPDF({ order, progress, events, isTest,
 
           <View style={s.footer} fixed>
             <Text style={s.footerText}>SICOM Patagonia SRL — {numberLabel}</Text>
-            <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+            <Text style={s.footerText}>Documento generado por el sistema SICOM</Text>
           </View>
+          <Text style={s.pageNumber} fixed render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
         </Page>
       )}
     </Document>
