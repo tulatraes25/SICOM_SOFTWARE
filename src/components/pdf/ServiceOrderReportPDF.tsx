@@ -144,7 +144,7 @@ export default function ServiceOrderReportPDF({ order, progress, events, isTest,
         {/* Footer */}
         <View style={s.footer} fixed>
           <Text style={s.footerText}>SICOM Patagonia SRL — {numberLabel}</Text>
-          <Text style={s.footerText}>Documento generado por el sistema SICOM</Text>
+          <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
         </View>
       </Page>
 
@@ -199,15 +199,24 @@ export default function ServiceOrderReportPDF({ order, progress, events, isTest,
             <View style={s.sigRow}>
               <View style={s.sigBlock}>
                 {signatureUrl ? <Image src={signatureUrl} style={s.sigImg} /> : <View style={s.sigLine} />}
-                <Text style={s.sigName}>{signerName || 'SICOM Patagonia SRL'}</Text>
-                <Text style={s.sigRole}>Administrador</Text>
+                {signerName && signerName !== 'Administrador' ? (
+                  <>
+                    <Text style={s.sigName}>{signerName}</Text>
+                    <Text style={s.sigRole}>Administrador</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={s.sigName}>Administrador</Text>
+                    <Text style={s.sigRole}>SICOM Patagonia SRL</Text>
+                  </>
+                )}
               </View>
             </View>
           </View>
 
           <View style={s.footer} fixed>
             <Text style={s.footerText}>SICOM Patagonia SRL — {numberLabel}</Text>
-            <Text style={s.footerText}>Documento generado por el sistema SICOM</Text>
+            <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
           </View>
         </Page>
       )}
