@@ -8,6 +8,7 @@ import { getServiceCase, closeServiceCase, cancelServiceCase, formatCaseNumber, 
 import { CASE_ORIGIN_LABELS, CASE_STATUS_LABELS } from '@/types/database';
 import type { ServiceCase, ServiceCaseEvent } from '@/types/database';
 import { ArrowLeft, X, CheckCircle, User, Building2, Wrench, Calendar, AlertCircle } from 'lucide-react';
+import CaseDocumentsSection from '@/components/cases/CaseDocumentsSection';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   open: 'info',
@@ -188,6 +189,9 @@ export default function ServiceCaseDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Documents */}
+            <CaseDocumentsSection serviceCaseId={serviceCase.id} />
 
             {/* Events timeline */}
             <Card>
