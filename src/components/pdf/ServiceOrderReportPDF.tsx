@@ -147,7 +147,7 @@ export default function ServiceOrderReportPDF({ order, progress, events, isTest,
           <Text style={s.footerText}>SICOM Patagonia SRL — {numberLabel}</Text>
           <Text style={s.footerText}>Documento generado por el sistema SICOM</Text>
         </View>
-        <Text style={s.pageNumber} fixed render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+        <Text fixed style={{ position: 'absolute', bottom: 20, left: 0, right: 0, textAlign: 'center', fontSize: 7, color: '#ffffff' }} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
       </Page>
 
       {/* Page 2+: Progress and History */}
@@ -201,17 +201,8 @@ export default function ServiceOrderReportPDF({ order, progress, events, isTest,
             <View style={s.sigRow}>
               <View style={s.sigBlock}>
                 {signatureUrl ? <Image src={signatureUrl} style={s.sigImg} /> : <View style={s.sigLine} />}
-                {signerName && signerName !== 'Administrador' ? (
-                  <>
-                    <Text style={s.sigName}>{signerName}</Text>
-                    <Text style={s.sigRole}>Administrador</Text>
-                  </>
-                ) : (
-                  <>
-                    <Text style={s.sigName}>Administrador</Text>
-                    <Text style={s.sigRole}>SICOM Patagonia SRL</Text>
-                  </>
-                )}
+                <Text style={s.sigName}>{(signerName && signerName.trim() && signerName.trim().toLowerCase() !== 'administrador') ? signerName.trim() : 'Administrador'}</Text>
+                <Text style={s.sigRole}>{(signerName && signerName.trim() && signerName.trim().toLowerCase() !== 'administrador') ? 'Administrador' : 'SICOM Patagonia SRL'}</Text>
               </View>
             </View>
           </View>
@@ -220,7 +211,7 @@ export default function ServiceOrderReportPDF({ order, progress, events, isTest,
             <Text style={s.footerText}>SICOM Patagonia SRL — {numberLabel}</Text>
             <Text style={s.footerText}>Documento generado por el sistema SICOM</Text>
           </View>
-          <Text style={s.pageNumber} fixed render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+          <Text fixed style={{ position: 'absolute', bottom: 20, left: 0, right: 0, textAlign: 'center', fontSize: 7, color: '#ffffff' }} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
         </Page>
       )}
     </Document>
