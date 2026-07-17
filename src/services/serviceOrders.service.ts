@@ -34,11 +34,19 @@ export async function getServiceOrder(id: string): Promise<ServiceOrder | null> 
     building:buildings(id, name, code, address),
     elevator:elevators(id, code, manufacturer, model),
     technicians:service_order_technicians(technician:profiles!service_order_technicians_technician_id_fkey(id, full_name, email), is_lead, assigned_at),
-    created_user:profiles!service_orders_created_by_fkey(full_name, email),
-    approved_user:profiles!service_orders_approved_by_fkey(full_name, email)
+    created_user:profiles!service_orders_created_by_fkey(full_name, email)
   `).eq('id', id).single();
   if (error) throw error;
-  return data;
+
+  // Load approver separately (no FK from service_orders to profiles for approved_by)
+  let approvedUser = null;
+  const reviewedBy = (data as any).reviewed_by;
+  if (reviewedBy) {
+    const { data: profile } = await supabase.from('profiles').select('full_name, email').eq('id', reviewedBy).single();
+    approvedUser = profile;
+  }
+
+  return { ...data, approved_user: approvedUser } as any;
 }
 
 export async function createServiceOrder(params: {
