@@ -64,5 +64,12 @@ export function useTechnicianOrderAlerts(): OrderAlertData {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Re-fetch when page becomes visible (after navigating back from detail)
+  useEffect(() => {
+    const handler = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, [refresh]);
+
   return { newCount, urgentCount, highestPriority, loading, refresh };
 }

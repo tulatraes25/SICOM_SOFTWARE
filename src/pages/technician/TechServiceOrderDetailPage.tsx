@@ -18,10 +18,12 @@ export default function TechServiceOrderDetailPage() {
   const [progress, setProgress] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressNote, setProgressNote] = useState('');
   const [progressType, setProgressType] = useState('update');
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
 
   useEffect(() => { if (id) loadData(); }, [id]);
 
@@ -38,30 +40,45 @@ export default function TechServiceOrderDetailPage() {
     try { await action(); await loadData(); } catch (err: any) { setError(err?.message || 'Error'); } finally { setActionLoading(false); }
   };
 
+  const handleComplete = async () => {
+    setActionLoading(true); setError('');
+    try {
+      await completeOrder(id!);
+      setSuccess('La orden fue completada correctamente');
+      setShowCompleteModal(false);
+      setTimeout(() => navigate('/tecnico/ordenes'), 1200);
+    } catch (err: any) { setError(err?.message || 'Error'); } finally { setActionLoading(false); }
+  };
+
   if (loading) return <DashboardLayout role="technician" title="Orden"><div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
   if (error && !order) return <DashboardLayout role="technician" title="Orden"><div className="max-w-2xl mx-auto"><button onClick={() => navigate('/tecnico/ordenes')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"><ArrowLeft size={18} /> Volver</button><Card><CardContent><div className="text-center py-8"><AlertCircle size={48} className="mx-auto text-danger mb-4" /><p className="text-gray-600">{error}</p></div></CardContent></Card></div></DashboardLayout>;
   if (!order) return null;
 
   const caseNum = (order.service_case as any)?.case_number;
   const caseMode = (order.service_case as any)?.numbering_mode;
+  const numLabel = caseMode === 'test' ? `PRUEBA N.º ${caseNum}` : `N.º ${caseNum}`;
+  const isCompleted = order.status === 'completed';
 
   return (
-    <DashboardLayout role="technician" title={`Orden ${caseMode === 'test' ? 'PRUEBA ' : ''}N.º ${caseNum}`}>
+    <DashboardLayout role="technician" title={`Orden ${numLabel}`}>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <button onClick={() => navigate('/tecnico/ordenes')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-2"><ArrowLeft size={18} /> Volver</button>
+            <button onClick={() => navigate('/tecnico/ordenes')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-2"><ArrowLeft size={18} /> Volver a Mis Órdenes</button>
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold text-gray-900">{caseMode === 'test' ? 'PRUEBA ' : ''}N.º {caseNum}</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{numLabel}</h2>
               <Badge variant={STATUS_BADGE[order.status] || 'default'}>{SERVICE_ORDER_STATUS_LABELS[order.status]}</Badge>
             </div>
           </div>
           <div className="flex gap-2">
             {order.status === 'assigned' && <Button onClick={() => handleAction(() => startOrder(id!))} disabled={actionLoading}><Play size={16} className="mr-2" /> Comenzar trabajo</Button>}
             {['in_progress', 'visited'].includes(order.status) && <Button onClick={() => setShowProgressModal(true)}>Registrar Avance</Button>}
-            {['in_progress', 'visited'].includes(order.status) && <Button onClick={() => handleAction(() => completeOrder(id!))}><CheckCircle size={16} className="mr-2" /> Completar</Button>}
+            {['in_progress', 'visited'].includes(order.status) && <Button onClick={() => setShowCompleteModal(true)}><CheckCircle size={16} className="mr-2" /> Completar</Button>}
+            {isCompleted && <Button onClick={() => navigate('/tecnico/ordenes')}>Volver a Mis Órdenes</Button>}
           </div>
         </div>
+
+        {success && <div className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm flex items-center gap-2"><CheckCircle size={16} /> {success}</div>}
         {error && <div className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -93,6 +110,17 @@ export default function TechServiceOrderDetailPage() {
         </div>
       </div>
 
+      {/* Complete confirmation modal */}
+      {showCompleteModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-xl max-w-md w-full p-6">
+        <h3 className="text-lg font-semibold mb-2">Completar orden de servicio</h3>
+        <p className="text-sm text-gray-600 mb-4">¿Confirmás que el trabajo fue finalizado?</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setShowCompleteModal(false)}>Cancelar</Button>
+          <Button onClick={handleComplete} disabled={actionLoading}>{actionLoading ? 'Completando...' : 'Confirmar finalización'}</Button>
+        </div>
+      </div></div>}
+
+      {/* Progress modal */}
       {showProgressModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-xl max-w-md w-full p-6">
         <h3 className="text-lg font-semibold mb-4">Registrar Avance</h3>
         <select className="w-full border rounded px-3 py-2 text-sm mb-3" value={progressType} onChange={(e) => setProgressType(e.target.value)}>
