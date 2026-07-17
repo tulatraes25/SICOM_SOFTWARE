@@ -341,9 +341,9 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION assign_service_order_technicians(UUID,UUID[],BOOLEAN) FROM PUBLIC;
-REVOKE ALL ON FUNCTION assign_service_order_technicians(UUID,UUID[],BOOLEAN) FROM anon;
-GRANT EXECUTE ON FUNCTION assign_service_order_technicians(UUID,UUID[],BOOLEAN) TO authenticated;
+REVOKE ALL ON FUNCTION assign_service_order_technicians(UUID,UUID[],UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION assign_service_order_technicians(UUID,UUID[],UUID) FROM anon;
+GRANT EXECUTE ON FUNCTION assign_service_order_technicians(UUID,UUID[],UUID) TO authenticated;
 
 -- ============================================================
 -- 7. RPC: start_service_order
