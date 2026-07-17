@@ -64,7 +64,7 @@ export default function TechClaimsPage() {
   const urgentHigh = claims.filter(c => c.priority === 'urgent' || c.priority === 'high');
   const pending = assigned.length + inProgress.length + visited.length;
 
-  const renderCard = (claim: Claim, showStart: boolean) => {
+  const renderCard = (claim: Claim) => {
     const p = PRIORITY_STYLE[claim.priority] || PRIORITY_STYLE.normal;
     const delay = isDelayed(claim);
     const caseNum = (claim.service_case as any)?.case_number;
@@ -88,10 +88,15 @@ export default function TechClaimsPage() {
           {delay && <span className={`font-medium ${p.text}`}>{delay}</span>}
         </div>
         <div className="flex gap-2">
-          {showStart && (
+          {claim.status === 'assigned' && (
             <Button size="sm" onClick={() => handleStartWork(claim.id)} disabled={actionLoading === claim.id}>
-              <Play size={14} className="mr-1" /> {claim.status === 'assigned' ? 'Comenzar atención' : 'Continuar'}
+              <Play size={14} className="mr-1" /> Comenzar atención
             </Button>
+          )}
+          {claim.status === 'in_progress' && (
+            <Link to={`/tecnico/reclamos/${claim.id}`}>
+              <Button size="sm"><Play size={14} className="mr-1" /> Continuar atención</Button>
+            </Link>
           )}
           {claim.status === 'visited' && (
             <Link to={`/tecnico/reclamos/${claim.id}`}>
@@ -143,7 +148,7 @@ export default function TechClaimsPage() {
               <div>
                 <h3 className="text-sm font-bold text-blue-700 uppercase tracking-wide mb-3">Nuevos Reclamos ({assigned.length})</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {assigned.map(c => renderCard(c, true))}
+                  {assigned.map(c => renderCard(c))}
                 </div>
               </div>
             )}
@@ -151,7 +156,7 @@ export default function TechClaimsPage() {
               <div>
                 <h3 className="text-sm font-bold text-yellow-700 uppercase tracking-wide mb-3">En Atención ({inProgress.length})</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {inProgress.map(c => renderCard(c, true))}
+                  {inProgress.map(c => renderCard(c))}
                 </div>
               </div>
             )}
@@ -159,7 +164,7 @@ export default function TechClaimsPage() {
               <div>
                 <h3 className="text-sm font-bold text-purple-700 uppercase tracking-wide mb-3">Pendientes de Resolver ({visited.length})</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {visited.map(c => renderCard(c, false))}
+                  {visited.map(c => renderCard(c))}
                 </div>
               </div>
             )}
