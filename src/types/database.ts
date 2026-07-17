@@ -612,4 +612,60 @@ export const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
   visited: 'Visitado', resolved: 'Resuelto', closed: 'Cerrado', cancelled: 'Cancelado',
 };
 
+// ============================================================
+// Service Orders
+// ============================================================
+
+export type ServiceOrderType = 'preventive' | 'corrective' | 'emergency' | 'inspection' | 'claim_response' | 'budgeted_work' | 'modernization' | 'other';
+export type ServiceOrderStatus = 'draft' | 'ready' | 'assigned' | 'in_progress' | 'visited' | 'completed' | 'cancelled';
+
+export interface ServiceOrder {
+  id: string;
+  service_case_id: string;
+  claim_id?: string;
+  budget_id?: string;
+  service_record_id?: string;
+  client_id: string;
+  building_id: string;
+  elevator_id?: string;
+  order_date: string;
+  scheduled_date?: string;
+  scheduled_time?: string;
+  priority: string;
+  order_type: ServiceOrderType;
+  subject: string;
+  work_requested: string;
+  internal_notes?: string;
+  client_notes?: string;
+  status: ServiceOrderStatus;
+  created_by: string;
+  ready_by?: string;
+  ready_at?: string;
+  assigned_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  completed_by?: string;
+  completion_summary?: string;
+  cancellation_reason?: string;
+  created_at: string;
+  updated_at: string;
+  // Relations
+  service_case?: ServiceCase;
+  client?: Client;
+  building?: Building;
+  elevator?: Elevator;
+  technicians?: Array<{ technician: Profile; is_lead: boolean }>;
+}
+
+export const SERVICE_ORDER_TYPE_LABELS: Record<ServiceOrderType, string> = {
+  preventive: 'Preventivo', corrective: 'Correctivo', emergency: 'Emergencia',
+  inspection: 'Inspección', claim_response: 'Respuesta a reclamo',
+  budgeted_work: 'Trabajo presupuestado', modernization: 'Modernización', other: 'Otro',
+};
+
+export const SERVICE_ORDER_STATUS_LABELS: Record<ServiceOrderStatus, string> = {
+  draft: 'Borrador', ready: 'Listo', assigned: 'Asignado', in_progress: 'En ejecución',
+  visited: 'Visitado', completed: 'Completado', cancelled: 'Cancelado',
+};
+
 

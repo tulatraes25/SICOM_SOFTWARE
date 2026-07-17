@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useTechnicianClaimAlerts } from '@/hooks/useTechnicianClaimAlerts';
+import { useTechnicianOrderAlerts } from '@/hooks/useTechnicianOrderAlerts';
 import {
   LayoutDashboard,
   Building2,
@@ -45,6 +46,7 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Buscar Ascensor', path: '/tecnico/ascensores', icon: Search },
     { label: 'Mis Mantenimientos', path: '/tecnico/mantenimientos', icon: FileText },
     { label: 'Mis Reclamos', path: '/tecnico/reclamos', icon: AlertTriangle, badgeKey: 'claims' },
+    { label: 'Mis Órdenes', path: '/tecnico/ordenes', icon: Wrench, badgeKey: 'orders' },
     { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
   ],
   supervisor: [
@@ -66,7 +68,9 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
   const location = useLocation();
   const items = menuItems[role] || [];
   const claimAlerts = useTechnicianClaimAlerts();
+  const orderAlerts = useTechnicianOrderAlerts();
   const showClaimAlert = role === 'technician' && claimAlerts.newCount > 0 && !claimAlerts.loading;
+  const showOrderAlert = role === 'technician' && orderAlerts.newCount > 0 && !orderAlerts.loading;
 
   return (
     <>
@@ -146,6 +150,41 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
                   onClick={() => setCollapsed(true)}
                   title={`Tenés ${claimAlerts.newCount} reclamo(s) nuevo(s)`}
                   aria-label={`Tenés ${claimAlerts.newCount} reclamo(s) nuevo(s)`}
+                >
+                  <span className="relative flex h-5 w-5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-300 opacity-75" />
+                    <span className="relative inline-flex h-5 w-5 rounded-full bg-red-600 border-2 border-red-400" />
+                  </span>
+                </Link>
+              );
+            }
+
+            // Technician order alarm
+            if (item.badgeKey === 'orders' && showOrderAlert && !collapsed) {
+              return (
+                <Link key={item.path} to="/tecnico/ordenes"
+                  className="claim-alarm flex items-center gap-3 px-3 py-2.5 rounded-lg text-white font-bold border border-red-800 shadow-lg shadow-red-500/50"
+                  onClick={() => setCollapsed(true)}
+                  title={`Tenés ${orderAlerts.newCount} orden(es) nueva(s)`}
+                  aria-label={`Tenés ${orderAlerts.newCount} orden(es) nueva(s)`}
+                >
+                  <span className="relative flex h-5 w-5 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-300 opacity-75" />
+                    <span className="relative inline-flex h-5 w-5 rounded-full bg-red-600 border-2 border-red-400" />
+                  </span>
+                  <span className="flex-1">Mis Órdenes</span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-sm font-extrabold text-red-700">{orderAlerts.newCount}</span>
+                </Link>
+              );
+            }
+
+            if (item.badgeKey === 'orders' && showOrderAlert && collapsed) {
+              return (
+                <Link key={item.path} to="/tecnico/ordenes"
+                  className="claim-alarm flex items-center justify-center px-3 py-2.5 rounded-lg text-white border border-red-800 shadow-lg shadow-red-500/50"
+                  onClick={() => setCollapsed(true)}
+                  title={`Tenés ${orderAlerts.newCount} orden(es) nueva(s)`}
+                  aria-label={`Tenés ${orderAlerts.newCount} orden(es) nueva(s)`}
                 >
                   <span className="relative flex h-5 w-5">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-300 opacity-75" />

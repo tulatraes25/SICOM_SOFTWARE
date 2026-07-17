@@ -30,6 +30,9 @@ import BudgetDetailPage from '@/pages/admin/BudgetDetailPage';
 import ClaimsPage from '@/pages/admin/ClaimsPage';
 import ClaimCreatePage from '@/pages/admin/ClaimCreatePage';
 import ClaimDetailPage from '@/pages/admin/ClaimDetailPage';
+import ServiceOrdersPage from '@/pages/admin/ServiceOrdersPage';
+import ServiceOrderCreatePage from '@/pages/admin/ServiceOrderCreatePage';
+import ServiceOrderDetailPage from '@/pages/admin/ServiceOrderDetailPage';
 
 // Technician
 import TechDashboard from '@/pages/technician/TechDashboard';
@@ -38,6 +41,8 @@ import ServiceRecordForm from '@/pages/technician/ServiceRecordForm';
 import ServiceRecordDetail from '@/pages/technician/ServiceRecordDetail';
 import TechClaimsPage from '@/pages/technician/TechClaimsPage';
 import TechClaimDetailPage from '@/pages/technician/TechClaimDetailPage';
+import TechServiceOrdersPage from '@/pages/technician/TechServiceOrdersPage';
+import TechServiceOrderDetailPage from '@/pages/technician/TechServiceOrderDetailPage';
 
 // Supervisor
 import SupervisorDashboard from '@/pages/supervisor/SupervisorDashboard';
@@ -205,6 +210,9 @@ export default function AppRouter() {
         <Route path="/admin/reclamos" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ClaimsPage /></ProtectedRoute>} />
         <Route path="/admin/reclamos/nuevo" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ClaimCreatePage /></ProtectedRoute>} />
         <Route path="/admin/reclamos/:id" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ClaimDetailPage /></ProtectedRoute>} />
+        <Route path="/admin/ordenes-servicio" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrdersPage /></ProtectedRoute>} />
+        <Route path="/admin/ordenes-servicio/nueva" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrderCreatePage /></ProtectedRoute>} />
+        <Route path="/admin/ordenes-servicio/:id" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrderDetailPage /></ProtectedRoute>} />
 
         {/* Technician routes */}
         <Route
@@ -257,6 +265,8 @@ export default function AppRouter() {
         />
         <Route path="/tecnico/reclamos" element={<ProtectedRoute allowedRoles={['technician', 'admin']}><TechClaimsPage /></ProtectedRoute>} />
         <Route path="/tecnico/reclamos/:id" element={<ProtectedRoute allowedRoles={['technician', 'admin']}><TechClaimDetailPage /></ProtectedRoute>} />
+        <Route path="/tecnico/ordenes" element={<ProtectedRoute allowedRoles={['technician', 'admin']}><TechServiceOrdersPage /></ProtectedRoute>} />
+        <Route path="/tecnico/ordenes/:id" element={<ProtectedRoute allowedRoles={['technician', 'admin']}><TechServiceOrderDetailPage /></ProtectedRoute>} />
 
         {/* Supervisor routes */}
         <Route
