@@ -40,7 +40,7 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Revisión de Servicios', path: '/admin/mantenimientos', icon: FileText },
     { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
     { label: 'Configuración documental', path: '/admin/configuracion/documentos', icon: Settings },
-    { label: 'Usuarios', path: ROUTES.ADMIN_USERS, icon: Users, disabled: true },
+    { label: 'Usuarios', path: '/admin/usuarios', icon: Users },
   ],
   technician: [
     { label: 'Dashboard', path: ROUTES.TECH_DASHBOARD, icon: LayoutDashboard },

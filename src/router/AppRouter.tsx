@@ -33,6 +33,11 @@ import ClaimDetailPage from '@/pages/admin/ClaimDetailPage';
 import ServiceOrdersPage from '@/pages/admin/ServiceOrdersPage';
 import ServiceOrderCreatePage from '@/pages/admin/ServiceOrderCreatePage';
 import ServiceOrderDetailPage from '@/pages/admin/ServiceOrderDetailPage';
+import UsersPage from '@/pages/admin/UsersPage';
+import UserCreatePage from '@/pages/admin/UserCreatePage';
+import UserDetailPage from '@/pages/admin/UserDetailPage';
+import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
+import UpdatePasswordPage from '@/pages/auth/UpdatePasswordPage';
 
 // Technician
 import TechDashboard from '@/pages/technician/TechDashboard';
@@ -213,6 +218,11 @@ export default function AppRouter() {
         <Route path="/admin/ordenes-servicio" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrdersPage /></ProtectedRoute>} />
         <Route path="/admin/ordenes-servicio/nueva" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrderCreatePage /></ProtectedRoute>} />
         <Route path="/admin/ordenes-servicio/:id" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrderDetailPage /></ProtectedRoute>} />
+        <Route path="/admin/usuarios" element={<ProtectedRoute allowedRoles={['admin']}><UsersPage /></ProtectedRoute>} />
+        <Route path="/admin/usuarios/nuevo" element={<ProtectedRoute allowedRoles={['admin']}><UserCreatePage /></ProtectedRoute>} />
+        <Route path="/admin/usuarios/:id" element={<ProtectedRoute allowedRoles={['admin']}><UserDetailPage /></ProtectedRoute>} />
+        <Route path="/recuperar-contrasena" element={<ForgotPasswordPage />} />
+        <Route path="/actualizar-contrasena" element={<UpdatePasswordPage />} />
 
         {/* Technician routes */}
         <Route

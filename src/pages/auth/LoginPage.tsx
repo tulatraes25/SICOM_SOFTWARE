@@ -5,6 +5,7 @@ import { COMPANY_NAME, COMPANY_WEBSITE } from '@/config/constants';
 import { SICOM_IMAGES } from '@/config/assets';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import { Link } from 'react-router-dom';
 import { Eye, EyeOff, ExternalLink } from 'lucide-react';
 
 export default function LoginPage() {
@@ -154,7 +155,7 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 text-center text-sm text-gray-500">
-            <p className="mb-2">¿Olvidaste tu contraseña? Contactá al administrador.</p>
+            <Link to="/recuperar-contrasena" className="text-secondary hover:underline">¿Olvidaste tu contraseña?</Link>
             <p className="text-xs text-gray-400">
               Los usuarios deben ser creados desde el panel de Supabase Auth.
             </p>
