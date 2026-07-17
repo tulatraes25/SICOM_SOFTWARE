@@ -46,7 +46,8 @@ export default function TechServiceOrderDetailPage() {
       await completeOrder(id!);
       setSuccess('La orden fue completada correctamente');
       setShowCompleteModal(false);
-      setTimeout(() => navigate('/tecnico/ordenes'), 1200);
+      // Force navigation after state update
+      window.location.href = '/tecnico/ordenes';
     } catch (err: any) { setError(err?.message || 'Error'); } finally { setActionLoading(false); }
   };
 
