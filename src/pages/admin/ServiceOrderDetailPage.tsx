@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { pdf } from '@react-pdf/renderer';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { getServiceOrder, markReady, assignTechnicians, cancelOrder, approveOrder, requestCorrections, getOrderEvents, getOrderProgress, addProgress } from '@/services/serviceOrders.service';
+import { getServiceOrder, markReady, assignTechnicians, cancelOrder, approveOrder, requestCorrections, getOrderEvents, getOrderProgress, addProgress, generateOrderPDF, getOrderPDFUrl } from '@/services/serviceOrders.service';
+import ServiceOrderReportPDF from '@/components/pdf/ServiceOrderReportPDF';
 import { SERVICE_ORDER_STATUS_LABELS, SERVICE_ORDER_TYPE_LABELS, CLAIM_PRIORITY_LABELS } from '@/types/database';
 import type { ServiceOrder } from '@/types/database';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
@@ -38,6 +40,7 @@ export default function ServiceOrderDetailPage() {
   const [progress, setProgress] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -51,6 +54,7 @@ export default function ServiceOrderDetailPage() {
   const [approveNotes, setApproveNotes] = useState('');
   const [showCorrectionsModal, setShowCorrectionsModal] = useState(false);
   const [correctionsNotes, setCorrectionsNotes] = useState('');
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
   useEffect(() => { if (id) loadData(); }, [id]);
 
@@ -75,6 +79,33 @@ export default function ServiceOrderDetailPage() {
   const handleApprove = () => handleAction(() => approveOrder(id!, approveNotes), '/admin/revision-servicios').then(() => { setShowApproveModal(false); setApproveNotes(''); });
   const handleCorrections = () => handleAction(() => requestCorrections(id!, correctionsNotes), '/admin/revision-servicios').then(() => { setShowCorrectionsModal(false); setCorrectionsNotes(''); });
   const handleCancel = () => handleAction(() => cancelOrder(id!, cancelReason)).then(() => { setShowCancelModal(false); setCancelReason(''); });
+
+  const handleGeneratePDF = async () => {
+    if (!order || order.status !== 'approved') return;
+    setPdfGenerating(true); setError('');
+    try {
+      const version = ((order as any).final_pdf_version || 0) + 1;
+      const blob = await pdf(
+        <ServiceOrderReportPDF order={order} progress={progress} events={events}
+          isTest={(order.service_case as any)?.numbering_mode === 'test'}
+          signerName={(order as any).reviewed_by ? 'Administrador' : undefined} />
+      ).toBlob();
+
+      const arrayBuffer = await blob.arrayBuffer();
+      const base64 = btoa(new Uint8Array(arrayBuffer).reduce((d, b) => d + String.fromCharCode(b), ''));
+
+      await generateOrderPDF(id!, base64, version);
+      await loadData();
+      setSuccess(`PDF versión ${version} generado correctamente`);
+    } catch (err: any) { setError('Error al generar PDF: ' + (err?.message || '')); }
+    finally { setPdfGenerating(false); }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!(order as any).final_pdf_path) return;
+    const url = await getOrderPDFUrl((order as any).final_pdf_path);
+    if (url) window.open(url, '_blank');
+  };
 
   if (loading) return <DashboardLayout role="admin" title="Orden"><div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
   if (error && !order) return <DashboardLayout role="admin" title="Orden"><div className="max-w-2xl mx-auto"><button onClick={() => navigate('/admin/ordenes-servicio')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"><ArrowLeft size={18} /> Volver</button><Card><CardContent><div className="text-center py-8"><AlertCircle size={48} className="mx-auto text-danger mb-4" /><p className="text-gray-600">{error}</p></div></CardContent></Card></div></DashboardLayout>;
@@ -102,12 +133,23 @@ export default function ServiceOrderDetailPage() {
               <Button variant="outline" onClick={() => setShowCorrectionsModal(true)}>Solicitar correcciones</Button>
               <Button onClick={() => setShowApproveModal(true)}>Aprobar orden</Button>
             </>}
+            {order.status === 'approved' && <>
+              {(order as any).final_pdf_path ? (
+                <>
+                  <Button variant="outline" onClick={handleDownloadPDF}>Descargar PDF</Button>
+                  <Button onClick={handleGeneratePDF} disabled={pdfGenerating}>{pdfGenerating ? 'Regenerando...' : 'Regenerar PDF'}</Button>
+                </>
+              ) : (
+                <Button onClick={handleGeneratePDF} disabled={pdfGenerating}>{pdfGenerating ? 'Generando...' : 'Generar PDF final'}</Button>
+              )}
+            </>}
             {order.status === 'draft' && <Button onClick={handleReady}>Marcar Listo</Button>}
             {['draft', 'ready', 'assigned'].includes(order.status) && <Button onClick={() => setShowAssignModal(true)}>Asignar Técnicos</Button>}
             {!['completed', 'approved', 'cancelled'].includes(order.status) && <Button variant="danger" onClick={() => setShowCancelModal(true)}>Cancelar</Button>}
           </div>
         </div>
         {error && <div className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
+        {success && <div className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm">{success}</div>}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">

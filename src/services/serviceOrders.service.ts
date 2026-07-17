@@ -124,3 +124,43 @@ export async function getOrderProgress(orderId: string) {
   if (error) throw error;
   return data || [];
 }
+
+export async function generateOrderPDF(orderId: string, pdfBase64: string, version: number): Promise<{ storage_path: string }> {
+  // Convert base64 to blob
+  const binaryString = atob(pdfBase64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+
+  const { data: order } = await supabase.from('service_orders').select('service_case:service_cases(case_number)').eq('id', orderId).single();
+  const caseNum = (order?.service_case as any)?.case_number || orderId;
+  const storagePath = `service-orders/orden-${caseNum}-v${version}.pdf`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('service-order-reports')
+    .upload(storagePath, blob, { contentType: 'application/pdf', upsert: true });
+
+  if (uploadError) throw uploadError;
+
+  // Update order with PDF info
+  const { error: updateError } = await supabase
+    .from('service_orders')
+    .update({
+      final_pdf_path: storagePath,
+      final_pdf_generated_at: new Date().toISOString(),
+      final_pdf_generated_by: (await supabase.auth.getUser()).data.user?.id,
+      final_pdf_version: version,
+    })
+    .eq('id', orderId);
+
+  if (updateError) throw updateError;
+
+  return { storage_path: storagePath };
+}
+
+export async function getOrderPDFUrl(storagePath: string): Promise<string | null> {
+  const { data } = await supabase.storage
+    .from('service-order-reports')
+    .createSignedUrl(storagePath, 3600);
+  return data?.signedUrl || null;
+}
