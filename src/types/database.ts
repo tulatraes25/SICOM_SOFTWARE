@@ -617,7 +617,7 @@ export const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
 // ============================================================
 
 export type ServiceOrderType = 'preventive' | 'corrective' | 'emergency' | 'inspection' | 'claim_response' | 'budgeted_work' | 'modernization' | 'other';
-export type ServiceOrderStatus = 'draft' | 'ready' | 'assigned' | 'in_progress' | 'visited' | 'completed' | 'cancelled';
+export type ServiceOrderStatus = 'draft' | 'ready' | 'assigned' | 'in_progress' | 'visited' | 'completed' | 'approved' | 'changes_requested' | 'cancelled';
 
 export interface ServiceOrder {
   id: string;
@@ -665,7 +665,8 @@ export const SERVICE_ORDER_TYPE_LABELS: Record<ServiceOrderType, string> = {
 
 export const SERVICE_ORDER_STATUS_LABELS: Record<ServiceOrderStatus, string> = {
   draft: 'Borrador', ready: 'Listo', assigned: 'Asignado', in_progress: 'En ejecución',
-  visited: 'Visitado', completed: 'Completado', cancelled: 'Cancelado',
+  visited: 'Visitado', completed: 'Completado', approved: 'Aprobado',
+  changes_requested: 'Correcciones solicitadas', cancelled: 'Cancelado',
 };
 
 

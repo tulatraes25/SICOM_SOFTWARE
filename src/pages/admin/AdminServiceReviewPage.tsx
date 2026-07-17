@@ -1,40 +1,51 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { listPendingServiceRecords, listApprovedServiceRecords } from '@/services/supervisor.service';
+import { listServiceOrders } from '@/services/serviceOrders.service';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { SERVICE_STATUS_LABELS } from '@/config/constants';
+import { SERVICE_ORDER_STATUS_LABELS } from '@/types/database';
 import { Eye, Clock, CheckCircle } from 'lucide-react';
-import type { ServiceRecord } from '@/types/database';
 
 type TabType = 'pending' | 'approved';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
-  draft: 'default',
-  submitted: 'info',
-  in_review: 'warning',
-  approved: 'success',
-  rejected: 'danger',
+  draft: 'default', submitted: 'info', in_review: 'warning', approved: 'success', rejected: 'danger',
+  completed: 'info', changes_requested: 'warning',
 };
 
 export default function AdminServiceReviewPage() {
   const [activeTab, setActiveTab] = useState<TabType>('pending');
-  const [records, setRecords] = useState<ServiceRecord[]>([]);
+  const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadData();
-  }, [activeTab]);
+  useEffect(() => { loadData(); }, [activeTab]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = activeTab === 'pending'
-        ? await listPendingServiceRecords()
-        : await listApprovedServiceRecords();
-      setRecords(data);
+      if (activeTab === 'pending') {
+        // Get pending maintenance records + completed service orders
+        const [maintenance, orders] = await Promise.all([
+          listPendingServiceRecords(),
+          listServiceOrders({ status: 'completed' }),
+        ]);
+        const maintenanceItems = (maintenance || []).map((r: any) => ({ ...r, _origin: 'maintenance' }));
+        const orderItems = (orders.data || []).map((o: any) => ({ ...o, _origin: 'service_order' }));
+        setRecords([...maintenanceItems, ...orderItems]);
+      } else {
+        // Get approved maintenance records + approved service orders
+        const [maintenance, orders] = await Promise.all([
+          listApprovedServiceRecords(),
+          listServiceOrders({ status: 'approved' }),
+        ]);
+        const maintenanceItems = (maintenance || []).map((r: any) => ({ ...r, _origin: 'maintenance' }));
+        const orderItems = (orders.data || []).map((o: any) => ({ ...o, _origin: 'service_order' }));
+        setRecords([...maintenanceItems, ...orderItems]);
+      }
     } catch (err) {
       console.error('Error:', err);
     } finally {
@@ -45,83 +56,86 @@ export default function AdminServiceReviewPage() {
   return (
     <DashboardLayout role="admin" title="Revisión de Servicios">
       <div className="space-y-6">
-        {/* Tabs */}
-        <div className="flex gap-2 border-b border-gray-200 pb-2">
-          <button
+        <div className="flex gap-2">
+          <Button
+            variant={activeTab === 'pending' ? 'primary' : 'outline'}
             onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'pending'
-                ? 'bg-primary text-white'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
           >
-            <Clock size={16} className="inline mr-2" />
+            <Clock size={16} className="mr-2" />
             Pendientes
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={activeTab === 'approved' ? 'primary' : 'outline'}
             onClick={() => setActiveTab('approved')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'approved'
-                ? 'bg-success text-white'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
           >
-            <CheckCircle size={16} className="inline mr-2" />
+            <CheckCircle size={16} className="mr-2" />
             Aprobados
-          </button>
+          </Button>
         </div>
 
-        {/* List */}
         <Card>
-          <CardContent>
+          <CardContent className="p-0">
             {loading ? (
-              <div className="text-center py-8">
-                <div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin mx-auto" />
+              <div className="flex justify-center py-12">
+                <div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
               </div>
             ) : records.length === 0 ? (
-              <div className="text-center py-8">
+              <div className="text-center py-12">
+                <CheckCircle size={48} className="mx-auto text-gray-300 mb-4" />
                 <p className="text-gray-500">
-                  {activeTab === 'pending' ? 'No hay registros pendientes' : 'No hay registros aprobados'}
+                  {activeTab === 'pending' ? 'No hay elementos pendientes de revisión' : 'No hay elementos aprobados'}
                 </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-medium text-gray-600">Ascensor</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600">Cliente</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600">Técnico</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600">Fecha</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600">Tipo</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600">Estado</th>
-                      <th className="text-right py-3 px-4 font-medium text-gray-600">Acción</th>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Origen</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">N.º</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Cliente</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Edificio</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Ascensor</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Estado</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {records.map((record) => {
-                      const elevator = record.elevator as any;
-                      const technician = record.technician as any;
-                      const client = elevator?.building?.client;
+                    {records.map((r: any) => {
+                      const isOrder = r._origin === 'service_order';
+                      const caseNum = isOrder
+                        ? (r.service_case as any)?.case_number
+                        : (r.elevator as any)?.building?.client?.name ? undefined : undefined;
+                      const caseMode = isOrder ? (r.service_case as any)?.numbering_mode : undefined;
+                      const numLabel = isOrder
+                        ? (caseMode === 'test' ? `PRUEBA N.º ${caseNum}` : `N.º ${caseNum}`)
+                        : (r.elevator?.code || '-');
+                      const status = isOrder ? SERVICE_ORDER_STATUS_LABELS[r.status as keyof typeof SERVICE_ORDER_STATUS_LABELS] || r.status : SERVICE_STATUS_LABELS[r.status] || r.status;
+
                       return (
-                        <tr key={record.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-3 px-4 font-mono font-medium">{elevator?.code || '-'}</td>
-                          <td className="py-3 px-4 text-gray-600">{client?.name || '-'}</td>
-                          <td className="py-3 px-4 text-gray-600">{technician?.full_name || '-'}</td>
-                          <td className="py-3 px-4 text-gray-600">
-                            {new Date(record.service_date).toLocaleDateString('es-AR')}
-                          </td>
-                          <td className="py-3 px-4 text-gray-600 capitalize">{record.service_type}</td>
-                          <td className="py-3 px-4">
-                            <Badge variant={STATUS_BADGE[record.status] || 'default'}>
-                              {SERVICE_STATUS_LABELS[record.status as keyof typeof SERVICE_STATUS_LABELS] || record.status}
+                        <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <Badge variant={isOrder ? 'info' : 'default'}>
+                              {isOrder ? 'Orden' : 'Mantenimiento'}
                             </Badge>
                           </td>
-                          <td className="py-3 px-4 text-right">
-                            <Link to={`/admin/mantenimientos/${record.id}`}>
-                              <Button size="sm">
-                                <Eye size={14} className="mr-1" />
-                                Revisar
+                          <td className="px-4 py-3 font-mono font-semibold text-gray-900">{numLabel}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {isOrder ? (r.client as any)?.name : (r.elevator?.building?.client?.name || '-')}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {isOrder ? (r.building as any)?.name : (r.elevator?.building?.name || '-')}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {isOrder ? (r.elevator as any)?.code : (r.elevator?.code || '-')}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge variant={STATUS_BADGE[r.status]}>{status}</Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Link to={isOrder ? `/admin/ordenes-servicio/${r.id}` : `/admin/mantenimientos/${r.id}`}>
+                              <Button variant="ghost" size="sm">
+                                <Eye size={14} />
                               </Button>
                             </Link>
                           </td>

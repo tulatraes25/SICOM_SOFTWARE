@@ -93,6 +93,18 @@ export async function cancelOrder(orderId: string, reason: string): Promise<void
   if (data?.error) throw new Error(data.error);
 }
 
+export async function approveOrder(orderId: string, notes?: string): Promise<void> {
+  const { data, error } = await supabase.rpc('approve_service_order', { p_service_order_id: orderId, p_notes: notes || null });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+}
+
+export async function requestCorrections(orderId: string, notes: string): Promise<void> {
+  const { data, error } = await supabase.rpc('request_service_order_corrections', { p_service_order_id: orderId, p_notes: notes });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+}
+
 export async function addProgress(orderId: string, note: string, progressType: string = 'update'): Promise<void> {
   const { data, error } = await supabase.rpc('add_service_order_progress', {
     p_order_id: orderId, p_note: note, p_progress_type: progressType,
