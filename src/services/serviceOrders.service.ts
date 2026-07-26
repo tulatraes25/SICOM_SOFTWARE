@@ -33,20 +33,27 @@ export async function getServiceOrder(id: string): Promise<ServiceOrder | null> 
     client:clients(id, name, code, contact_name, contact_phone),
     building:buildings(id, name, code, address),
     elevator:elevators(id, code, manufacturer, model),
-    technicians:service_order_technicians(technician:profiles!service_order_technicians_technician_id_fkey(id, full_name, email), is_lead, assigned_at),
-    created_user:profiles!service_orders_created_by_fkey(full_name, email)
+    technicians:service_order_technicians(technician:profiles!service_order_technicians_technician_id_fkey(id, full_name, email), is_lead, assigned_at)
   `).eq('id', id).single();
   if (error) throw error;
 
-  // Load approver separately (no FK from service_orders to profiles for approved_by)
-  let approvedUser = null;
-  const reviewedBy = (data as any).reviewed_by;
-  if (reviewedBy) {
-    const { data: profile } = await supabase.from('profiles').select('full_name, email').eq('id', reviewedBy).single();
-    approvedUser = profile;
+  // Load related profiles separately (no embed from service_orders to profiles)
+  const profileIds = new Set<string>();
+  if (data.created_by) profileIds.add(data.created_by);
+  if ((data as any).reviewed_by) profileIds.add((data as any).reviewed_by);
+  if ((data as any).completed_by) profileIds.add((data as any).completed_by);
+
+  let profilesMap: Record<string, any> = {};
+  if (profileIds.size > 0) {
+    const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', Array.from(profileIds));
+    if (profiles) profilesMap = Object.fromEntries(profiles.map((p: any) => [p.id, p]));
   }
 
-  return { ...data, approved_user: approvedUser } as any;
+  return {
+    ...data,
+    created_user: profilesMap[data.created_by] || null,
+    approved_user: profilesMap[(data as any).reviewed_by] || null,
+  } as any;
 }
 
 export async function createServiceOrder(params: {
