@@ -218,6 +218,8 @@ export default function AppRouter() {
         <Route path="/admin/ordenes-servicio" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrdersPage /></ProtectedRoute>} />
         <Route path="/admin/ordenes-servicio/nueva" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrderCreatePage /></ProtectedRoute>} />
         <Route path="/admin/ordenes-servicio/:id" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrderDetailPage /></ProtectedRoute>} />
+        <Route path="/admin/informes-mensuales" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><MonthlyReportsPage /></ProtectedRoute>} />
+        <Route path="/admin/informes-mensuales/:id" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><MonthlyReportDetailPage /></ProtectedRoute>} />
         <Route path="/admin/usuarios" element={<ProtectedRoute allowedRoles={['admin']}><UsersPage /></ProtectedRoute>} />
         <Route path="/admin/usuarios/nuevo" element={<ProtectedRoute allowedRoles={['admin']}><UserCreatePage /></ProtectedRoute>} />
         <Route path="/admin/usuarios/:id" element={<ProtectedRoute allowedRoles={['admin']}><UserDetailPage /></ProtectedRoute>} />
