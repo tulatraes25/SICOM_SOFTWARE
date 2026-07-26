@@ -14,11 +14,12 @@ interface SendOrderEmailModalProps {
   buildingName: string;
   buildingId?: string;
   elevatorId?: string;
+  pdfVersion?: number;
   onSent: () => void;
 }
 
 export default function SendOrderEmailModal({
-  isOpen, onClose, orderId, caseNumber, numberingMode, elevatorCode, buildingName, buildingId, elevatorId, onSent
+  isOpen, onClose, orderId, caseNumber, numberingMode, elevatorCode, buildingName, buildingId, elevatorId, pdfVersion, onSent
 }: SendOrderEmailModalProps) {
   const [recipients, setRecipients] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
@@ -33,7 +34,7 @@ export default function SendOrderEmailModal({
 
   useEffect(() => {
     if (isOpen && buildingId) loadRecipients();
-  }, [isOpen, buildingId]);
+  }, [isOpen, buildingId, elevatorId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -98,7 +99,7 @@ export default function SendOrderEmailModal({
         ) : (
           <div className="space-y-3">
             <div className="p-3 bg-gray-50 rounded text-sm">
-              <p><strong>Archivo:</strong> orden-{caseNumber}-v{1}.pdf</p>
+              <p><strong>Archivo:</strong> orden-{caseNumber}-v{pdfVersion || 1}.pdf</p>
             </div>
 
             {loading ? <p className="text-sm text-gray-500">Cargando destinatarios...</p> : (

@@ -275,6 +275,8 @@ export default function ServiceOrderDetailPage() {
         elevatorCode={(order.elevator as any)?.code || ''}
         buildingName={(order.building as any)?.name || ''}
         buildingId={(order.building as any)?.id}
+        elevatorId={(order as any).elevator_id}
+        pdfVersion={(order as any).final_pdf_version || 1}
         onSent={() => { setShowEmailModal(false); loadData(); }}
       />
     </DashboardLayout>
