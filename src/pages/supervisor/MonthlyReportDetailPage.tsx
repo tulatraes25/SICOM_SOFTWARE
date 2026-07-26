@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
 import { supabase } from '@/config/supabase';
-import { getMonthlyReportPeriodData, updateMonthlyReport } from '@/services/monthlyReportEnhanced.service';
+import { getMonthlyReportPeriodData, updateMonthlyReport, approveMonthlyReport } from '@/services/monthlyReportEnhanced.service';
 import MonthlyReportPDF from '@/components/pdf/MonthlyReportPDF';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
@@ -30,6 +30,8 @@ export default function MonthlyReportDetailPage() {
   const [success, setSuccess] = useState('');
   const [generalStatus, setGeneralStatus] = useState('operativo');
   const [generalNotes, setGeneralNotes] = useState('');
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approveNotes, setApproveNotes] = useState('');
 
   useEffect(() => { if (id) loadReport(); }, [id]);
 
@@ -38,6 +40,14 @@ export default function MonthlyReportDetailPage() {
     try {
       const { data: r } = await supabase.from('monthly_reports').select('*').eq('id', id).single();
       if (r) {
+        // Load related entities separately
+        let elevator = null;
+        if (r.elevator_id) {
+          const { data: e } = await supabase.from('elevators').select('id, code, building:buildings(id, name, address, client:clients(name))').eq('id', r.elevator_id).single();
+          elevator = e;
+        }
+        r.elevator = elevator;
+
         setReport(r);
         setGeneralStatus(r.general_status || 'operativo');
         setGeneralNotes(r.general_notes || '');
@@ -107,6 +117,38 @@ export default function MonthlyReportDetailPage() {
     finally { setGenerating(false); }
   };
 
+  const handleViewPDF = async () => {
+    if (!report?.pdf_url) return;
+    const { data } = await supabase.storage.from('service-order-reports').createSignedUrl(report.pdf_url, 3600);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!report?.pdf_url) return;
+    const { data } = await supabase.storage.from('service-order-reports').createSignedUrl(report.pdf_url, 3600);
+    if (!data?.signedUrl) return;
+    const response = await fetch(data.signedUrl);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `informe-mensual-${report.report_year}-${String(report.report_month).padStart(2, '0')}-v${report.pdf_version || 1}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  };
+
+  const handleApprove = async () => {
+    if (!report) return;
+    try {
+      await approveMonthlyReport(report.id);
+      setShowApproveModal(false);
+      setSuccess('Informe aprobado correctamente');
+      await loadReport();
+    } catch (err: any) { setError(err?.message || 'Error al aprobar'); }
+  };
+
   if (loading) return <DashboardLayout role="admin" title="Informe Mensual"><div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
   if (!report) return <DashboardLayout role="admin" title="Informe Mensual"><div className="text-center py-8"><p className="text-gray-500">Informe no encontrado</p></div></DashboardLayout>;
 
@@ -155,13 +197,23 @@ export default function MonthlyReportDetailPage() {
           <div className="space-y-6">
             <Card><CardHeader><h3 className="font-semibold">PDF</h3></CardHeader><CardContent>
               {report.pdf_url ? (
-                <div className="space-y-2"><p className="text-sm text-success font-medium">PDF v{report.pdf_version} generado</p>
+                <div className="space-y-2">
+                  <p className="text-sm text-success font-medium">PDF v{report.pdf_version} generado</p>
+                  <Button className="w-full" variant="outline" onClick={handleViewPDF}>Ver PDF</Button>
+                  <Button className="w-full" variant="outline" onClick={handleDownloadPDF}>Descargar PDF</Button>
                   <Button className="w-full" onClick={handleGeneratePDF} disabled={generating}>{generating ? 'Regenerando...' : 'Regenerar PDF'}</Button>
                 </div>
               ) : (
                 <Button className="w-full" onClick={handleGeneratePDF} disabled={generating}>{generating ? 'Generando...' : 'Generar y Guardar PDF'}</Button>
               )}
             </CardContent></Card>
+
+            {report.pdf_url && report.status === 'generated' && (
+              <Card><CardHeader><h3 className="font-semibold">Aprobación</h3></CardHeader><CardContent>
+                <p className="text-sm text-gray-600 mb-3">Revisá el informe y aprobalo para habilitar el envío.</p>
+                <Button className="w-full" onClick={() => setShowApproveModal(true)}>Aprobar informe</Button>
+              </CardContent></Card>
+            )}
 
             <Card><CardHeader><h3 className="font-semibold">Destinatarios ({recipients.length})</h3></CardHeader><CardContent>
               {recipients.length === 0 ? (
@@ -180,6 +232,20 @@ export default function MonthlyReportDetailPage() {
           </div>
         </div>
       </div>
+
+      {showApproveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-2">Aprobar informe mensual</h3>
+            <p className="text-sm text-gray-600 mb-3">¿Confirmás que el informe fue revisado y está listo para enviarse?</p>
+            <textarea className="w-full border rounded px-3 py-2 text-sm resize-none mb-3" rows={2} value={approveNotes} onChange={(e) => setApproveNotes(e.target.value)} placeholder="Observaciones (opcional)..." />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowApproveModal(false)}>Cancelar</Button>
+              <Button onClick={handleApprove}>Aprobar</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
