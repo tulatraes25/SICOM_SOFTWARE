@@ -158,11 +158,17 @@ export type MonthlyReportStatus =
 export interface MonthlyReport {
   id: string;
   elevator_id: string;
+  client_id?: string;
+  building_id?: string;
+  report_month?: number;
+  report_year?: number;
   period: string;
   title?: string;
   content?: string;
   summary?: string;
   status: MonthlyReportStatus;
+  general_status?: string;
+  general_notes?: string;
   created_by?: string;
   reviewed_by?: string;
   approved_by?: string;
@@ -170,6 +176,7 @@ export interface MonthlyReport {
   pdf_url?: string;
   pdf_storage_path?: string;
   pdf_generated_at?: string;
+  pdf_version?: number;
   sent_at?: string;
   services_count: number;
   created_at: string;

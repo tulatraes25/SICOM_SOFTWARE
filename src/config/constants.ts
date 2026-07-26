@@ -27,6 +27,7 @@ export const ROUTES = {
   ADMIN_NUMBERING_CONFIG: '/admin/configuracion/numeracion',
   ADMIN_DOCUMENT_SETTINGS: '/admin/configuracion/documentos',
   ADMIN_USER_SIGNATURE: '/perfil/firma',
+  ADMIN_MONTHLY_REPORTS: '/admin/informes-mensuales',
   ADMIN_ELEVATOR_VISIT_BOOK: '/admin/ascensores/:elevatorId/libro',
   ADMIN_VISIT_ENTRY_NEW: '/admin/ascensores/:elevatorId/libro/nuevo',
   ADMIN_VISIT_ENTRY_DETAIL: '/admin/ascensores/:elevatorId/libro/:entryId',

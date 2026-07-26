@@ -37,6 +37,7 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Presupuestos', path: '/admin/presupuestos', icon: Calculator },
     { label: 'Reclamos', path: '/admin/reclamos', icon: AlertTriangle },
     { label: 'Órdenes de Servicio', path: '/admin/ordenes-servicio', icon: Wrench },
+    { label: 'Informes Mensuales', path: '/admin/informes-mensuales', icon: FileText },
     { label: 'Revisión de Servicios', path: '/admin/mantenimientos', icon: FileText },
     { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
     { label: 'Configuración documental', path: '/admin/configuracion/documentos', icon: Settings },
