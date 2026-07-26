@@ -33,6 +33,8 @@ export default function MonthlyReportDetailPage() {
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [approveNotes, setApproveNotes] = useState('');
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailResult, setEmailResult] = useState('');
 
   useEffect(() => { if (id) loadReport(); }, [id]);
 
@@ -150,6 +152,26 @@ export default function MonthlyReportDetailPage() {
     } catch (err: any) { setError(err?.message || 'Error al aprobar'); }
   };
 
+  const handleSendEmail = async () => {
+    if (!report) return;
+    setEmailSending(true); setEmailResult('');
+    try {
+      const result = await supabase.functions.invoke('send-monthly-report-email', {
+        body: {
+          monthly_report_id: report.id,
+          recipients: recipients.map(r => ({ email: r.email, name: r.name })),
+          subject: `SICOM Patagonia — Informe mensual ${elevator?.code || ''} — ${MONTH_NAMES[report.report_month || 0]} ${report.report_year}`,
+          body: `Adjuntamos el informe mensual correspondiente a ${elevator?.code || ''} del período ${MONTH_NAMES[report.report_month || 0]} ${report.report_year}.`,
+        },
+      });
+      if (result.error) throw new Error(result.error);
+      setEmailResult('Informe enviado correctamente');
+      await loadReport();
+    } catch (err: any) {
+      setEmailResult('Error: ' + (err?.message || ''));
+    } finally { setEmailSending(false); }
+  };
+
   if (loading) return <DashboardLayout role="admin" title="Informe Mensual"><div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
   if (!report) return <DashboardLayout role="admin" title="Informe Mensual"><div className="text-center py-8"><p className="text-gray-500">Informe no encontrado</p></div></DashboardLayout>;
 
@@ -259,19 +281,30 @@ export default function MonthlyReportDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold mb-2">Enviar Informe Mensual</h3>
-            <p className="text-sm text-gray-600 mb-3">Enviar a {recipients.length} destinatario(s).</p>
-            <div className="space-y-2 mb-4">
-              {recipients.map((r) => (
-                <div key={r.id} className="text-sm p-2 bg-gray-50 rounded">
-                  <p className="font-medium">{r.name}</p>
-                  <p className="text-xs text-gray-500">{r.email}</p>
+            {emailSending ? (
+              <div className="text-center py-4"><p className="text-sm text-gray-600">Enviando informe...</p></div>
+            ) : emailResult ? (
+              <div className="text-center py-4">
+                <p className="text-sm mb-4">{emailResult}</p>
+                <Button onClick={() => { setShowEmailModal(false); setEmailResult(''); }}>Cerrar</Button>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600 mb-3">Enviar a {recipients.length} destinatario(s).</p>
+                <div className="space-y-2 mb-4">
+                  {recipients.map((r) => (
+                    <div key={r.id} className="text-sm p-2 bg-gray-50 rounded">
+                      <p className="font-medium">{r.name}</p>
+                      <p className="text-xs text-gray-500">{r.email}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowEmailModal(false)}>Cancelar</Button>
-              <Button onClick={() => { setShowEmailModal(false); /* TODO: send email */ }}>Enviar</Button>
-            </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setShowEmailModal(false)}>Cancelar</Button>
+                  <Button onClick={handleSendEmail}>Enviar</Button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
