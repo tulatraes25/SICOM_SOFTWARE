@@ -59,7 +59,7 @@ export default function RecipientsSection({ buildingId, elevators = [] }: Recipi
 
   const handleSave = async () => {
     if (!name.trim() || !email.trim()) { setError('Nombre y correo son obligatorios'); return; }
-    setError('');
+    setError(''); setSuccess('');
     try {
       if (editingId) {
         await updateBuildingRecipient(editingId, {
@@ -69,20 +69,26 @@ export default function RecipientsSection({ buildingId, elevators = [] }: Recipi
         });
         setSuccess('Destinatario actualizado');
       } else {
-        await createBuildingRecipient({
+        const created = await createBuildingRecipient({
           building_id: buildingId, full_name: name.trim(), email: email.trim().toLowerCase(),
           phone: phone || undefined, role_label: roleLabel || undefined,
           elevator_id: elevatorScope || undefined,
           receives_service_orders: receivesOrders, receives_monthly_reports: receivesReports,
         });
-        setSuccess('Destinatario creado');
+        if (!created || !created.id) {
+          setError('No se pudo guardar el destinatario');
+          return;
+        }
+        setSuccess('Destinatario guardado correctamente');
       }
       resetForm();
       await loadRecipients();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
+      console.error('[RecipientsSection] Error:', err?.message, err?.code, err?.details);
       if (err?.message?.includes('duplicate')) setError('Ya existe un contacto con ese correo en este alcance');
-      else setError(err?.message || 'Error');
+      else if (err?.message?.includes('violates')) setError('Error de restricción. Verificá los datos.');
+      else setError(err?.message || 'No se pudo guardar el destinatario');
     }
   };
 
