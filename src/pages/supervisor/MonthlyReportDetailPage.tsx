@@ -23,6 +23,7 @@ export default function MonthlyReportDetailPage() {
   const navigate = useNavigate();
   const [report, setReport] = useState<any>(null);
   const [periodData, setPeriodData] = useState<any>(null);
+  const [recipients, setRecipients] = useState<Array<{ id: string; name: string; email: string; role_label?: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
@@ -44,6 +45,17 @@ export default function MonthlyReportDetailPage() {
         if (r.elevator_id && r.report_month && r.report_year) {
           const pd = await getMonthlyReportPeriodData(r.elevator_id, r.report_year, r.report_month);
           setPeriodData(pd);
+        }
+        // Load recipients from building_recipients
+        if (r.building_id) {
+          const { data: recs } = await supabase
+            .from('building_recipients')
+            .select('id, full_name, email, role_label')
+            .eq('building_id', r.building_id)
+            .eq('active', true)
+            .eq('receives_monthly_reports', true)
+            .or(`elevator_id.is.null,elevator_id.eq.${r.elevator_id}`);
+          setRecipients((recs || []).map((c: any) => ({ id: c.id, name: c.full_name, email: c.email, role_label: c.role_label })));
         }
       }
     } catch (err: any) { setError(err?.message || 'Error'); } finally { setLoading(false); }
@@ -148,6 +160,21 @@ export default function MonthlyReportDetailPage() {
                 </div>
               ) : (
                 <Button className="w-full" onClick={handleGeneratePDF} disabled={generating}>{generating ? 'Generando...' : 'Generar y Guardar PDF'}</Button>
+              )}
+            </CardContent></Card>
+
+            <Card><CardHeader><h3 className="font-semibold">Destinatarios ({recipients.length})</h3></CardHeader><CardContent>
+              {recipients.length === 0 ? (
+                <p className="text-sm text-gray-500">No hay destinatarios configurados para informes mensuales.</p>
+              ) : (
+                <div className="space-y-2">
+                  {recipients.map((r) => (
+                    <div key={r.id} className="text-sm">
+                      <p className="font-medium">{r.name}</p>
+                      <p className="text-xs text-gray-500">{r.email}{r.role_label ? ` — ${r.role_label}` : ''}</p>
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent></Card>
           </div>
