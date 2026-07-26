@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '@/config/supabase';
 import { listClients } from '@/services/clients.service';
 import { createBuilding, updateBuilding } from '@/services/buildings.service';
 import { createAuditLog } from '@/services/audit.service';
-import BuildingRecipientsManager from './BuildingRecipientsManager';
+import RecipientsSection from '@/components/recipients/RecipientsSection';
 import type { Client, Building } from '@/types/database';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -18,6 +19,7 @@ export default function BuildingForm({ building, onSuccess, onCancel }: Building
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [clients, setClients] = useState<Client[]>([]);
+  const [buildingElevators, setBuildingElevators] = useState<Array<{ id: string; code: string }>>([]);
   const [formData, setFormData] = useState({
     code: '',
     name: '',
@@ -44,6 +46,9 @@ export default function BuildingForm({ building, onSuccess, onCancel }: Building
         longitude: building.longitude?.toString() || '',
         active: building.active ?? true,
       });
+      // Load elevators for this building
+      supabase.from('elevators').select('id, code').eq('building_id', building.id).eq('active', true).order('code')
+        .then(({ data }) => setBuildingElevators(data || []));
     }
   }, [building]);
 
@@ -169,10 +174,10 @@ export default function BuildingForm({ building, onSuccess, onCancel }: Building
         />
       </div>
 
-      {/* Destinatarios de informes */}
+      {/* Destinatarios */}
       {building ? (
         <div className="border-t pt-4 mt-4">
-          <BuildingRecipientsManager buildingId={building.id} />
+          <RecipientsSection buildingId={building.id} elevators={buildingElevators} />
         </div>
       ) : (
         <div className="border-t pt-4 mt-4">
