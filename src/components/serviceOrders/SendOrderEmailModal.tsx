@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import Button from '@/components/ui/Button';
 import { X } from 'lucide-react';
-import { listByBuilding } from '@/services/buildingReportRecipients.service';
-import { sendBudgetEmails } from '@/services/budgetEmail.service';
+import { listServiceOrderRecipients } from '@/services/buildingRecipients.service';
 import { supabase } from '@/config/supabase';
 
 interface SendOrderEmailModalProps {
@@ -14,11 +13,12 @@ interface SendOrderEmailModalProps {
   elevatorCode: string;
   buildingName: string;
   buildingId?: string;
+  elevatorId?: string;
   onSent: () => void;
 }
 
 export default function SendOrderEmailModal({
-  isOpen, onClose, orderId, caseNumber, numberingMode, elevatorCode, buildingName, buildingId, onSent
+  isOpen, onClose, orderId, caseNumber, numberingMode, elevatorCode, buildingName, buildingId, elevatorId, onSent
 }: SendOrderEmailModalProps) {
   const [recipients, setRecipients] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
@@ -47,9 +47,9 @@ export default function SendOrderEmailModal({
   const loadRecipients = async () => {
     setLoading(true);
     try {
-      const contacts = await listByBuilding(buildingId!);
-      setRecipients(contacts.map((c: { id: string; name: string; email: string }) => ({ id: c.id, name: c.name, email: c.email })));
-      setSelectedEmails(contacts.map((c: { id: string; name: string; email: string }) => c.email));
+      const contacts = await listServiceOrderRecipients(buildingId!, elevatorId);
+      setRecipients(contacts.map(c => ({ id: c.id, name: c.full_name, email: c.email })));
+      setSelectedEmails(contacts.map(c => c.email));
     } catch { setRecipients([]); } finally { setLoading(false); }
   };
 
@@ -66,7 +66,9 @@ export default function SendOrderEmailModal({
       let sent = 0, failed = 0;
       for (const r of recipientsList) {
         try {
-          await sendBudgetEmails({ budgetId: orderId, recipients: [r], subject, body: body.replace(/\n/g, '<br>'), pdfBase64: undefined, pdfFilename: `orden-${caseNumber}.pdf` });
+          await supabase.functions.invoke('send-service-order-email', {
+            body: { service_order_id: orderId, recipients: [r], subject, body: body.replace(/\n/g, '<br>') },
+          });
           sent++;
         } catch { failed++; }
       }

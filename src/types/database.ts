@@ -544,6 +544,30 @@ export const BUDGET_STATUS_LABELS: Record<BudgetStatus, string> = {
 };
 
 // ============================================================
+// Building Recipients
+// ============================================================
+
+export interface BuildingRecipient {
+  id: string;
+  building_id: string;
+  elevator_id?: string;
+  full_name: string;
+  email: string;
+  role_label?: string;
+  phone?: string;
+  active: boolean;
+  receives_service_orders: boolean;
+  receives_monthly_reports: boolean;
+  receives_budgets: boolean;
+  receives_invoices: boolean;
+  receives_claim_updates: boolean;
+  receives_general_notices: boolean;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================
 // Claims
 // ============================================================
 
