@@ -32,6 +32,7 @@ export default function MonthlyReportDetailPage() {
   const [generalNotes, setGeneralNotes] = useState('');
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [approveNotes, setApproveNotes] = useState('');
+  const [showEmailModal, setShowEmailModal] = useState(false);
 
   useEffect(() => { if (id) loadReport(); }, [id]);
 
@@ -215,6 +216,13 @@ export default function MonthlyReportDetailPage() {
               </CardContent></Card>
             )}
 
+            {report.pdf_url && report.status === 'approved' && recipients.length > 0 && (
+              <Card><CardHeader><h3 className="font-semibold">Enviar por Correo</h3></CardHeader><CardContent>
+                <p className="text-sm text-gray-600 mb-3">Enviar el informe a {recipients.length} destinatario(s).</p>
+                <Button className="w-full" onClick={() => setShowEmailModal(true)}>Enviar por correo</Button>
+              </CardContent></Card>
+            )}
+
             <Card><CardHeader><h3 className="font-semibold">Destinatarios ({recipients.length})</h3></CardHeader><CardContent>
               {recipients.length === 0 ? (
                 <p className="text-sm text-gray-500">No hay destinatarios configurados para informes mensuales.</p>
@@ -242,6 +250,27 @@ export default function MonthlyReportDetailPage() {
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowApproveModal(false)}>Cancelar</Button>
               <Button onClick={handleApprove}>Aprobar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEmailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-2">Enviar Informe Mensual</h3>
+            <p className="text-sm text-gray-600 mb-3">Enviar a {recipients.length} destinatario(s).</p>
+            <div className="space-y-2 mb-4">
+              {recipients.map((r) => (
+                <div key={r.id} className="text-sm p-2 bg-gray-50 rounded">
+                  <p className="font-medium">{r.name}</p>
+                  <p className="text-xs text-gray-500">{r.email}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowEmailModal(false)}>Cancelar</Button>
+              <Button onClick={() => { setShowEmailModal(false); /* TODO: send email */ }}>Enviar</Button>
             </div>
           </div>
         </div>
