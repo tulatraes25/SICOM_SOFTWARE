@@ -33,6 +33,7 @@ import ClaimDetailPage from '@/pages/admin/ClaimDetailPage';
 import ServiceOrdersPage from '@/pages/admin/ServiceOrdersPage';
 import ServiceOrderCreatePage from '@/pages/admin/ServiceOrderCreatePage';
 import ServiceOrderDetailPage from '@/pages/admin/ServiceOrderDetailPage';
+import VisitBookListPage from '@/pages/admin/VisitBookListPage';
 import UsersPage from '@/pages/admin/UsersPage';
 import UserCreatePage from '@/pages/admin/UserCreatePage';
 import UserDetailPage from '@/pages/admin/UserDetailPage';
@@ -218,6 +219,7 @@ export default function AppRouter() {
         <Route path="/admin/ordenes-servicio" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrdersPage /></ProtectedRoute>} />
         <Route path="/admin/ordenes-servicio/nueva" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrderCreatePage /></ProtectedRoute>} />
         <Route path="/admin/ordenes-servicio/:id" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><ServiceOrderDetailPage /></ProtectedRoute>} />
+        <Route path="/admin/libro-visitas" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><VisitBookListPage /></ProtectedRoute>} />
         <Route path="/admin/informes-mensuales" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><MonthlyReportsPage /></ProtectedRoute>} />
         <Route path="/admin/informes-mensuales/:id" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><MonthlyReportDetailPage /></ProtectedRoute>} />
         <Route path="/admin/usuarios" element={<ProtectedRoute allowedRoles={['admin']}><UsersPage /></ProtectedRoute>} />

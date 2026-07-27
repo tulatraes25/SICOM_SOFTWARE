@@ -37,6 +37,7 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Presupuestos', path: '/admin/presupuestos', icon: Calculator },
     { label: 'Reclamos', path: '/admin/reclamos', icon: AlertTriangle },
     { label: 'Órdenes de Servicio', path: '/admin/ordenes-servicio', icon: Wrench },
+    { label: 'Libro de Visitas', path: '/admin/libro-visitas', icon: FileText },
     { label: 'Informes Mensuales', path: '/admin/informes-mensuales', icon: FileText },
     { label: 'Revisión de Servicios', path: '/admin/mantenimientos', icon: FileText },
     { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
@@ -49,6 +50,7 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Mis Mantenimientos', path: '/tecnico/mantenimientos', icon: FileText },
     { label: 'Mis Reclamos', path: '/tecnico/reclamos', icon: AlertTriangle, badgeKey: 'claims' },
     { label: 'Mis Órdenes', path: '/tecnico/ordenes', icon: Wrench, badgeKey: 'orders' },
+    { label: 'Mis Visitas', path: '/tecnico/visitas', icon: FileText },
     { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
   ],
   supervisor: [
