@@ -22,7 +22,8 @@ export async function listEntriesByElevator(
       registered_user:profiles!elevator_visit_entries_registered_by_fkey(full_name, email),
       reviewer:profiles!elevator_visit_entries_reviewed_by_fkey(full_name, email),
       service_case:service_cases(case_number, numbering_mode),
-      service_record:service_records(service_type, status)
+      service_record:service_records(service_type, status),
+      service_order:service_orders(subject, order_type, priority, status)
     `, { count: 'exact' })
     .eq('elevator_id', elevatorId)
     .order('visit_date', { ascending: false })
@@ -33,6 +34,43 @@ export async function listEntriesByElevator(
   if (filters?.technician_id) query = query.eq('technician_id', filters.technician_id);
   if (filters?.date_from) query = query.gte('visit_date', filters.date_from);
   if (filters?.date_to) query = query.lte('visit_date', filters.date_to);
+  if (filters?.search) {
+    query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%,entry_number::text.ilike.%${filters.search}%`);
+  }
+
+  const from = filters?.offset || 0;
+  const to = from + (filters?.limit || 50) - 1;
+  query = query.range(from, to);
+
+  const { data, count, error } = await query;
+  if (error) throw error;
+  return { data: data || [], count: count || 0 };
+}
+
+export async function listAllEntries(
+  filters?: {
+    status?: string;
+    entry_type?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }
+): Promise<{ data: any[]; count: number }> {
+  let query = supabase
+    .from('elevator_visit_entries')
+    .select(`
+      id, entry_number, visit_date, elevator_id, technician_id, status,
+      entry_type, origin_type, title, description, check_in_at, check_out_at,
+      duration_minutes, service_order_id, service_record_id, service_case_id,
+      elevator:elevators(id, code, building:buildings(name)),
+      technician:profiles!elevator_visit_entries_technician_id_fkey(full_name),
+      service_order:service_orders(id, subject, order_type)
+    `, { count: 'exact' })
+    .order('visit_date', { ascending: false })
+    .order('entry_number', { ascending: false });
+
+  if (filters?.status) query = query.eq('status', filters.status);
+  if (filters?.entry_type) query = query.eq('entry_type', filters.entry_type);
   if (filters?.search) {
     query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%,entry_number::text.ilike.%${filters.search}%`);
   }
@@ -174,4 +212,42 @@ export async function getVisitHistory(
 
   if (error) throw error;
   return data || [];
+}
+
+export async function createVisitFromServiceOrder(orderId: string): Promise<{ id: string; entry_number: number; status: string }> {
+  const { data, error } = await supabase.rpc('create_visit_from_service_order', {
+    p_order_id: orderId,
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function updateVisitOnOrderComplete(orderId: string, summary?: string): Promise<{ id: string; status: string }> {
+  const { data, error } = await supabase.rpc('update_visit_on_order_complete', {
+    p_order_id: orderId,
+    p_summary: summary || null,
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function updateVisitOnOrderApprove(orderId: string): Promise<{ id: string; status: string }> {
+  const { data, error } = await supabase.rpc('update_visit_on_order_approve', {
+    p_order_id: orderId,
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function updateVisitOnOrderCorrections(orderId: string, notes: string): Promise<{ id: string; status: string }> {
+  const { data, error } = await supabase.rpc('update_visit_on_order_corrections', {
+    p_order_id: orderId,
+    p_notes: notes,
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
 }

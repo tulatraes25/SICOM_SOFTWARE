@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { getVisitEntry, submitVisitEntry, approveVisitEntry, cancelVisitEntry } from '@/services/elevatorVisitBook.service';
-import { VISIT_ENTRY_TYPE_LABELS, VISIT_ENTRY_STATUS_LABELS } from '@/types/database';
+import { VISIT_ENTRY_TYPE_LABELS, VISIT_ENTRY_STATUS_LABELS, VISIT_ORIGIN_LABELS } from '@/types/database';
 import type { ElevatorVisitEntry } from '@/types/database';
-import { ArrowLeft, X, CheckCircle, Send, AlertCircle, User, Calendar, Wrench } from 'lucide-react';
+import { ArrowLeft, X, CheckCircle, Send, AlertCircle, User, Calendar, Wrench, Clock, ExternalLink } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default',
@@ -18,7 +18,7 @@ const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' 
 };
 
 export default function VisitEntryDetailPage() {
-  const { elevatorId, entryId } = useParams<{ elevatorId: string; entryId: string }>();
+  const { entryId } = useParams<{ elevatorId: string; entryId: string }>();
   const navigate = useNavigate();
   const [entry, setEntry] = useState<ElevatorVisitEntry | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,6 +69,18 @@ export default function VisitEntryDetailPage() {
     });
   };
 
+  const formatTime = (ts: string | null | undefined) => {
+    if (!ts) return 'No informado';
+    return new Date(ts).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
+  const formatDuration = (mins: number | null | undefined) => {
+    if (!mins) return 'No informado';
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m} minutos`;
+  };
+
   if (loading) {
     return (
       <DashboardLayout role="admin" title="Asiento del Libro">
@@ -83,7 +95,7 @@ export default function VisitEntryDetailPage() {
     return (
       <DashboardLayout role="admin" title="Asiento del Libro">
         <div className="max-w-2xl mx-auto">
-          <button onClick={() => navigate(`/admin/ascensores/${elevatorId}/libro`)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4">
+          <button onClick={() => navigate(`/admin/libro-visitas`)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4">
             <ArrowLeft size={18} /> Volver al libro
           </button>
           <Card>
@@ -110,7 +122,7 @@ export default function VisitEntryDetailPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <button onClick={() => navigate(`/admin/ascensores/${elevatorId}/libro`)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-2">
+            <button onClick={() => navigate(`/admin/libro-visitas`)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-2">
               <ArrowLeft size={18} /> Volver al libro
             </button>
             <div className="flex items-center gap-3">
@@ -165,6 +177,10 @@ export default function VisitEntryDetailPage() {
                     <p className="font-medium">{new Date(entry.visit_date).toLocaleDateString('es-AR')}</p>
                   </div>
                   <div>
+                    <p className="text-sm text-gray-500">Origen</p>
+                    <p className="font-medium">                {VISIT_ORIGIN_LABELS[entry.origin_type || ''] || entry.origin_type || 'No informado'}</p>
+                  </div>
+                  <div>
                     <p className="text-sm text-gray-500">Fecha de registro</p>
                     <p className="font-medium">{new Date(entry.registered_at).toLocaleString('es-AR')}</p>
                   </div>
@@ -205,6 +221,31 @@ export default function VisitEntryDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Time Tracking Card */}
+            <Card>
+              <CardHeader>
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <Clock size={18} /> Horarios y Duración
+                </h3>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Hora de ingreso</p>
+                    <p className="font-medium">{formatTime(entry.check_in_at)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Hora de salida</p>
+                    <p className="font-medium">{formatTime(entry.check_out_at)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Duración</p>
+                    <p className="font-medium">{formatDuration(entry.duration_minutes)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="space-y-6">
@@ -243,6 +284,17 @@ export default function VisitEntryDetailPage() {
                     </div>
                   </div>
                 )}
+                {entry.service_order_id && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <ExternalLink size={16} className="text-gray-400" />
+                    <div>
+                      <p className="text-gray-500">Orden de servicio</p>
+                      <Link to={`/admin/ordenes-servicio/${entry.service_order_id}`} className="font-medium text-blue-600 hover:underline">
+                        Ver orden →
+                      </Link>
+                    </div>
+                  </div>
+                )}
                 {entry.reviewed_by && (
                   <div className="flex items-center gap-3 text-sm">
                     <CheckCircle size={16} className="text-gray-400" />
@@ -271,6 +323,9 @@ export default function VisitEntryDetailPage() {
                     <p className="text-gray-500">Estado de conservación</p>
                     <p className="font-medium">{entry.conservation_status}</p>
                   </div>
+                )}
+                {!entry.operational_status && !entry.conservation_status && (
+                  <p className="text-gray-400 italic">No evaluado</p>
                 )}
               </CardContent>
             </Card>

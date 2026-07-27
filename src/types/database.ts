@@ -324,6 +324,7 @@ export interface ElevatorVisitEntry {
   elevator_id: string;
   service_case_id?: string;
   service_record_id?: string;
+  service_order_id?: string;
   entry_number: number;
   visit_date: string;
   registered_at: string;
@@ -346,6 +347,9 @@ export interface ElevatorVisitEntry {
   cancellation_reason?: string;
   technician_signature_id?: string;
   reviewer_signature_id?: string;
+  check_in_at?: string;
+  check_out_at?: string;
+  duration_minutes?: number;
   created_at: string;
   updated_at: string;
   // Relations
@@ -355,6 +359,7 @@ export interface ElevatorVisitEntry {
   reviewer?: Profile;
   service_case?: ServiceCase;
   service_record?: ServiceRecord;
+  service_order?: any;
   rectified_entry?: ElevatorVisitEntry;
 }
 
@@ -375,6 +380,13 @@ export const VISIT_ENTRY_STATUS_LABELS: Record<VisitEntryStatus, string> = {
   approved: 'Aprobado',
   rectified: 'Rectificado',
   cancelled: 'Anulado',
+};
+
+export const VISIT_ORIGIN_LABELS: Record<string, string> = {
+  service_order: 'Orden de servicio',
+  maintenance: 'Mantenimiento',
+  claim: 'Reclamo',
+  manual: 'Manual',
 };
 
 // ============================================================
