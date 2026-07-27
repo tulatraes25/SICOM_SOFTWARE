@@ -137,6 +137,28 @@ export default function ElevatorVisitBookPage() {
         return;
       }
 
+      // Enrich with service records and progress for summaries
+      const enriched = await Promise.all(pdfEntries.map(async (entry: any) => {
+        if (entry.service_record_id) {
+          const { data: sr } = await supabase.from('service_records')
+            .select('service_type, service_date, description, technical_report, observations, final_report_text')
+            .eq('id', entry.service_record_id).maybeSingle();
+          entry._serviceRecord = sr;
+        }
+        if (entry.service_order_id) {
+          const { data: so } = await supabase.from('service_orders')
+            .select('completion_summary')
+            .eq('id', entry.service_order_id).maybeSingle();
+          entry._serviceOrder = so;
+          const { data: prog } = await supabase.from('service_order_progress')
+            .select('note, progress_type')
+            .eq('service_order_id', entry.service_order_id)
+            .order('created_at', { ascending: true });
+          entry._progress = prog;
+        }
+        return entry;
+      }));
+
       const building = (elevator as any).building;
       const client = building?.client;
 
@@ -147,7 +169,7 @@ export default function ElevatorVisitBookPage() {
           clientName={client?.name || '-'}
           dateFrom={pdfDateFrom}
           dateTo={pdfDateTo}
-          entries={pdfEntries}
+          entries={enriched}
         />
       ).toBlob();
 

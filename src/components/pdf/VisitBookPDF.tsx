@@ -1,30 +1,33 @@
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image, Font } from '@react-pdf/renderer';
 import type { ElevatorVisitEntry } from '@/types/database';
 import { VISIT_ENTRY_STATUS_LABELS, VISIT_ORIGIN_LABELS } from '@/types/database';
+import logoSicom from '@/assets/logo-sicom.png';
+
+Font.registerHyphenationCallback((word) => [word]);
 
 const styles = StyleSheet.create({
-  page: { padding: 40, fontFamily: 'Helvetica', fontSize: 8, lineHeight: 1.3 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 2, borderBottomColor: '#8DB600', paddingBottom: 10, marginBottom: 15 },
-  headerLeft: { flex: 1 },
-  companyName: { fontSize: 14, fontWeight: 'bold', color: '#1a1a1a' },
-  title: { fontSize: 11, fontWeight: 'bold', color: '#06172E', marginTop: 8, marginBottom: 4 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, fontSize: 8, color: '#444' },
-  tableHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#8DB600', paddingBottom: 3, marginBottom: 3 },
-  tableHeaderText: { fontSize: 7, fontWeight: 'bold', color: '#06172E' },
-  tableRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#e5e7eb', paddingBottom: 3, marginBottom: 3 },
-  colN: { width: '5%' },
-  colDate: { width: '10%' },
-  colOrigin: { width: '12%' },
-  colDoc: { width: '15%' },
-  colTech: { width: '13%' },
-  colDesc: { width: '20%' },
-  colIn: { width: '8%' },
-  colOut: { width: '8%' },
-  colDur: { width: '7%' },
-  colStatus: { width: '8%' },
-  cellText: { fontSize: 7, color: '#333' },
-  footer: { marginTop: 15, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#8DB600', fontSize: 7, color: '#999', textAlign: 'center' },
+  page: { padding: 30, fontFamily: 'Helvetica', fontSize: 7, lineHeight: 1.2 },
+  header: { marginBottom: 10 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  logo: { width: 50, height: 50 },
+  headerRight: { alignItems: 'flex-end' },
+  headerText: { fontSize: 7, color: '#555' },
+  greenLine: { borderBottomWidth: 2, borderBottomColor: '#8DB600', marginTop: 5 },
+  title: { fontSize: 10, fontWeight: 'bold', color: '#06172E', marginTop: 8, marginBottom: 4 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6, fontSize: 7, color: '#444' },
+  testBanner: { backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#f59e0b', borderRadius: 3, padding: 4, marginBottom: 8 },
+  testText: { fontSize: 7, fontWeight: 'bold', color: '#92400e', textAlign: 'center' },
+  tableHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#8DB600', paddingBottom: 2, marginBottom: 2 },
+  th: { fontSize: 6, fontWeight: 'bold', color: '#06172E' },
+  tableRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#e5e7eb', paddingBottom: 2, marginBottom: 2 },
+  td: { fontSize: 6, color: '#333' },
+  footer: { position: 'absolute', bottom: 20, left: 30, right: 30, borderTopWidth: 1, borderTopColor: '#8DB600', paddingTop: 5, flexDirection: 'row', justifyContent: 'space-between', fontSize: 6, color: '#999' },
 });
+
+const COL = {
+  n: '4%', date: '7%', origin: '9%', doc: '14%', tech: '11%',
+  summary: '27%', in: '6%', out: '6%', dur: '7%', status: '9%',
+};
 
 interface VisitBookPDFProps {
   elevatorCode: string;
@@ -41,123 +44,164 @@ function formatCaseNumber(sc: any): string {
   return `N.º ${sc.case_number}`;
 }
 
+function formatDateShort(d: string): string {
+  const [y, m, day] = d.split('-');
+  return `${parseInt(day)}/${parseInt(m)}/${y}`;
+}
+
+function formatTime(ts: string | null | undefined): string {
+  if (!ts) return '-';
+  const d = new Date(ts);
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function formatDuration(entry: any): string {
+  if (entry.duration_seconds !== null && entry.duration_seconds !== undefined && entry.duration_seconds > 0) {
+    if (entry.duration_seconds < 60) return '<1 min';
+    if (entry.duration_seconds < 120) return '1 min';
+    if (entry.duration_seconds < 3600) return `${Math.floor(entry.duration_seconds / 60)} min`;
+    const h = Math.floor(entry.duration_seconds / 3600);
+    const m = Math.floor((entry.duration_seconds % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  if (entry.duration_minutes !== null && entry.duration_minutes !== undefined && entry.duration_minutes > 0) {
+    if (entry.duration_minutes < 60) return `${entry.duration_minutes} min`;
+    const h = Math.floor(entry.duration_minutes / 60);
+    const m = entry.duration_minutes % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  if (entry.check_in_at && entry.check_out_at) {
+    const diff = Math.floor((new Date(entry.check_out_at).getTime() - new Date(entry.check_in_at).getTime()) / 1000);
+    if (diff < 60) return '<1 min';
+    if (diff < 120) return '1 min';
+    if (diff < 3600) return `${Math.floor(diff / 60)} min`;
+    const h = Math.floor(diff / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  return '-';
+}
+
+function buildVisitBookSummary(entry: any): string {
+  const MAX = 280;
+
+  if (entry.origin_type === 'maintenance') {
+    const sr = entry._serviceRecord;
+    if (sr) {
+      const texts = [sr.description, sr.observations, sr.final_report_text, sr.technical_report].filter(Boolean);
+      for (const t of texts) {
+        const clean = t.replace(/TAREAS REALIZADAS[\s\S]*/i, '').replace(/CONCLUSIÓN[\s\S]*/i, '').trim();
+        if (clean.length > 10) return clean.length > MAX ? clean.slice(0, MAX) + '…' : clean;
+      }
+    }
+    return entry.work_performed && entry.work_performed !== 'Trabajo completado'
+      ? (entry.work_performed.length > MAX ? entry.work_performed.slice(0, MAX) + '…' : entry.work_performed)
+      : 'Mantenimiento realizado sin observaciones adicionales.';
+  }
+
+  if (entry.origin_type === 'service_order') {
+    const so = entry._serviceOrder;
+    if (so?.completion_summary && so.completion_summary !== 'Trabajo completado') {
+      return so.completion_summary.length > MAX ? so.completion_summary.slice(0, MAX) + '…' : so.completion_summary;
+    }
+    const progress = entry._progress;
+    if (progress && progress.length > 0) {
+      const last = progress[progress.length - 1];
+      if (last?.note && last.note.length > 10) {
+        return last.note.length > MAX ? last.note.slice(0, MAX) + '…' : last.note;
+      }
+    }
+    if (entry.work_performed && entry.work_performed !== 'Trabajo completado') {
+      return entry.work_performed.length > MAX ? entry.work_performed.slice(0, MAX) + '…' : entry.work_performed;
+    }
+  }
+
+  const fallback = entry.title || entry.description || '-';
+  return fallback.length > MAX ? fallback.slice(0, MAX) + '…' : fallback;
+}
+
+function buildDocumentLabel(entry: any): string {
+  if (entry.service_case) return formatCaseNumber(entry.service_case);
+  if (entry.service_order_id) return 'Orden de servicio';
+  if (entry.service_record_id) {
+    const sr = entry._serviceRecord;
+    const type = sr?.service_type === 'preventivo' ? 'Mant. preventivo'
+      : sr?.service_type === 'correctivo' ? 'Mant. correctivo'
+      : sr?.service_type === 'emergencia' ? 'Emergencia'
+      : sr?.service_type === 'inspeccion' ? 'Inspección'
+      : 'Mantenimiento';
+    const date = sr?.service_date ? formatDateShort(sr.service_date) : '';
+    return date ? `${type} - ${date}` : type;
+  }
+  return '-';
+}
+
 export default function VisitBookPDF({
-  elevatorCode,
-  buildingName,
-  clientName,
-  dateFrom,
-  dateTo,
-  entries,
+  elevatorCode, buildingName, clientName, dateFrom, dateTo, entries,
 }: VisitBookPDFProps) {
-  const formatDate = (d: string) => {
-    const [y, m, day] = d.split('-');
-    return `${parseInt(day)}/${parseInt(m)}/${y}`;
-  };
+  const hasTestEntries = entries.some((e) =>
+    (e.service_case as any)?.numbering_mode === 'test' ||
+    ((e.service_case as any)?.case_number >= 1900 && (e.service_case as any)?.case_number <= 1999)
+  );
 
-  const formatTime = (ts: string | null | undefined) => {
-    if (!ts) return '-';
-    const d = new Date(ts);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-  };
-
-  const formatDuration = (entry: any) => {
-    if (entry.duration_seconds !== null && entry.duration_seconds !== undefined && entry.duration_seconds > 0) {
-      if (entry.duration_seconds < 60) return '<1 min';
-      if (entry.duration_seconds < 120) return '1 min';
-      if (entry.duration_seconds < 3600) return `${Math.floor(entry.duration_seconds / 60)} min`;
-      const h = Math.floor(entry.duration_seconds / 3600);
-      const m = Math.floor((entry.duration_seconds % 3600) / 60);
-      return m > 0 ? `${h} h ${m} min` : `${h} h`;
-    }
-    if (entry.duration_minutes !== null && entry.duration_minutes !== undefined && entry.duration_minutes > 0) {
-      if (entry.duration_minutes < 60) return `${entry.duration_minutes} min`;
-      const h = Math.floor(entry.duration_minutes / 60);
-      const m = entry.duration_minutes % 60;
-      return m > 0 ? `${h} h ${m} min` : `${h} h`;
-    }
-    if (entry.check_in_at && entry.check_out_at) {
-      const diff = Math.floor((new Date(entry.check_out_at).getTime() - new Date(entry.check_in_at).getTime()) / 1000);
-      if (diff < 60) return '<1 min';
-      if (diff < 120) return '1 min';
-      if (diff < 3600) return `${Math.floor(diff / 60)} min`;
-      const h = Math.floor(diff / 3600);
-      const m = Math.floor((diff % 3600) / 60);
-      return m > 0 ? `${h} h ${m} min` : `${h} h`;
-    }
-    return '-';
-  };
-
-  const hasTestEntries = entries.some(e => (e.service_case as any)?.numbering_mode === 'test' || ((e.service_case as any)?.case_number >= 1900 && (e.service_case as any)?.case_number <= 1999));
+  const renderHeader = () => (
+    <View style={styles.header} fixed>
+      <View style={styles.headerRow}>
+        <Image src={logoSicom} style={styles.logo} />
+        <View style={styles.headerRight}>
+          <Text style={styles.headerText}>+54 297 421-4430</Text>
+          <Text style={styles.headerText}>sicompatagonia.com</Text>
+        </View>
+      </View>
+      <View style={styles.greenLine} />
+      <Text style={styles.title}>LIBRO DE VISITAS — {elevatorCode}</Text>
+      <View style={styles.infoRow}>
+        <Text>Edificio: {buildingName}</Text>
+        <Text>Cliente: {clientName}</Text>
+        <Text>Período: {formatDateShort(dateFrom)} — {formatDateShort(dateTo)}</Text>
+        <Text>Total: {entries.length} asiento(s)</Text>
+      </View>
+      {hasTestEntries && (
+        <View style={styles.testBanner}>
+          <Text style={styles.testText}>DOCUMENTO DE PRUEBA — SIN VALIDEZ COMERCIAL</Text>
+        </View>
+      )}
+      <View style={styles.tableHeader}>
+        <Text style={[styles.th, { width: COL.n }]}>N.º</Text>
+        <Text style={[styles.th, { width: COL.date }]}>Fecha</Text>
+        <Text style={[styles.th, { width: COL.origin }]}>Origen</Text>
+        <Text style={[styles.th, { width: COL.doc }]}>Documento</Text>
+        <Text style={[styles.th, { width: COL.tech }]}>Técnico</Text>
+        <Text style={[styles.th, { width: COL.summary }]}>Resumen</Text>
+        <Text style={[styles.th, { width: COL.in }]}>Ingreso</Text>
+        <Text style={[styles.th, { width: COL.out }]}>Salida</Text>
+        <Text style={[styles.th, { width: COL.dur }]}>Duración</Text>
+        <Text style={[styles.th, { width: COL.status }]}>Estado</Text>
+      </View>
+    </View>
+  );
 
   return (
     <Document>
       <Page size={[842, 595]} style={styles.page}>
-        {hasTestEntries && (
-          <View style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#f59e0b', borderRadius: 4, padding: 6, marginBottom: 10 }}>
-            <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#92400e', textAlign: 'center' }}>
-              DOCUMENTO DE PRUEBA — SIN VALIDEZ COMERCIAL
-            </Text>
-          </View>
-        )}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.companyName}>SICOM Patagonia SRL</Text>
-            <Text style={{ fontSize: 7, color: '#666', marginTop: 2 }}>Libro Digital de Visitas</Text>
-          </View>
-        </View>
-
-        <Text style={styles.title}>LIBRO DE VISITAS — {elevatorCode}</Text>
-
-        <View style={styles.infoRow}>
-          <Text>Edificio: {buildingName}</Text>
-          <Text>Cliente: {clientName}</Text>
-          <Text>Período: {formatDate(dateFrom)} — {formatDate(dateTo)}</Text>
-          <Text>Total: {entries.length} asiento(s)</Text>
-        </View>
-
-        <View style={styles.tableHeader}>
-          <Text style={[styles.tableHeaderText, styles.colN]}>N.º</Text>
-          <Text style={[styles.tableHeaderText, styles.colDate]}>Fecha</Text>
-          <Text style={[styles.tableHeaderText, styles.colOrigin]}>Origen</Text>
-          <Text style={[styles.tableHeaderText, styles.colDoc]}>Documento</Text>
-          <Text style={[styles.tableHeaderText, styles.colTech]}>Técnico</Text>
-          <Text style={[styles.tableHeaderText, styles.colDesc]}>Descripción</Text>
-          <Text style={[styles.tableHeaderText, styles.colIn]}>Ingreso</Text>
-          <Text style={[styles.tableHeaderText, styles.colOut]}>Salida</Text>
-          <Text style={[styles.tableHeaderText, styles.colDur]}>Duración</Text>
-          <Text style={[styles.tableHeaderText, styles.colStatus]}>Estado</Text>
-        </View>
-
+        {renderHeader()}
         {entries.map((entry) => (
-          <View key={entry.id} style={styles.tableRow}>
-            <Text style={[styles.cellText, styles.colN]}>{entry.entry_number}</Text>
-            <Text style={[styles.cellText, styles.colDate]}>{formatDate(entry.visit_date)}</Text>
-            <Text style={[styles.cellText, styles.colOrigin]}>{(VISIT_ORIGIN_LABELS as Record<string, string>)[entry.origin_type || ''] || entry.origin_type || '-'}</Text>
-            <Text style={[styles.cellText, styles.colDoc]}>
-              {entry.service_case
-                ? formatCaseNumber(entry.service_case)
-                : entry.service_order_id
-                  ? 'Orden'
-                  : entry.service_record_id
-                    ? 'Mant.'
-                    : '-'}
-            </Text>
-            <Text style={[styles.cellText, styles.colTech]}>
-              {(entry.technician as any)?.full_name || '-'}
-            </Text>
-            <Text style={[styles.cellText, styles.colDesc]}>
-              {entry.work_performed || entry.title || entry.description?.slice(0, 40) || '-'}
-            </Text>
-            <Text style={[styles.cellText, styles.colIn]}>{formatTime(entry.check_in_at)}</Text>
-            <Text style={[styles.cellText, styles.colOut]}>{formatTime(entry.check_out_at)}</Text>
-            <Text style={[styles.cellText, styles.colDur]}>{formatDuration(entry)}</Text>
-            <Text style={[styles.cellText, styles.colStatus]}>{(VISIT_ENTRY_STATUS_LABELS as Record<string, string>)[entry.status] || entry.status}</Text>
+          <View key={entry.id} style={styles.tableRow} wrap={false}>
+            <Text style={[styles.td, { width: COL.n }]}>{entry.entry_number}</Text>
+            <Text style={[styles.td, { width: COL.date }]}>{formatDateShort(entry.visit_date)}</Text>
+            <Text style={[styles.td, { width: COL.origin }]}>{(VISIT_ORIGIN_LABELS as Record<string, string>)[entry.origin_type || ''] || '-'}</Text>
+            <Text style={[styles.td, { width: COL.doc }]}>{buildDocumentLabel(entry)}</Text>
+            <Text style={[styles.td, { width: COL.tech }]}>{(entry.technician as any)?.full_name || '-'}</Text>
+            <Text style={[styles.td, { width: COL.summary }]}>{buildVisitBookSummary(entry)}</Text>
+            <Text style={[styles.td, { width: COL.in }]}>{formatTime(entry.check_in_at)}</Text>
+            <Text style={[styles.td, { width: COL.out }]}>{formatTime(entry.check_out_at)}</Text>
+            <Text style={[styles.td, { width: COL.dur }]}>{formatDuration(entry)}</Text>
+            <Text style={[styles.td, { width: COL.status }]}>{(VISIT_ENTRY_STATUS_LABELS as Record<string, string>)[entry.status] || '-'}</Text>
           </View>
         ))}
-
-        <Text style={styles.footer}>
-          SICOM Patagonia SRL — Libro Digital de Visitas — Generado el {new Date().toLocaleDateString('es-AR')}
-        </Text>
+        <Text style={styles.footer} fixed render={({ pageNumber, totalPages }) =>
+          `SICOM Patagonia SRL | +54 297 421-4430 | sicompatagonia.com | Página ${pageNumber} de ${totalPages} | Generado el ${new Date().toLocaleDateString('es-AR')}`
+        } />
       </Page>
     </Document>
   );
