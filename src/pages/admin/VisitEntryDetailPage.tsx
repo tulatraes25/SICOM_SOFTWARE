@@ -165,7 +165,13 @@ export default function VisitEntryDetailPage() {
               )}
             </div>
           </div>
-          {isActive && (
+          {entry.service_order_id ? (
+            <Link to={`/admin/ordenes-servicio/${entry.service_order_id}`}>
+              <Button>
+                <ExternalLink size={16} className="mr-2" /> Abrir orden de servicio
+              </Button>
+            </Link>
+          ) : isActive && (
             <div className="flex gap-2">
               {canSubmit && (
                 <Button onClick={handleSubmit} disabled={actionLoading}>

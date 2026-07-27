@@ -22,7 +22,6 @@ export async function listEntriesByElevator(
       registered_user:profiles!elevator_visit_entries_registered_by_fkey(full_name, email),
       reviewer:profiles!elevator_visit_entries_reviewed_by_fkey(full_name, email),
       service_case:service_cases(case_number, numbering_mode),
-      service_record:service_records(service_type, status),
       service_order:service_orders(subject, order_type, priority, status)
     `, { count: 'exact' })
     .eq('elevator_id', elevatorId)
@@ -96,7 +95,7 @@ export async function listAllEntries(
 }
 
 export async function getVisitEntry(id: string): Promise<ElevatorVisitEntry | null> {
-  const { data, error } = await supabase
+  const { data: entry, error } = await supabase
     .from('elevator_visit_entries')
     .select(`
       *,
@@ -105,14 +104,27 @@ export async function getVisitEntry(id: string): Promise<ElevatorVisitEntry | nu
       registered_user:profiles!elevator_visit_entries_registered_by_fkey(full_name, email),
       reviewer:profiles!elevator_visit_entries_reviewed_by_fkey(full_name, email),
       service_case:service_cases(case_number, numbering_mode, status),
-      service_record:service_records(service_type, status, service_date),
+      service_order:service_orders(id, subject, work_requested, completion_summary, order_type, priority, status),
       rectified_entry:elevator_visit_entries!rectifies_entry_id(entry_number, visit_date, description)
     `)
     .eq('id', id)
     .single();
 
   if (error) throw error;
-  return data;
+  if (!entry) return null;
+
+  // Load service_record separately to avoid ambiguous embed
+  let serviceRecord = null;
+  if (entry.service_record_id) {
+    const { data } = await supabase
+      .from('service_records')
+      .select('id, service_type, status, service_date, description, technical_report, observations, final_report_text, operational_status_at_service, conservation_status_at_service')
+      .eq('id', entry.service_record_id)
+      .maybeSingle();
+    serviceRecord = data;
+  }
+
+  return { ...entry, service_record: serviceRecord } as any;
 }
 
 export async function createVisitEntry(params: {
