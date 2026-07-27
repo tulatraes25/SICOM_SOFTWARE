@@ -579,26 +579,36 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- ============================================================
--- 7. REVOKE AND GRANTS
+-- 7. REVOKE AND GRANTS (exact signatures)
 -- ============================================================
+
+-- start_service_order_with_visit(UUID)
+REVOKE ALL ON FUNCTION public.start_service_order_with_visit(UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.start_service_order_with_visit(UUID) FROM anon;
+GRANT EXECUTE ON FUNCTION public.start_service_order_with_visit(UUID) TO authenticated;
+
+-- complete_service_order_with_visit(UUID, TEXT)
+REVOKE ALL ON FUNCTION public.complete_service_order_with_visit(UUID, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.complete_service_order_with_visit(UUID, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.complete_service_order_with_visit(UUID, TEXT) TO authenticated;
+
+-- approve_service_order_with_visit(UUID, TEXT)
+REVOKE ALL ON FUNCTION public.approve_service_order_with_visit(UUID, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.approve_service_order_with_visit(UUID, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.approve_service_order_with_visit(UUID, TEXT) TO authenticated;
+
+-- request_order_corrections_with_visit(UUID, TEXT)
+REVOKE ALL ON FUNCTION public.request_order_corrections_with_visit(UUID, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.request_order_corrections_with_visit(UUID, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.request_order_corrections_with_visit(UUID, TEXT) TO authenticated;
+
+-- cancel_service_order_with_visit(UUID, TEXT)
+REVOKE ALL ON FUNCTION public.cancel_service_order_with_visit(UUID, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.cancel_service_order_with_visit(UUID, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.cancel_service_order_with_visit(UUID, TEXT) TO authenticated;
+
 DO $$
-DECLARE
-  func_name TEXT;
 BEGIN
-  FOR func_name IN
-    SELECT unnest(ARRAY[
-      'start_service_order_with_visit',
-      'complete_service_order_with_visit',
-      'approve_service_order_with_visit',
-      'request_order_corrections_with_visit',
-      'cancel_service_order_with_visit'
-    ])
-  LOOP
-    EXECUTE format('REVOKE ALL ON FUNCTION public.%I(UUID) FROM PUBLIC', func_name);
-    EXECUTE format('REVOKE ALL ON FUNCTION public.%I(UUID, TEXT) FROM PUBLIC', func_name);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION public.%I(UUID) TO authenticated', func_name);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION public.%I(UUID, TEXT) TO authenticated', func_name);
-  END LOOP;
   RAISE NOTICE 'REVOKE/GRANT applied to all hardened RPCs';
 END $$;
 
