@@ -86,20 +86,21 @@ export default function MonthlyReportDetailPage() {
     if (!report) return;
     setGenerating(true); setError(''); setSuccess('');
     try {
-      // Save general status and notes first
       await updateMonthlyReport(report.id, { general_status: generalStatus, general_notes: generalNotes });
-
+      const nextVersion = (report.pdf_version || 0) + 1;
       const sigData = await getUserSignatureForPDF(report.created_by, 'administrator');
+      const approverName = (report as any).approved_by_profile?.full_name;
+      const reportWithVersion = { ...report, pdf_version: nextVersion };
 
       const blob = await pdf(
         <MonthlyReportPDF
-          report={report}
+          report={reportWithVersion}
           maintenances={periodData?.maintenances || []}
           serviceOrders={periodData?.serviceOrders || []}
           claims={periodData?.claims || []}
           summary={periodData?.summary || { preventiveCount: 0, correctiveCount: 0, serviceOrderCount: 0, claimCount: 0, totalApproved: 0, totalWithCorrections: 0, firstDate: null, lastDate: null }}
           signatureUrl={sigData?.signedUrl || undefined}
-          signerName={(report as any).approved_by_profile?.full_name || undefined}
+          signerName={approverName || undefined}
         />
       ).toBlob();
 
