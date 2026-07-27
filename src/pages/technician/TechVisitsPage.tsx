@@ -9,10 +9,10 @@ import { supabase } from '@/config/supabase';
 import { Eye, Clock } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
-  draft: 'default', submitted: 'info', approved: 'success', cancelled: 'danger', rectified: 'warning',
+  draft: 'default', in_progress: 'info', submitted: 'info', changes_requested: 'warning', approved: 'success', cancelled: 'danger', rectified: 'warning',
 };
 const STATUS_LABELS: Record<string, string> = {
-  draft: 'Borrador', submitted: 'Enviado', approved: 'Aprobado', cancelled: 'Anulado', rectified: 'Rectificado',
+  draft: 'Borrador', in_progress: 'En curso', submitted: 'Pendiente de revisión', changes_requested: 'Correcciones solicitadas', approved: 'Aprobado', cancelled: 'Anulado', rectified: 'Rectificado',
 };
 
 export default function TechVisitsPage() {

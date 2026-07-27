@@ -8,7 +8,6 @@ const styles = StyleSheet.create({
   headerLeft: { flex: 1 },
   companyName: { fontSize: 14, fontWeight: 'bold', color: '#1a1a1a' },
   title: { fontSize: 11, fontWeight: 'bold', color: '#06172E', marginTop: 8, marginBottom: 4 },
-  subtitle: { fontSize: 8, color: '#666' },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, fontSize: 8, color: '#444' },
   tableHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#8DB600', paddingBottom: 3, marginBottom: 3 },
   tableHeaderText: { fontSize: 7, fontWeight: 'bold', color: '#06172E' },
@@ -36,6 +35,12 @@ interface VisitBookPDFProps {
   entries: ElevatorVisitEntry[];
 }
 
+function formatCaseNumber(sc: any): string {
+  if (!sc) return '';
+  if (sc.numbering_mode === 'test') return `PRUEBA N.º ${sc.case_number}`;
+  return `N.º ${sc.case_number}`;
+}
+
 export default function VisitBookPDF({
   elevatorCode,
   buildingName,
@@ -55,11 +60,23 @@ export default function VisitBookPDF({
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
   };
 
-  const formatDuration = (mins: number | null | undefined) => {
-    if (!mins) return '-';
+  const formatDuration = (mins: number | null | undefined, checkIn?: string | null, checkOut?: string | null) => {
+    if (mins === null || mins === undefined) {
+      if (checkIn && checkOut) {
+        const diff = Math.floor((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000);
+        if (diff === 0) return '<1 min';
+        if (diff < 60) return `${diff} min`;
+        const h = Math.floor(diff / 60);
+        const m = diff % 60;
+        return m > 0 ? `${h} h ${m} min` : `${h} h`;
+      }
+      return '-';
+    }
+    if (mins === 0) return '<1 min';
+    if (mins < 60) return `${mins} min`;
     const h = Math.floor(mins / 60);
     const m = mins % 60;
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    return m > 0 ? `${h} h ${m} min` : `${h} h`;
   };
 
   return (
@@ -100,7 +117,13 @@ export default function VisitBookPDF({
             <Text style={[styles.cellText, styles.colDate]}>{formatDate(entry.visit_date)}</Text>
             <Text style={[styles.cellText, styles.colOrigin]}>{(VISIT_ORIGIN_LABELS as Record<string, string>)[entry.origin_type || ''] || entry.origin_type || '-'}</Text>
             <Text style={[styles.cellText, styles.colDoc]}>
-              {entry.service_order_id ? `Orden` : entry.service_record_id ? `Mant.` : '-'}
+              {entry.service_case
+                ? formatCaseNumber(entry.service_case)
+                : entry.service_order_id
+                  ? 'Orden'
+                  : entry.service_record_id
+                    ? 'Mant.'
+                    : '-'}
             </Text>
             <Text style={[styles.cellText, styles.colTech]}>
               {(entry.technician as any)?.full_name || '-'}
@@ -110,7 +133,7 @@ export default function VisitBookPDF({
             </Text>
             <Text style={[styles.cellText, styles.colIn]}>{formatTime(entry.check_in_at)}</Text>
             <Text style={[styles.cellText, styles.colOut]}>{formatTime(entry.check_out_at)}</Text>
-            <Text style={[styles.cellText, styles.colDur]}>{formatDuration(entry.duration_minutes)}</Text>
+            <Text style={[styles.cellText, styles.colDur]}>{formatDuration(entry.duration_minutes, entry.check_in_at, entry.check_out_at)}</Text>
             <Text style={[styles.cellText, styles.colStatus]}>{(VISIT_ENTRY_STATUS_LABELS as Record<string, string>)[entry.status] || entry.status}</Text>
           </View>
         ))}

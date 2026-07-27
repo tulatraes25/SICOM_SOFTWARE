@@ -92,57 +92,33 @@ export async function assignTechnicians(orderId: string, technicianIds: string[]
 }
 
 export async function startOrder(orderId: string): Promise<void> {
-  const { data, error } = await supabase.rpc('start_service_order', { p_order_id: orderId });
+  const { data, error } = await supabase.rpc('start_service_order_with_visit', { p_order_id: orderId });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
-
-  // Auto-create visit entry
-  try {
-    const { data: visitResult } = await supabase.rpc('create_visit_from_service_order', { p_order_id: orderId });
-    if (visitResult?.error) console.warn('Visit creation:', visitResult.error);
-  } catch (e) { console.warn('Could not create visit entry:', e); }
 }
 
 export async function completeOrder(orderId: string, summary?: string): Promise<void> {
-  const { data, error } = await supabase.rpc('complete_service_order', { p_order_id: orderId, p_summary: summary || null });
+  const { data, error } = await supabase.rpc('complete_service_order_with_visit', { p_order_id: orderId, p_summary: summary || null });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
-
-  // Update visit entry
-  try {
-    const { data: visitResult } = await supabase.rpc('update_visit_on_order_complete', { p_order_id: orderId, p_summary: summary || null });
-    if (visitResult?.error) console.warn('Visit update:', visitResult.error);
-  } catch (e) { console.warn('Could not update visit entry:', e); }
 }
 
 export async function cancelOrder(orderId: string, reason: string): Promise<void> {
-  const { data, error } = await supabase.rpc('cancel_service_order', { p_order_id: orderId, p_reason: reason });
+  const { data, error } = await supabase.rpc('cancel_service_order_with_visit', { p_order_id: orderId, p_reason: reason });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
 }
 
 export async function approveOrder(orderId: string, notes?: string): Promise<void> {
-  const { data, error } = await supabase.rpc('approve_service_order', { p_service_order_id: orderId, p_notes: notes || null });
+  const { data, error } = await supabase.rpc('approve_service_order_with_visit', { p_service_order_id: orderId, p_notes: notes || null });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
-
-  // Approve visit entry
-  try {
-    const { data: visitResult } = await supabase.rpc('update_visit_on_order_approve', { p_order_id: orderId });
-    if (visitResult?.error) console.warn('Visit approve:', visitResult.error);
-  } catch (e) { console.warn('Could not approve visit entry:', e); }
 }
 
 export async function requestCorrections(orderId: string, notes: string): Promise<void> {
-  const { data, error } = await supabase.rpc('request_service_order_corrections', { p_service_order_id: orderId, p_notes: notes });
+  const { data, error } = await supabase.rpc('request_order_corrections_with_visit', { p_service_order_id: orderId, p_notes: notes });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
-
-  // Update visit entry with corrections notes
-  try {
-    const { data: visitResult } = await supabase.rpc('update_visit_on_order_corrections', { p_order_id: orderId, p_notes: notes });
-    if (visitResult?.error) console.warn('Visit corrections:', visitResult.error);
-  } catch (e) { console.warn('Could not update visit entry:', e); }
 }
 
 export async function addProgress(orderId: string, note: string, progressType: string = 'update'): Promise<void> {

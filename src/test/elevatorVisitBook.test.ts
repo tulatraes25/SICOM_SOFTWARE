@@ -27,7 +27,7 @@ describe('Elevator Visit Book - Constants', () => {
   it('VISIT_ENTRY_STATUS_LABELS has all statuses', async () => {
     const { VISIT_ENTRY_STATUS_LABELS } = await import('@/types/database');
     expect(VISIT_ENTRY_STATUS_LABELS.draft).toBe('Borrador');
-    expect(VISIT_ENTRY_STATUS_LABELS.submitted).toBe('Enviado');
+    expect(VISIT_ENTRY_STATUS_LABELS.submitted).toBe('Pendiente de revisión');
     expect(VISIT_ENTRY_STATUS_LABELS.approved).toBe('Aprobado');
     expect(VISIT_ENTRY_STATUS_LABELS.rectified).toBe('Rectificado');
     expect(VISIT_ENTRY_STATUS_LABELS.cancelled).toBe('Anulado');

@@ -64,7 +64,8 @@ export async function listAllEntries(
       duration_minutes, service_order_id, service_record_id, service_case_id,
       elevator:elevators(id, code, building:buildings(name)),
       technician:profiles!elevator_visit_entries_technician_id_fkey(full_name),
-      service_order:service_orders(id, subject, order_type)
+      service_case:service_cases(id, case_number, numbering_mode),
+      service_order:service_orders(id, subject, order_type, service_case_id)
     `, { count: 'exact' })
     .order('visit_date', { ascending: false })
     .order('entry_number', { ascending: false });
@@ -81,7 +82,17 @@ export async function listAllEntries(
 
   const { data, count, error } = await query;
   if (error) throw error;
-  return { data: data || [], count: count || 0 };
+
+  // Enrich: for entries without direct service_case, load from service_order's case
+  const enriched = await Promise.all((data || []).map(async (entry: any) => {
+    if (!entry.service_case && entry.service_order?.service_case_id) {
+      const { data: sc } = await supabase.from('service_cases').select('id, case_number, numbering_mode').eq('id', entry.service_order.service_case_id).single();
+      if (sc) entry.service_case = sc;
+    }
+    return entry;
+  }));
+
+  return { data: enriched, count: count || 0 };
 }
 
 export async function getVisitEntry(id: string): Promise<ElevatorVisitEntry | null> {
@@ -214,38 +225,9 @@ export async function getVisitHistory(
   return data || [];
 }
 
-export async function createVisitFromServiceOrder(orderId: string): Promise<{ id: string; entry_number: number; status: string }> {
+export async function createVisitFromServiceOrder(orderId: string): Promise<{ id: string; entry_number: number; status: string; already_existed?: boolean }> {
   const { data, error } = await supabase.rpc('create_visit_from_service_order', {
     p_order_id: orderId,
-  });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
-  return data;
-}
-
-export async function updateVisitOnOrderComplete(orderId: string, summary?: string): Promise<{ id: string; status: string }> {
-  const { data, error } = await supabase.rpc('update_visit_on_order_complete', {
-    p_order_id: orderId,
-    p_summary: summary || null,
-  });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
-  return data;
-}
-
-export async function updateVisitOnOrderApprove(orderId: string): Promise<{ id: string; status: string }> {
-  const { data, error } = await supabase.rpc('update_visit_on_order_approve', {
-    p_order_id: orderId,
-  });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
-  return data;
-}
-
-export async function updateVisitOnOrderCorrections(orderId: string, notes: string): Promise<{ id: string; status: string }> {
-  const { data, error } = await supabase.rpc('update_visit_on_order_corrections', {
-    p_order_id: orderId,
-    p_notes: notes,
   });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);

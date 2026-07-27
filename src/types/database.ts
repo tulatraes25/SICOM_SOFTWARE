@@ -317,7 +317,7 @@ export type VisitEntryType =
   | 'verification'
   | 'other';
 
-export type VisitEntryStatus = 'draft' | 'submitted' | 'approved' | 'rectified' | 'cancelled';
+export type VisitEntryStatus = 'draft' | 'in_progress' | 'submitted' | 'changes_requested' | 'approved' | 'rectified' | 'cancelled';
 
 export interface ElevatorVisitEntry {
   id: string;
@@ -376,7 +376,9 @@ export const VISIT_ENTRY_TYPE_LABELS: Record<VisitEntryType, string> = {
 
 export const VISIT_ENTRY_STATUS_LABELS: Record<VisitEntryStatus, string> = {
   draft: 'Borrador',
-  submitted: 'Enviado',
+  in_progress: 'En curso',
+  submitted: 'Pendiente de revisión',
+  changes_requested: 'Correcciones solicitadas',
   approved: 'Aprobado',
   rectified: 'Rectificado',
   cancelled: 'Anulado',

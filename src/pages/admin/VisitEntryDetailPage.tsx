@@ -11,7 +11,9 @@ import { ArrowLeft, X, CheckCircle, Send, AlertCircle, User, Calendar, Wrench, C
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default',
+  in_progress: 'info',
   submitted: 'info',
+  changes_requested: 'warning',
   approved: 'success',
   rectified: 'warning',
   cancelled: 'danger',
@@ -71,14 +73,26 @@ export default function VisitEntryDetailPage() {
 
   const formatTime = (ts: string | null | undefined) => {
     if (!ts) return 'No informado';
-    return new Date(ts).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+    return new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
-  const formatDuration = (mins: number | null | undefined) => {
-    if (!mins) return 'No informado';
+  const formatDuration = (mins: number | null | undefined, checkIn?: string | null, checkOut?: string | null) => {
+    if (mins === null || mins === undefined) {
+      if (checkIn && checkOut) {
+        const diff = Math.floor((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000);
+        if (diff === 0) return '<1 min';
+        if (diff < 60) return `${diff} min`;
+        const h = Math.floor(diff / 60);
+        const m = diff % 60;
+        return m > 0 ? `${h} h ${m} min` : `${h} h`;
+      }
+      return 'No informado';
+    }
+    if (mins === 0) return '<1 min';
+    if (mins < 60) return `${mins} min`;
     const h = Math.floor(mins / 60);
     const m = mins % 60;
-    return h > 0 ? `${h}h ${m}m` : `${m} minutos`;
+    return m > 0 ? `${h} h ${m} min` : `${h} h`;
   };
 
   if (loading) {
@@ -115,7 +129,7 @@ export default function VisitEntryDetailPage() {
 
   const isActive = !['cancelled', 'rectified'].includes(entry.status);
   const canSubmit = entry.status === 'draft';
-  const canApprove = entry.status === 'submitted';
+  const canApprove = entry.status === 'submitted' || entry.status === 'changes_requested';
 
   return (
     <DashboardLayout role="admin" title={`Asiento N.º ${entry.entry_number}`}>
@@ -241,7 +255,7 @@ export default function VisitEntryDetailPage() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Duración</p>
-                    <p className="font-medium">{formatDuration(entry.duration_minutes)}</p>
+                    <p className="font-medium">{formatDuration(entry.duration_minutes, entry.check_in_at, entry.check_out_at)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -276,10 +290,9 @@ export default function VisitEntryDetailPage() {
                     <div>
                       <p className="text-gray-500">Expediente</p>
                       <p className="font-medium">
-                        N.º {(entry.service_case as any).case_number}
-                        {(entry.service_case as any).numbering_mode === 'test' && (
-                          <span className="text-warning ml-1">(PRUEBA)</span>
-                        )}
+                        {(entry.service_case as any).numbering_mode === 'test'
+                          ? `PRUEBA N.º ${(entry.service_case as any).case_number}`
+                          : `N.º ${(entry.service_case as any).case_number}`}
                       </p>
                     </div>
                   </div>
@@ -290,7 +303,11 @@ export default function VisitEntryDetailPage() {
                     <div>
                       <p className="text-gray-500">Orden de servicio</p>
                       <Link to={`/admin/ordenes-servicio/${entry.service_order_id}`} className="font-medium text-blue-600 hover:underline">
-                        Ver orden →
+                        {entry.service_case
+                          ? ((entry.service_case as any).numbering_mode === 'test'
+                              ? `PRUEBA N.º ${(entry.service_case as any).case_number}`
+                              : `N.º ${(entry.service_case as any).case_number}`)
+                          : 'Ver orden →'}
                       </Link>
                     </div>
                   </div>

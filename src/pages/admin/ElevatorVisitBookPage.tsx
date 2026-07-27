@@ -14,7 +14,9 @@ import { Plus, Search, Eye, BookOpen, ArrowLeft } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default',
+  in_progress: 'info',
   submitted: 'info',
+  changes_requested: 'warning',
   approved: 'success',
   rectified: 'warning',
   cancelled: 'danger',

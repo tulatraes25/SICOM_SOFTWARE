@@ -11,11 +11,26 @@ import { Eye, BookOpen, Search, Clock } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default',
+  in_progress: 'info',
   submitted: 'info',
+  changes_requested: 'warning',
   approved: 'success',
   rectified: 'warning',
   cancelled: 'danger',
 };
+
+function formatCaseNumber(sc: any): string {
+  if (!sc) return '';
+  if (sc.numbering_mode === 'test') return `PRUEBA N.º ${sc.case_number}`;
+  return `N.º ${sc.case_number}`;
+}
+
+function formatMaintenanceId(entry: any): string {
+  if (entry.service_case) return formatCaseNumber(entry.service_case);
+  const type = entry.title || 'Mantenimiento';
+  const date = entry.visit_date ? new Date(entry.visit_date).toLocaleDateString('es-AR') : '';
+  return `${type} — ${date}`;
+}
 
 export default function VisitBookListPage() {
   const [entries, setEntries] = useState<any[]>([]);
@@ -36,14 +51,27 @@ export default function VisitBookListPage() {
 
   const formatTime = (ts: string | null | undefined) => {
     if (!ts) return '-';
-    return new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    return new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
-  const formatDuration = (mins: number | null | undefined) => {
-    if (!mins) return '-';
+  const formatDuration = (mins: number | null | undefined, checkIn?: string | null, checkOut?: string | null) => {
+    if (mins === null || mins === undefined) {
+      // Try to calculate from timestamps
+      if (checkIn && checkOut) {
+        const diff = Math.floor((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000);
+        if (diff === 0) return '<1 min';
+        if (diff < 60) return `${diff} min`;
+        const h = Math.floor(diff / 60);
+        const m = diff % 60;
+        return m > 0 ? `${h} h ${m} min` : `${h} h`;
+      }
+      return '-';
+    }
+    if (mins === 0) return '<1 min';
+    if (mins < 60) return `${mins} min`;
     const h = Math.floor(mins / 60);
     const m = mins % 60;
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    return m > 0 ? `${h} h ${m} min` : `${h} h`;
   };
 
   return (
@@ -133,10 +161,12 @@ export default function VisitBookListPage() {
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {entry.service_order ? (
                             <Link to={`/admin/ordenes-servicio/${entry.service_order_id}`} className="text-blue-600 hover:underline">
-                              {(entry.service_order as any).subject || 'Orden'}
+                              {entry.service_case
+                                ? formatCaseNumber(entry.service_case)
+                                : (entry.service_order as any).subject || 'Orden'}
                             </Link>
                           ) : entry.service_record_id ? (
-                            <span>Mant. #{entry.service_record_id.slice(0, 8)}</span>
+                            <span>{formatMaintenanceId(entry)}</span>
                           ) : '-'}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
@@ -146,7 +176,7 @@ export default function VisitBookListPage() {
                           {formatTime(entry.check_out_at)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
-                          {formatDuration(entry.duration_minutes)}
+                          {formatDuration(entry.duration_minutes, entry.check_in_at, entry.check_out_at)}
                         </td>
                         <td className="px-4 py-3">
                           <Badge variant={STATUS_BADGE[entry.status] || 'default'}>
