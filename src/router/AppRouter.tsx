@@ -50,6 +50,7 @@ import TechClaimDetailPage from '@/pages/technician/TechClaimDetailPage';
 import TechServiceOrdersPage from '@/pages/technician/TechServiceOrdersPage';
 import TechServiceOrderDetailPage from '@/pages/technician/TechServiceOrderDetailPage';
 import TechVisitsPage from '@/pages/technician/TechVisitsPage';
+import TechVisitDetailPage from '@/pages/technician/TechVisitDetailPage';
 
 // Supervisor
 import SupervisorDashboard from '@/pages/supervisor/SupervisorDashboard';
@@ -170,7 +171,7 @@ export default function AppRouter() {
         <Route
           path="/admin/ascensores/:elevatorId/libro/:entryId"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'supervisor', 'technician']}>
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
               <VisitEntryDetailPage />
             </ProtectedRoute>
           }
@@ -284,6 +285,7 @@ export default function AppRouter() {
         <Route path="/tecnico/ordenes" element={<ProtectedRoute allowedRoles={['technician', 'admin']}><TechServiceOrdersPage /></ProtectedRoute>} />
         <Route path="/tecnico/ordenes/:id" element={<ProtectedRoute allowedRoles={['technician', 'admin']}><TechServiceOrderDetailPage /></ProtectedRoute>} />
         <Route path="/tecnico/visitas" element={<ProtectedRoute allowedRoles={['technician', 'admin']}><TechVisitsPage /></ProtectedRoute>} />
+        <Route path="/tecnico/visitas/:entryId" element={<ProtectedRoute allowedRoles={['technician', 'admin']}><TechVisitDetailPage /></ProtectedRoute>} />
 
         {/* Supervisor routes */}
         <Route

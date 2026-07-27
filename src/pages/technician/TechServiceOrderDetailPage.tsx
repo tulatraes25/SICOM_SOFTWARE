@@ -35,6 +35,8 @@ export default function TechServiceOrderDetailPage() {
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressNote, setProgressNote] = useState('');
   const [progressType, setProgressType] = useState('update');
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [completionSummary, setCompletionSummary] = useState('');
 
   useEffect(() => { if (id) loadData(); }, [id]);
 
@@ -76,7 +78,7 @@ export default function TechServiceOrderDetailPage() {
             {order.status === 'assigned' && <Button onClick={() => handleAction(() => startOrder(id!))} disabled={actionLoading}><Play size={16} className="mr-2" /> Comenzar trabajo</Button>}
             {isChangesRequested && <Button onClick={() => handleAction(() => startOrder(id!))} disabled={actionLoading}><Play size={16} className="mr-2" /> Retomar trabajo</Button>}
             {['in_progress', 'visited'].includes(order.status) && <Button onClick={() => setShowProgressModal(true)}>Registrar Avance</Button>}
-            {['in_progress', 'visited'].includes(order.status) && <Button onClick={() => handleAction(() => completeOrder(id!))}><CheckCircle size={16} className="mr-2" /> Completar</Button>}
+            {['in_progress', 'visited'].includes(order.status) && <Button onClick={() => { setCompletionSummary((order as any).completion_summary || progress[progress.length - 1]?.note || ''); setShowCompleteModal(true); }}><CheckCircle size={16} className="mr-2" /> Completar</Button>}
             {isCompleted && <Button onClick={() => navigate('/tecnico/ordenes')}>Volver a Mis Órdenes</Button>}
           </div>
         </div>
@@ -161,6 +163,30 @@ export default function TechServiceOrderDetailPage() {
         </select>
         <textarea className="w-full border rounded px-3 py-2 text-sm resize-none" rows={3} value={progressNote} onChange={(e) => setProgressNote(e.target.value)} placeholder="Descripción..." />
         <div className="flex justify-end gap-2 mt-4"><Button variant="outline" onClick={() => setShowProgressModal(false)}>Cancelar</Button><Button onClick={() => handleAction(() => addProgress(id!, progressNote, progressType)).then(() => { setShowProgressModal(false); setProgressNote(''); })} disabled={!progressNote.trim() || actionLoading}>Registrar</Button></div>
+      </div></div>}
+
+      {showCompleteModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-xl max-w-md w-full p-6">
+        <h3 className="text-lg font-semibold mb-2">Completar orden de servicio</h3>
+        <p className="text-sm text-gray-500 mb-4">Describí las tareas realizadas y el resultado obtenido.</p>
+        <textarea
+          className="w-full border rounded px-3 py-2 text-sm resize-none"
+          rows={4}
+          value={completionSummary}
+          onChange={(e) => setCompletionSummary(e.target.value)}
+          placeholder="Resumen del trabajo realizado..."
+          minLength={5}
+          maxLength={2000}
+        />
+        <p className="text-xs text-gray-400 mt-1">{completionSummary.length}/2000</p>
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="outline" onClick={() => { setShowCompleteModal(false); setCompletionSummary(''); }}>Cancelar</Button>
+          <Button
+            onClick={() => handleAction(() => completeOrder(id!, completionSummary).then(() => { setShowCompleteModal(false); setCompletionSummary(''); }))}
+            disabled={completionSummary.trim().length < 5 || actionLoading}
+          >
+            Confirmar finalización
+          </Button>
+        </div>
       </div></div>}
     </DashboardLayout>
   );

@@ -72,7 +72,7 @@ export default function TechVisitsPage() {
             <td className="px-4 py-3 text-sm font-mono">{(e.elevator as any)?.code || '-'}</td>
             <td className="px-4 py-3 text-sm text-gray-600">{(e.elevator as any)?.building?.name || '-'}</td>
             <td className="px-4 py-3"><Badge variant={STATUS_BADGE[e.status]}>{STATUS_LABELS[e.status]}</Badge></td>
-            <td className="px-4 py-3"><Link to={`/admin/ascensores/${e.elevator_id}/libro/${e.id}`}><Button variant="ghost" size="sm"><Eye size={14} /></Button></Link></td>
+            <td className="px-4 py-3"><Link to={`/tecnico/visitas/${e.id}`}><Button variant="ghost" size="sm"><Eye size={14} /></Button></Link></td>
           </tr>)}
         </tbody></table></div></CardContent></Card>}
       </div>

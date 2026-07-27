@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { pdf } from '@react-pdf/renderer';
 import { supabase } from '@/config/supabase';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -10,7 +11,8 @@ import Select from '@/components/ui/Select';
 import { listEntriesByElevator } from '@/services/elevatorVisitBook.service';
 import { VISIT_ENTRY_TYPE_LABELS, VISIT_ENTRY_STATUS_LABELS } from '@/types/database';
 import type { ElevatorVisitEntry } from '@/types/database';
-import { Plus, Search, Eye, BookOpen, ArrowLeft } from 'lucide-react';
+import VisitBookPDF from '@/components/pdf/VisitBookPDF';
+import { Plus, Search, Eye, BookOpen, ArrowLeft, FileDown } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default',
@@ -41,6 +43,11 @@ export default function ElevatorVisitBookPage() {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfDateFrom, setPdfDateFrom] = useState('');
+  const [pdfDateTo, setPdfDateTo] = useState('');
+  const [pdfStatus, setPdfStatus] = useState('approved');
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
   useEffect(() => {
     if (elevatorId) loadElevator();
@@ -78,6 +85,62 @@ export default function ElevatorVisitBookPage() {
     }
   };
 
+  const handleGeneratePDF = async () => {
+    if (!elevator || !elevatorId) return;
+    setPdfGenerating(true);
+    try {
+      let query = supabase.from('elevator_visit_entries')
+        .select(`
+          *,
+          elevator:elevators(id, code, building:buildings(name, client:clients(name))),
+          technician:profiles!elevator_visit_entries_technician_id_fkey(full_name),
+          service_case:service_cases(id, case_number, numbering_mode)
+        `)
+        .eq('elevator_id', elevatorId)
+        .order('visit_date', { ascending: true })
+        .order('entry_number', { ascending: true });
+
+      if (pdfStatus) query = query.eq('status', pdfStatus);
+      if (pdfDateFrom) query = query.gte('visit_date', pdfDateFrom);
+      if (pdfDateTo) query = query.lte('visit_date', pdfDateTo);
+
+      const { data: pdfEntries } = await query;
+      if (!pdfEntries || pdfEntries.length === 0) {
+        alert('No hay asientos para el período seleccionado');
+        return;
+      }
+
+      const building = (elevator as any).building;
+      const client = building?.client;
+
+      const blob = await pdf(
+        <VisitBookPDF
+          elevatorCode={elevator.code}
+          buildingName={building?.name || '-'}
+          clientName={client?.name || '-'}
+          dateFrom={pdfDateFrom || '2026-07-01'}
+          dateTo={pdfDateTo || '2026-07-31'}
+          entries={pdfEntries}
+        />
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `libro-visitas-${elevator.code.toLowerCase()}-${(pdfDateFrom || '2026-07').slice(0, 7).replace('-', '-')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setShowPdfModal(false);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      alert('Error al generar PDF');
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
   return (
     <DashboardLayout role="admin" title="Libro de Visitas">
       <div className="space-y-6">
@@ -94,12 +157,17 @@ export default function ElevatorVisitBookPage() {
               {(elevator?.building as any)?.name || '...'} — {count} asiento(s)
             </p>
           </div>
-          <Link to={`/admin/ascensores/${elevatorId}/libro/nuevo`}>
-            <Button>
-              <Plus size={16} className="mr-2" />
-              Nuevo Asiento
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => { setPdfDateFrom('2026-07-01'); setPdfDateTo('2026-07-31'); setPdfStatus('approved'); setShowPdfModal(true); }}>
+              <FileDown size={16} className="mr-2" /> Generar PDF
             </Button>
-          </Link>
+            <Link to={`/admin/ascensores/${elevatorId}/libro/nuevo`}>
+              <Button>
+                <Plus size={16} className="mr-2" />
+                Nuevo Asiento
+              </Button>
+            </Link>
+          </div>
         </div>
 
         <Card>
@@ -189,6 +257,39 @@ export default function ElevatorVisitBookPage() {
           </CardContent>
         </Card>
       </div>
+
+      {showPdfModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">Generar Libro de Visitas PDF</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm text-gray-600">Fecha desde</label>
+                  <input type="date" value={pdfDateFrom} onChange={(e) => setPdfDateFrom(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Fecha hasta</label>
+                  <input type="date" value={pdfDateTo} onChange={(e) => setPdfDateTo(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm text-gray-600">Estado</label>
+                <select className="w-full border rounded px-3 py-2 text-sm" value={pdfStatus} onChange={(e) => setPdfStatus(e.target.value)}>
+                  <option value="">Todos</option>
+                  {Object.entries(VISIT_ENTRY_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <Button variant="outline" onClick={() => setShowPdfModal(false)}>Cancelar</Button>
+              <Button onClick={handleGeneratePDF} disabled={pdfGenerating}>
+                {pdfGenerating ? 'Generando...' : 'Generar y descargar'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

@@ -87,9 +87,18 @@ export default function VisitBookPDF({
     return '-';
   };
 
+  const hasTestEntries = entries.some(e => (e.service_case as any)?.numbering_mode === 'test' || ((e.service_case as any)?.case_number >= 1900 && (e.service_case as any)?.case_number <= 1999));
+
   return (
     <Document>
       <Page size={[842, 595]} style={styles.page}>
+        {hasTestEntries && (
+          <View style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#f59e0b', borderRadius: 4, padding: 6, marginBottom: 10 }}>
+            <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#92400e', textAlign: 'center' }}>
+              DOCUMENTO DE PRUEBA — SIN VALIDEZ COMERCIAL
+            </Text>
+          </View>
+        )}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.companyName}>SICOM Patagonia SRL</Text>
@@ -137,7 +146,7 @@ export default function VisitBookPDF({
               {(entry.technician as any)?.full_name || '-'}
             </Text>
             <Text style={[styles.cellText, styles.colDesc]}>
-              {entry.title || entry.description?.slice(0, 40) || '-'}
+              {entry.work_performed || entry.title || entry.description?.slice(0, 40) || '-'}
             </Text>
             <Text style={[styles.cellText, styles.colIn]}>{formatTime(entry.check_in_at)}</Text>
             <Text style={[styles.cellText, styles.colOut]}>{formatTime(entry.check_out_at)}</Text>
