@@ -14,6 +14,20 @@ import type { ElevatorVisitEntry } from '@/types/database';
 import VisitBookPDF from '@/components/pdf/VisitBookPDF';
 import { Plus, Search, Eye, BookOpen, ArrowLeft, FileDown } from 'lucide-react';
 
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getCurrentMonthRange(): { from: string; to: string } {
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { from: toDateInputValue(firstDay), to: toDateInputValue(lastDay) };
+}
+
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default',
   in_progress: 'info',
@@ -85,8 +99,21 @@ export default function ElevatorVisitBookPage() {
     }
   };
 
+  const [pdfError, setPdfError] = useState('');
+
   const handleGeneratePDF = async () => {
     if (!elevator || !elevatorId) return;
+    setPdfError('');
+
+    if (!pdfDateFrom || !pdfDateTo) {
+      setPdfError('Indicá el período del informe');
+      return;
+    }
+    if (pdfDateFrom > pdfDateTo) {
+      setPdfError('La fecha desde no puede ser posterior a la fecha hasta');
+      return;
+    }
+
     setPdfGenerating(true);
     try {
       let query = supabase.from('elevator_visit_entries')
@@ -101,12 +128,12 @@ export default function ElevatorVisitBookPage() {
         .order('entry_number', { ascending: true });
 
       if (pdfStatus) query = query.eq('status', pdfStatus);
-      if (pdfDateFrom) query = query.gte('visit_date', pdfDateFrom);
-      if (pdfDateTo) query = query.lte('visit_date', pdfDateTo);
+      query = query.gte('visit_date', pdfDateFrom).lte('visit_date', pdfDateTo);
 
-      const { data: pdfEntries } = await query;
+      const { data: pdfEntries, error: pdfEntriesError } = await query;
+      if (pdfEntriesError) throw pdfEntriesError;
       if (!pdfEntries || pdfEntries.length === 0) {
-        alert('No hay asientos para el período seleccionado');
+        setPdfError('No hay asientos para el período seleccionado');
         return;
       }
 
@@ -118,16 +145,22 @@ export default function ElevatorVisitBookPage() {
           elevatorCode={elevator.code}
           buildingName={building?.name || '-'}
           clientName={client?.name || '-'}
-          dateFrom={pdfDateFrom || '2026-07-01'}
-          dateTo={pdfDateTo || '2026-07-31'}
+          dateFrom={pdfDateFrom}
+          dateTo={pdfDateTo}
           entries={pdfEntries}
         />
       ).toBlob();
 
+      const normalizedCode = elevator.code.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const sameMonth = pdfDateFrom.slice(0, 7) === pdfDateTo.slice(0, 7);
+      const filename = sameMonth
+        ? `libro-visitas-${normalizedCode}-${pdfDateFrom.slice(0, 7)}.pdf`
+        : `libro-visitas-${normalizedCode}-${pdfDateFrom}-a-${pdfDateTo}.pdf`;
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `libro-visitas-${elevator.code.toLowerCase()}-${(pdfDateFrom || '2026-07').slice(0, 7).replace('-', '-')}.pdf`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -135,7 +168,7 @@ export default function ElevatorVisitBookPage() {
       setShowPdfModal(false);
     } catch (err) {
       console.error('Error generating PDF:', err);
-      alert('Error al generar PDF');
+      setPdfError('Error al generar el PDF');
     } finally {
       setPdfGenerating(false);
     }
@@ -158,7 +191,7 @@ export default function ElevatorVisitBookPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => { setPdfDateFrom('2026-07-01'); setPdfDateTo('2026-07-31'); setPdfStatus('approved'); setShowPdfModal(true); }}>
+            <Button variant="outline" onClick={() => { const range = getCurrentMonthRange(); setPdfDateFrom(range.from); setPdfDateTo(range.to); setPdfStatus('approved'); setPdfError(''); setShowPdfModal(true); }}>
               <FileDown size={16} className="mr-2" /> Generar PDF
             </Button>
             <Link to={`/admin/ascensores/${elevatorId}/libro/nuevo`}>
@@ -281,6 +314,7 @@ export default function ElevatorVisitBookPage() {
                 </select>
               </div>
             </div>
+            {pdfError && <p className="text-sm text-danger mt-2">{pdfError}</p>}
             <div className="flex justify-end gap-2 mt-6">
               <Button variant="outline" onClick={() => setShowPdfModal(false)}>Cancelar</Button>
               <Button onClick={handleGeneratePDF} disabled={pdfGenerating}>
