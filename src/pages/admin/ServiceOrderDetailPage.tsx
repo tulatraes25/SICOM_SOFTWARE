@@ -70,17 +70,26 @@ export default function ServiceOrderDetailPage() {
     } catch (err: any) { setError(err?.message || 'Error'); } finally { setLoading(false); }
   };
 
-  const handleAction = async (action: () => Promise<void>, redirect?: string) => {
+  const handleAction = async (action: () => Promise<void>, redirect?: string): Promise<boolean> => {
     setActionLoading(true); setError('');
-    try { await action(); await loadData(); if (redirect) setTimeout(() => window.location.href = redirect, 800); }
-    catch (err: any) { setError(err?.message || 'Error'); } finally { setActionLoading(false); }
+    try {
+      await action();
+      await loadData();
+      if (redirect) navigate(redirect, { replace: true });
+      return true;
+    } catch (err: any) {
+      setError(err?.message || 'Error');
+      return false;
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleReady = () => { if (!confirm('¿Marcar como listo?')) return; handleAction(() => markReady(id!)); };
-  const handleAssign = () => handleAction(() => assignTechnicians(id!, selectedTechs)).then(() => { setShowAssignModal(false); setSelectedTechs([]); });
-  const handleApprove = () => handleAction(() => approveOrder(id!, approveNotes), '/admin/revision-servicios').then(() => { setShowApproveModal(false); setApproveNotes(''); });
-  const handleCorrections = () => handleAction(() => requestCorrections(id!, correctionsNotes), '/admin/revision-servicios').then(() => { setShowCorrectionsModal(false); setCorrectionsNotes(''); });
-  const handleCancel = () => handleAction(() => cancelOrder(id!, cancelReason)).then(() => { setShowCancelModal(false); setCancelReason(''); });
+  const handleAssign = () => handleAction(() => assignTechnicians(id!, selectedTechs)).then((ok) => { if (ok) { setShowAssignModal(false); setSelectedTechs([]); } });
+  const handleApprove = () => handleAction(() => approveOrder(id!, approveNotes), '/admin/mantenimientos').then((ok) => { if (ok) { setShowApproveModal(false); setApproveNotes(''); } });
+  const handleCorrections = () => handleAction(() => requestCorrections(id!, correctionsNotes), '/admin/mantenimientos').then((ok) => { if (ok) { setShowCorrectionsModal(false); setCorrectionsNotes(''); } });
+  const handleCancel = () => handleAction(() => cancelOrder(id!, cancelReason)).then((ok) => { if (ok) { setShowCancelModal(false); setCancelReason(''); } });
 
   const handleGeneratePDF = async () => {
     if (!order || order.status !== 'approved') return;

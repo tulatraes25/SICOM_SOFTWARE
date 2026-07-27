@@ -110,6 +110,7 @@ export default function AppRouter() {
             </ProtectedRoute>
           }
         />
+        <Route path="/admin/revision-servicios" element={<Navigate to="/admin/mantenimientos" replace />} />
         <Route
           path="/admin/mantenimientos/:id"
           element={
