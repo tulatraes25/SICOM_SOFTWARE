@@ -12,6 +12,16 @@ const STATUS_MAP: Record<string, string> = {
   cancelled: 'Cancelado', sent: 'Enviado', generated: 'Generado', reviewed: 'Revisado',
 };
 
+const SERVICE_TYPE_MAP: Record<string, string> = {
+  preventive: 'Preventivo', correctivo: 'Correctivo', emergency: 'Emergencia',
+  corrective: 'Correctivo', other: 'Otro', otro: 'Otro',
+};
+
+const PRIORITY_MAP: Record<string, string> = {
+  low: 'Baja', normal: 'Normal', high: 'Alta', urgent: 'Urgente',
+  baja: 'Baja', alta: 'Alta', urgente: 'Urgente',
+};
+
 const s = StyleSheet.create({
   page: { padding: 0, fontFamily: 'Helvetica', fontSize: 9, color: C.gray800, paddingBottom: 60 },
   header: { paddingHorizontal: 35, paddingTop: 20, paddingBottom: 10 },
@@ -117,6 +127,8 @@ export default function MonthlyReportPDF({ report, maintenances, serviceOrders, 
     return cm === 'test' ? `PRUEBA N.º ${cn}` : `N.º ${cn}`;
   };
 
+  const isTestDocument = report.numbering_mode === 'test' || (report.report_year && report.report_year >= 1900 && report.report_year <= 1999);
+
   return (
     <Document>
       <Page size="A4" style={s.page}>
@@ -137,7 +149,7 @@ export default function MonthlyReportPDF({ report, maintenances, serviceOrders, 
           <Text style={s.titleText}>INFORME TÉCNICO MENSUAL</Text>
           <Text style={s.titlePeriod}>{periodLabel} — {elevatorCode} — v{version}</Text>
         </View>
-        {report.numbering_mode === 'test' && (
+        {isTestDocument && (
           <View style={s.testBanner}><Text style={s.testText}>DOCUMENTO DE PRUEBA — SIN VALIDEZ COMERCIAL</Text></View>
         )}
 
@@ -173,7 +185,7 @@ export default function MonthlyReportPDF({ report, maintenances, serviceOrders, 
               {maintenances.map((m: any, i: number) => (
                 <View key={i} style={s.entryCard}>
                   <View style={s.entryHeader}>
-                    <Text style={s.entryType}>{m.service_type}</Text>
+                    <Text style={s.entryType}>{SERVICE_TYPE_MAP[m.service_type] || m.service_type}</Text>
                     <View style={s.statusPill}><Text style={s.statusPillText}>{STATUS_MAP[m.status] || m.status}</Text></View>
                   </View>
                   <View style={s.entryField}><Text style={s.entryLabel}>Fecha</Text><Text style={s.entryValue}>{fmtDate(m.service_date)}</Text></View>
@@ -196,7 +208,7 @@ export default function MonthlyReportPDF({ report, maintenances, serviceOrders, 
                   </View>
                   <View style={s.entryField}><Text style={s.entryLabel}>Fecha</Text><Text style={s.entryValue}>{fmtDate(o.order_date)}</Text></View>
                   <View style={s.entryField}><Text style={s.entryLabel}>Tipo</Text><Text style={s.entryValue}>{o.order_type}</Text></View>
-                  <View style={s.entryField}><Text style={s.entryLabel}>Prioridad</Text><Text style={s.entryValue}>{o.priority}</Text></View>
+                  <View style={s.entryField}><Text style={s.entryLabel}>Prioridad</Text><Text style={s.entryValue}>{PRIORITY_MAP[o.priority] || o.priority}</Text></View>
                   <View style={s.entryField}><Text style={s.entryLabel}>Trabajo</Text><Text style={s.entryValue}>{o.work_requested || 'N/D'}</Text></View>
                 </View>
               ))}
@@ -238,7 +250,8 @@ export default function MonthlyReportPDF({ report, maintenances, serviceOrders, 
             <View style={s.sigBlock}>
               {signatureUrl ? <Image src={signatureUrl} style={s.sigImg} /> : <View style={s.sigLine} />}
               <Text style={s.sigName}>{signerName || 'Administrador'}</Text>
-              <Text style={s.sigRole}>SICOM Patagonia SRL</Text>
+              <Text style={s.sigRole}>Administrador</Text>
+              <Text style={[s.sigRole, { marginTop: 1 }]}>SICOM Patagonia SRL</Text>
             </View>
           </View>
         </View>
