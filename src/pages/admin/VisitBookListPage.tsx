@@ -26,14 +26,32 @@ export default function VisitBookListPage() {
   const loadEntries = async () => {
     setLoading(true);
     try {
+      // Simple query first to verify data exists
       let query = supabase.from('elevator_visit_entries')
-        .select('*, elevator:elevators(code, building:buildings(name)), technician:profiles!elevator_visit_entries_technician_id_fkey(full_name)')
+        .select('id, entry_number, visit_date, elevator_id, technician_id, status, service_order_id, service_record_id')
         .order('visit_date', { ascending: false })
         .order('entry_number', { ascending: false });
-      if (search) query = query.or(`elevator:elevators.code.ilike.%${search}%,elevator:buildings.name.ilike.%${search}%`);
-      const { data } = await query;
-      setEntries(data || []);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+      const { data, error } = await query;
+      if (error) {
+        console.error('[VisitBook] Query error:', error);
+        setEntries([]);
+      } else {
+        // Load related data separately if needed
+        const enriched = await Promise.all((data || []).map(async (entry: any) => {
+          let elevator = null, technician = null;
+          if (entry.elevator_id) {
+            const { data: e } = await supabase.from('elevators').select('id, code, building:buildings(name)').eq('id', entry.elevator_id).single();
+            elevator = e;
+          }
+          if (entry.technician_id) {
+            const { data: t } = await supabase.from('profiles').select('full_name').eq('id', entry.technician_id).single();
+            technician = t;
+          }
+          return { ...entry, elevator, technician };
+        }));
+        setEntries(enriched);
+      }
+    } catch (err) { console.error('[VisitBook] Error:', err); } finally { setLoading(false); }
   };
 
   return (
