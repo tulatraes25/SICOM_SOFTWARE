@@ -13,8 +13,11 @@ const STATUS_MAP: Record<string, string> = {
 };
 
 const SERVICE_TYPE_MAP: Record<string, string> = {
-  preventive: 'Preventivo', correctivo: 'Correctivo', emergency: 'Emergencia',
-  corrective: 'Correctivo', other: 'Otro', otro: 'Otro',
+  preventive: 'Preventivo', preventivo: 'Preventivo',
+  correctivo: 'Correctivo', corrective: 'Correctivo',
+  emergency: 'Emergencia', emergencia: 'Emergencia',
+  inspection: 'Inspección', inspeccion: 'Inspección',
+  other: 'Otro', otro: 'Otro',
 };
 
 const PRIORITY_MAP: Record<string, string> = {
