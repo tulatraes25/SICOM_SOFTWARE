@@ -349,7 +349,9 @@ export interface ElevatorVisitEntry {
   reviewer_signature_id?: string;
   check_in_at?: string;
   check_out_at?: string;
+  active_session_started_at?: string;
   duration_minutes?: number;
+  duration_seconds?: number;
   created_at: string;
   updated_at: string;
   // Relations

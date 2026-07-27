@@ -28,8 +28,43 @@ function formatCaseNumber(sc: any): string {
 function formatMaintenanceId(entry: any): string {
   if (entry.service_case) return formatCaseNumber(entry.service_case);
   const type = entry.title || 'Mantenimiento';
-  const date = entry.visit_date ? new Date(entry.visit_date).toLocaleDateString('es-AR') : '';
+  const date = entry.visit_date ? formatDateOnly(entry.visit_date) : '';
   return `${type} — ${date}`;
+}
+
+function formatDateOnly(value?: string | null): string {
+  if (!value) return '-';
+  const datePart = value.slice(0, 10);
+  const [year, month, day] = datePart.split('-');
+  if (!year || !month || !day) return value;
+  return `${Number(day)}/${Number(month)}/${year}`;
+}
+
+function formatVisitDuration(durationSeconds?: number | null, durationMinutes?: number | null, checkIn?: string | null, checkOut?: string | null): string {
+  if (durationSeconds !== null && durationSeconds !== undefined && durationSeconds > 0) {
+    if (durationSeconds < 60) return '<1 min';
+    if (durationSeconds < 120) return '1 min';
+    if (durationSeconds < 3600) return `${Math.floor(durationSeconds / 60)} min`;
+    const h = Math.floor(durationSeconds / 3600);
+    const m = Math.floor((durationSeconds % 3600) / 60);
+    return m > 0 ? `${h} h ${m} min` : `${h} h`;
+  }
+  if (durationMinutes !== null && durationMinutes !== undefined && durationMinutes > 0) {
+    if (durationMinutes < 60) return `${durationMinutes} min`;
+    const h = Math.floor(durationMinutes / 60);
+    const m = durationMinutes % 60;
+    return m > 0 ? `${h} h ${m} min` : `${h} h`;
+  }
+  if (checkIn && checkOut) {
+    const diff = Math.floor((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 1000);
+    if (diff < 60) return '<1 min';
+    if (diff < 120) return '1 min';
+    if (diff < 3600) return `${Math.floor(diff / 60)} min`;
+    const h = Math.floor(diff / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    return m > 0 ? `${h} h ${m} min` : `${h} h`;
+  }
+  return '-';
 }
 
 export default function VisitBookListPage() {
@@ -54,24 +89,8 @@ export default function VisitBookListPage() {
     return new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
-  const formatDuration = (mins: number | null | undefined, checkIn?: string | null, checkOut?: string | null) => {
-    if (mins === null || mins === undefined) {
-      // Try to calculate from timestamps
-      if (checkIn && checkOut) {
-        const diff = Math.floor((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000);
-        if (diff === 0) return '<1 min';
-        if (diff < 60) return `${diff} min`;
-        const h = Math.floor(diff / 60);
-        const m = diff % 60;
-        return m > 0 ? `${h} h ${m} min` : `${h} h`;
-      }
-      return '-';
-    }
-    if (mins === 0) return '<1 min';
-    if (mins < 60) return `${mins} min`;
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return m > 0 ? `${h} h ${m} min` : `${h} h`;
+  const formatDuration = (entry: any) => {
+    return formatVisitDuration(entry.duration_seconds, entry.duration_minutes, entry.check_in_at, entry.check_out_at);
   };
 
   return (
@@ -144,7 +163,7 @@ export default function VisitBookListPage() {
                           N.º {entry.entry_number}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
-                          {new Date(entry.visit_date).toLocaleDateString('es-AR')}
+                          {formatDateOnly(entry.visit_date)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {(entry.elevator as any)?.code || '-'}
@@ -176,7 +195,7 @@ export default function VisitBookListPage() {
                           {formatTime(entry.check_out_at)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
-                          {formatDuration(entry.duration_minutes, entry.check_in_at, entry.check_out_at)}
+                          {formatDuration(entry)}
                         </td>
                         <td className="px-4 py-3">
                           <Badge variant={STATUS_BADGE[entry.status] || 'default'}>

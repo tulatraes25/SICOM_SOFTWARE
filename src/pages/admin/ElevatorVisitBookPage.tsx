@@ -155,7 +155,7 @@ export default function ElevatorVisitBookPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
-                          {new Date(entry.visit_date).toLocaleDateString('es-AR')}
+                          {entry.visit_date?.slice(0, 10).split('-').reverse().join('/') || '-'}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {VISIT_ENTRY_TYPE_LABELS[entry.entry_type]}

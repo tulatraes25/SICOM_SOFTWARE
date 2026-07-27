@@ -71,28 +71,44 @@ export default function VisitEntryDetailPage() {
     });
   };
 
+  const formatDateOnly = (value?: string | null): string => {
+    if (!value) return '-';
+    const datePart = value.slice(0, 10);
+    const [year, month, day] = datePart.split('-');
+    if (!year || !month || !day) return value;
+    return `${Number(day)}/${Number(month)}/${year}`;
+  };
+
   const formatTime = (ts: string | null | undefined) => {
     if (!ts) return 'No informado';
     return new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
-  const formatDuration = (mins: number | null | undefined, checkIn?: string | null, checkOut?: string | null) => {
-    if (mins === null || mins === undefined) {
-      if (checkIn && checkOut) {
-        const diff = Math.floor((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000);
-        if (diff === 0) return '<1 min';
-        if (diff < 60) return `${diff} min`;
-        const h = Math.floor(diff / 60);
-        const m = diff % 60;
-        return m > 0 ? `${h} h ${m} min` : `${h} h`;
-      }
-      return 'No informado';
+  const formatDuration = (entry: any): string => {
+    if (entry.duration_seconds !== null && entry.duration_seconds !== undefined && entry.duration_seconds > 0) {
+      if (entry.duration_seconds < 60) return '<1 min';
+      if (entry.duration_seconds < 120) return '1 min';
+      if (entry.duration_seconds < 3600) return `${Math.floor(entry.duration_seconds / 60)} min`;
+      const h = Math.floor(entry.duration_seconds / 3600);
+      const m = Math.floor((entry.duration_seconds % 3600) / 60);
+      return m > 0 ? `${h} h ${m} min` : `${h} h`;
     }
-    if (mins === 0) return '<1 min';
-    if (mins < 60) return `${mins} min`;
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return m > 0 ? `${h} h ${m} min` : `${h} h`;
+    if (entry.duration_minutes !== null && entry.duration_minutes !== undefined && entry.duration_minutes > 0) {
+      if (entry.duration_minutes < 60) return `${entry.duration_minutes} min`;
+      const h = Math.floor(entry.duration_minutes / 60);
+      const m = entry.duration_minutes % 60;
+      return m > 0 ? `${h} h ${m} min` : `${h} h`;
+    }
+    if (entry.check_in_at && entry.check_out_at) {
+      const diff = Math.floor((new Date(entry.check_out_at).getTime() - new Date(entry.check_in_at).getTime()) / 1000);
+      if (diff < 60) return '<1 min';
+      if (diff < 120) return '1 min';
+      if (diff < 3600) return `${Math.floor(diff / 60)} min`;
+      const h = Math.floor(diff / 3600);
+      const m = Math.floor((diff % 3600) / 60);
+      return m > 0 ? `${h} h ${m} min` : `${h} h`;
+    }
+    return 'No informado';
   };
 
   if (loading) {
@@ -188,7 +204,7 @@ export default function VisitEntryDetailPage() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Fecha de visita</p>
-                    <p className="font-medium">{new Date(entry.visit_date).toLocaleDateString('es-AR')}</p>
+                    <p className="font-medium">{formatDateOnly(entry.visit_date)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Origen</p>
@@ -255,7 +271,7 @@ export default function VisitEntryDetailPage() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Duración</p>
-                    <p className="font-medium">{formatDuration(entry.duration_minutes, entry.check_in_at, entry.check_out_at)}</p>
+                    <p className="font-medium">{formatDuration(entry)}</p>
                   </div>
                 </div>
               </CardContent>

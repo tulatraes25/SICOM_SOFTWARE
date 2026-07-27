@@ -62,9 +62,10 @@ interface ServiceOrderReportPDFProps {
 const EVENT_LABELS: Record<string, string> = {
   order_created: 'Orden creada', marked_ready: 'Marcada como lista',
   technician_assigned: 'Técnico asignado', order_started: 'Trabajo iniciado',
-  progress_added: 'Avance registrado', order_completed: 'Trabajo completado',
-  corrections_requested: 'Correcciones solicitadas', order_reopened: 'Trabajo retomado',
-  order_approved: 'Orden aprobada', order_cancelled: 'Orden cancelada',
+  visit_registered: 'Visita registrada', progress_added: 'Avance registrado',
+  order_completed: 'Trabajo completado', corrections_requested: 'Correcciones solicitadas',
+  order_reopened: 'Trabajo retomado', order_approved: 'Orden aprobada',
+  order_cancelled: 'Orden cancelada',
 };
 
 export default function ServiceOrderReportPDF({ order, progress, events, isTest, signatureUrl, signerName }: ServiceOrderReportPDFProps) {

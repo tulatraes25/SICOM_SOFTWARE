@@ -60,23 +60,31 @@ export default function VisitBookPDF({
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
   };
 
-  const formatDuration = (mins: number | null | undefined, checkIn?: string | null, checkOut?: string | null) => {
-    if (mins === null || mins === undefined) {
-      if (checkIn && checkOut) {
-        const diff = Math.floor((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000);
-        if (diff === 0) return '<1 min';
-        if (diff < 60) return `${diff} min`;
-        const h = Math.floor(diff / 60);
-        const m = diff % 60;
-        return m > 0 ? `${h} h ${m} min` : `${h} h`;
-      }
-      return '-';
+  const formatDuration = (entry: any) => {
+    if (entry.duration_seconds !== null && entry.duration_seconds !== undefined && entry.duration_seconds > 0) {
+      if (entry.duration_seconds < 60) return '<1 min';
+      if (entry.duration_seconds < 120) return '1 min';
+      if (entry.duration_seconds < 3600) return `${Math.floor(entry.duration_seconds / 60)} min`;
+      const h = Math.floor(entry.duration_seconds / 3600);
+      const m = Math.floor((entry.duration_seconds % 3600) / 60);
+      return m > 0 ? `${h} h ${m} min` : `${h} h`;
     }
-    if (mins === 0) return '<1 min';
-    if (mins < 60) return `${mins} min`;
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return m > 0 ? `${h} h ${m} min` : `${h} h`;
+    if (entry.duration_minutes !== null && entry.duration_minutes !== undefined && entry.duration_minutes > 0) {
+      if (entry.duration_minutes < 60) return `${entry.duration_minutes} min`;
+      const h = Math.floor(entry.duration_minutes / 60);
+      const m = entry.duration_minutes % 60;
+      return m > 0 ? `${h} h ${m} min` : `${h} h`;
+    }
+    if (entry.check_in_at && entry.check_out_at) {
+      const diff = Math.floor((new Date(entry.check_out_at).getTime() - new Date(entry.check_in_at).getTime()) / 1000);
+      if (diff < 60) return '<1 min';
+      if (diff < 120) return '1 min';
+      if (diff < 3600) return `${Math.floor(diff / 60)} min`;
+      const h = Math.floor(diff / 3600);
+      const m = Math.floor((diff % 3600) / 60);
+      return m > 0 ? `${h} h ${m} min` : `${h} h`;
+    }
+    return '-';
   };
 
   return (
@@ -133,7 +141,7 @@ export default function VisitBookPDF({
             </Text>
             <Text style={[styles.cellText, styles.colIn]}>{formatTime(entry.check_in_at)}</Text>
             <Text style={[styles.cellText, styles.colOut]}>{formatTime(entry.check_out_at)}</Text>
-            <Text style={[styles.cellText, styles.colDur]}>{formatDuration(entry.duration_minutes, entry.check_in_at, entry.check_out_at)}</Text>
+            <Text style={[styles.cellText, styles.colDur]}>{formatDuration(entry)}</Text>
             <Text style={[styles.cellText, styles.colStatus]}>{(VISIT_ENTRY_STATUS_LABELS as Record<string, string>)[entry.status] || entry.status}</Text>
           </View>
         ))}

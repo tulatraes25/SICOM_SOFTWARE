@@ -68,7 +68,7 @@ export default function TechVisitsPage() {
         </tr></thead><tbody>
           {entries.map((e) => <tr key={e.id} className="border-b border-gray-100 hover:bg-gray-50">
             <td className="px-4 py-3 font-mono font-semibold">N.º {e.entry_number}</td>
-            <td className="px-4 py-3 text-sm">{new Date(e.visit_date).toLocaleDateString('es-AR')}</td>
+            <td className="px-4 py-3 text-sm">{e.visit_date?.slice(0, 10).split('-').reverse().join('/') || '-'}</td>
             <td className="px-4 py-3 text-sm font-mono">{(e.elevator as any)?.code || '-'}</td>
             <td className="px-4 py-3 text-sm text-gray-600">{(e.elevator as any)?.building?.name || '-'}</td>
             <td className="px-4 py-3"><Badge variant={STATUS_BADGE[e.status]}>{STATUS_LABELS[e.status]}</Badge></td>
