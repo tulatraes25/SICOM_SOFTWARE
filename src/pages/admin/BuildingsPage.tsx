@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { listBuildings, searchBuildings, deactivateBuilding } from '@/services/buildings.service';
 import { listClients } from '@/services/clients.service';
 import { createAuditLog } from '@/services/audit.service';
@@ -9,7 +10,7 @@ import Badge from '@/components/ui/Badge';
 import Select from '@/components/ui/Select';
 import BuildingForm from './BuildingForm';
 import type { Building, Client } from '@/types/database';
-import { Plus, Search, Edit, Building2 } from 'lucide-react';
+import { Plus, Search, Edit, Building2, BookOpen } from 'lucide-react';
 
 export default function BuildingsPage() {
   const [buildings, setBuildings] = useState<Building[]>([]);
@@ -174,6 +175,11 @@ export default function BuildingsPage() {
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex justify-end gap-2">
+                            <Link to={`/admin/libro-visitas?buildingId=${building.id}`}>
+                              <Button size="sm" variant="ghost">
+                                <BookOpen size={16} />
+                              </Button>
+                            </Link>
                             <Button
                               size="sm"
                               variant="ghost"

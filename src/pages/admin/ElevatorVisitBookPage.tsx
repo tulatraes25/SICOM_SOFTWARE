@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { pdf } from '@react-pdf/renderer';
 import { supabase } from '@/config/supabase';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -11,22 +10,8 @@ import Select from '@/components/ui/Select';
 import { listEntriesByElevator } from '@/services/elevatorVisitBook.service';
 import { VISIT_ENTRY_TYPE_LABELS, VISIT_ENTRY_STATUS_LABELS } from '@/types/database';
 import type { ElevatorVisitEntry } from '@/types/database';
-import VisitBookPDF from '@/components/pdf/VisitBookPDF';
+import VisitBookPdfModal from '@/components/pdf/VisitBookPdfModal';
 import { Plus, Search, Eye, BookOpen, ArrowLeft, FileDown } from 'lucide-react';
-
-function toDateInputValue(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function getCurrentMonthRange(): { from: string; to: string } {
-  const now = new Date();
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { from: toDateInputValue(firstDay), to: toDateInputValue(lastDay) };
-}
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default',
@@ -58,10 +43,6 @@ export default function ElevatorVisitBookPage() {
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [showPdfModal, setShowPdfModal] = useState(false);
-  const [pdfDateFrom, setPdfDateFrom] = useState('');
-  const [pdfDateTo, setPdfDateTo] = useState('');
-  const [pdfStatus, setPdfStatus] = useState('approved');
-  const [pdfGenerating, setPdfGenerating] = useState(false);
 
   useEffect(() => {
     if (elevatorId) loadElevator();
@@ -99,103 +80,6 @@ export default function ElevatorVisitBookPage() {
     }
   };
 
-  const [pdfError, setPdfError] = useState('');
-
-  const handleGeneratePDF = async () => {
-    if (!elevator || !elevatorId) return;
-    setPdfError('');
-
-    if (!pdfDateFrom || !pdfDateTo) {
-      setPdfError('Indicá el período del informe');
-      return;
-    }
-    if (pdfDateFrom > pdfDateTo) {
-      setPdfError('La fecha desde no puede ser posterior a la fecha hasta');
-      return;
-    }
-
-    setPdfGenerating(true);
-    try {
-      let query = supabase.from('elevator_visit_entries')
-        .select(`
-          *,
-          elevator:elevators(id, code, building:buildings(name, client:clients(name))),
-          technician:profiles!elevator_visit_entries_technician_id_fkey(full_name),
-          service_case:service_cases(id, case_number, numbering_mode)
-        `)
-        .eq('elevator_id', elevatorId)
-        .order('visit_date', { ascending: true })
-        .order('entry_number', { ascending: true });
-
-      if (pdfStatus) query = query.eq('status', pdfStatus);
-      query = query.gte('visit_date', pdfDateFrom).lte('visit_date', pdfDateTo);
-
-      const { data: pdfEntries, error: pdfEntriesError } = await query;
-      if (pdfEntriesError) throw pdfEntriesError;
-      if (!pdfEntries || pdfEntries.length === 0) {
-        setPdfError('No hay asientos para el período seleccionado');
-        return;
-      }
-
-      // Enrich with service records and progress for summaries
-      const enriched = await Promise.all(pdfEntries.map(async (entry: any) => {
-        if (entry.service_record_id) {
-          const { data: sr } = await supabase.from('service_records')
-            .select('service_type, service_date, description, technical_report, observations, final_report_text')
-            .eq('id', entry.service_record_id).maybeSingle();
-          entry._serviceRecord = sr;
-        }
-        if (entry.service_order_id) {
-          const { data: so } = await supabase.from('service_orders')
-            .select('completion_summary')
-            .eq('id', entry.service_order_id).maybeSingle();
-          entry._serviceOrder = so;
-          const { data: prog } = await supabase.from('service_order_progress')
-            .select('note, progress_type')
-            .eq('service_order_id', entry.service_order_id)
-            .order('created_at', { ascending: true });
-          entry._progress = prog;
-        }
-        return entry;
-      }));
-
-      const building = (elevator as any).building;
-      const client = building?.client;
-
-      const blob = await pdf(
-        <VisitBookPDF
-          elevatorCode={elevator.code}
-          buildingName={building?.name || '-'}
-          clientName={client?.name || '-'}
-          dateFrom={pdfDateFrom}
-          dateTo={pdfDateTo}
-          entries={enriched}
-        />
-      ).toBlob();
-
-      const normalizedCode = elevator.code.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-      const sameMonth = pdfDateFrom.slice(0, 7) === pdfDateTo.slice(0, 7);
-      const filename = sameMonth
-        ? `libro-visitas-${normalizedCode}-${pdfDateFrom.slice(0, 7)}.pdf`
-        : `libro-visitas-${normalizedCode}-${pdfDateFrom}-a-${pdfDateTo}.pdf`;
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      setShowPdfModal(false);
-    } catch (err) {
-      console.error('Error generating PDF:', err);
-      setPdfError('Error al generar el PDF');
-    } finally {
-      setPdfGenerating(false);
-    }
-  };
-
   return (
     <DashboardLayout role="admin" title="Libro de Visitas">
       <div className="space-y-6">
@@ -213,7 +97,7 @@ export default function ElevatorVisitBookPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => { const range = getCurrentMonthRange(); setPdfDateFrom(range.from); setPdfDateTo(range.to); setPdfStatus('approved'); setPdfError(''); setShowPdfModal(true); }}>
+            <Button variant="outline" onClick={() => setShowPdfModal(true)}>
               <FileDown size={16} className="mr-2" /> Generar PDF
             </Button>
             <Link to={`/admin/ascensores/${elevatorId}/libro/nuevo`}>
@@ -314,37 +198,10 @@ export default function ElevatorVisitBookPage() {
       </div>
 
       {showPdfModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold mb-4">Generar Libro de Visitas PDF</h3>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm text-gray-600">Fecha desde</label>
-                  <input type="date" value={pdfDateFrom} onChange={(e) => setPdfDateFrom(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Fecha hasta</label>
-                  <input type="date" value={pdfDateTo} onChange={(e) => setPdfDateTo(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Estado</label>
-                <select className="w-full border rounded px-3 py-2 text-sm" value={pdfStatus} onChange={(e) => setPdfStatus(e.target.value)}>
-                  <option value="">Todos</option>
-                  {Object.entries(VISIT_ENTRY_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-            </div>
-            {pdfError && <p className="text-sm text-danger mt-2">{pdfError}</p>}
-            <div className="flex justify-end gap-2 mt-6">
-              <Button variant="outline" onClick={() => setShowPdfModal(false)}>Cancelar</Button>
-              <Button onClick={handleGeneratePDF} disabled={pdfGenerating}>
-                {pdfGenerating ? 'Generando...' : 'Generar y descargar'}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <VisitBookPdfModal
+          initialElevatorId={elevatorId || ''}
+          onClose={() => setShowPdfModal(false)}
+        />
       )}
     </DashboardLayout>
   );
