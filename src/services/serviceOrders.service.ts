@@ -95,6 +95,21 @@ export async function startOrder(orderId: string): Promise<void> {
   const { data, error } = await supabase.rpc('start_service_order', { p_order_id: orderId });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
+
+  // Auto-create visit entry
+  try {
+    const { data: order } = await supabase.from('service_orders').select('elevator_id, service_case_id, technician_id:service_order_technicians!service_order_technicians_service_order_id_fkey(technician_id)').eq('id', orderId).single();
+    if (order?.elevator_id) {
+      const techId = order.technician_id?.[0]?.technician_id;
+      await supabase.rpc('create_elevator_visit_entry', {
+        p_elevator_id: order.elevator_id,
+        p_visit_date: new Date().toISOString().split('T')[0],
+        p_entry_type: 'service_order_visit',
+        p_description: 'Orden de servicio iniciada',
+        p_technician_id: techId || null,
+      });
+    }
+  } catch (e) { console.warn('Could not create visit entry:', e); }
 }
 
 export async function completeOrder(orderId: string, summary?: string): Promise<void> {
