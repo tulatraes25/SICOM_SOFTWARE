@@ -82,9 +82,10 @@ interface MonthlyReportPDFProps {
   summary: any;
   signatureUrl?: string;
   signerName?: string;
+  isTestDocument?: boolean;
 }
 
-export default function MonthlyReportPDF({ report, maintenances, serviceOrders, claims, summary, signatureUrl, signerName }: MonthlyReportPDFProps) {
+export default function MonthlyReportPDF({ report, maintenances, serviceOrders, claims, summary, signatureUrl, signerName, isTestDocument: isTestProp }: MonthlyReportPDFProps) {
   const elevatorCode = report.elevator?.code || 'N/D';
   const buildingName = report.elevator?.building?.name || '';
   const buildingAddress = report.elevator?.building?.address || '';
@@ -127,7 +128,7 @@ export default function MonthlyReportPDF({ report, maintenances, serviceOrders, 
     return cm === 'test' ? `PRUEBA N.º ${cn}` : `N.º ${cn}`;
   };
 
-  const isTestDocument = report.numbering_mode === 'test' || (report.report_year && report.report_year >= 1900 && report.report_year <= 1999);
+  const isTestDocument = isTestProp || report.numbering_mode === 'test';
 
   return (
     <Document>
@@ -207,7 +208,7 @@ export default function MonthlyReportPDF({ report, maintenances, serviceOrders, 
                     <View style={s.statusPill}><Text style={s.statusPillText}>{STATUS_MAP[o.status] || o.status}</Text></View>
                   </View>
                   <View style={s.entryField}><Text style={s.entryLabel}>Fecha</Text><Text style={s.entryValue}>{fmtDate(o.order_date)}</Text></View>
-                  <View style={s.entryField}><Text style={s.entryLabel}>Tipo</Text><Text style={s.entryValue}>{o.order_type}</Text></View>
+                  <View style={s.entryField}><Text style={s.entryLabel}>Tipo</Text><Text style={s.entryValue}>{SERVICE_TYPE_MAP[o.order_type] || o.order_type}</Text></View>
                   <View style={s.entryField}><Text style={s.entryLabel}>Prioridad</Text><Text style={s.entryValue}>{PRIORITY_MAP[o.priority] || o.priority}</Text></View>
                   <View style={s.entryField}><Text style={s.entryLabel}>Trabajo</Text><Text style={s.entryValue}>{o.work_requested || 'N/D'}</Text></View>
                 </View>

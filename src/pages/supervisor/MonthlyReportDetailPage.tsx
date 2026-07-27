@@ -92,6 +92,11 @@ export default function MonthlyReportDetailPage() {
       const approverName = (report as any).approved_by_profile?.full_name;
       const reportWithVersion = { ...report, pdf_version: nextVersion };
 
+      // Determine if this is a test document
+      const hasTestRecords = (periodData?.serviceOrders || []).some((o: any) => o.service_case?.numbering_mode === 'test' || (o.service_case?.case_number >= 1900 && o.service_case?.case_number <= 1999))
+        || (periodData?.claims || []).some((cl: any) => cl.service_case?.numbering_mode === 'test' || (cl.service_case?.case_number >= 1900 && cl.service_case?.case_number <= 1999));
+      const isTestDoc = hasTestRecords || report.numbering_mode === 'test';
+
       const blob = await pdf(
         <MonthlyReportPDF
           report={reportWithVersion}
@@ -101,6 +106,7 @@ export default function MonthlyReportDetailPage() {
           summary={periodData?.summary || { preventiveCount: 0, correctiveCount: 0, serviceOrderCount: 0, claimCount: 0, totalApproved: 0, totalWithCorrections: 0, firstDate: null, lastDate: null }}
           signatureUrl={sigData?.signedUrl || undefined}
           signerName={approverName || undefined}
+          isTestDocument={isTestDoc}
         />
       ).toBlob();
 
@@ -144,7 +150,8 @@ export default function MonthlyReportDetailPage() {
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = blobUrl;
-    a.download = `informe-mensual-${report.report_year}-${String(report.report_month).padStart(2, '0')}-v${report.pdf_version || 1}.pdf`;
+    const elevCode = (report.elevator as any)?.code || 'ascensor';
+    a.download = `informe-mensual-${elevCode.toLowerCase()}-${report.report_year}-${String(report.report_month).padStart(2, '0')}-v${report.pdf_version || 1}.pdf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
