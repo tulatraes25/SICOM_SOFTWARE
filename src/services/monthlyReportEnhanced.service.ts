@@ -60,7 +60,7 @@ export async function getMonthlyReportPeriodData(
   // Get approved service orders
   const { data: serviceOrders } = await supabase
     .from('service_orders')
-    .select('*, technicians:service_order_technicians(technician:profiles!service_order_technicians_technician_id_fkey(full_name), is_lead)')
+    .select('*, service_case:service_cases(case_number, numbering_mode), technicians:service_order_technicians(technician:profiles!service_order_technicians_technician_id_fkey(full_name), is_lead)')
     .eq('elevator_id', elevatorId)
     .eq('status', 'approved')
     .gte('order_date', dateFrom)
@@ -70,7 +70,7 @@ export async function getMonthlyReportPeriodData(
   // Get claims for this elevator in the period
   const { data: claims } = await supabase
     .from('claims')
-    .select('*')
+    .select('*, service_case:service_cases(case_number, numbering_mode)')
     .eq('elevator_id', elevatorId)
     .gte('claim_date', dateFrom)
     .lte('claim_date', dateTo)

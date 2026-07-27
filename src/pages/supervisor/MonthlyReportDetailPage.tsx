@@ -43,6 +43,14 @@ export default function MonthlyReportDetailPage() {
     try {
       const { data: r } = await supabase.from('monthly_reports').select('*').eq('id', id).single();
       if (r) {
+        // Load approver profile separately
+        let approvedByProfile = null;
+        if (r.approved_by) {
+          const { data: profile } = await supabase.from('profiles').select('full_name, email').eq('id', r.approved_by).single();
+          approvedByProfile = profile;
+        }
+        r.approved_by_profile = approvedByProfile;
+
         // Load related entities separately
         let elevator = null;
         if (r.elevator_id) {
