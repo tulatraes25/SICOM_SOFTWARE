@@ -48,20 +48,35 @@ export async function listEntriesByElevator(
 
 export async function listAllEntries(
   filters?: {
+    clientId?: string;
+    buildingId?: string;
+    elevatorId?: string;
+    technicianId?: string;
+    dateFrom?: string;
+    dateTo?: string;
     status?: string;
-    entry_type?: string;
+    originType?: string;
     search?: string;
     limit?: number;
     offset?: number;
   }
 ): Promise<{ data: any[]; count: number }> {
+  let elevatorIds: string[] | null = null;
+
+  // Resolve building to elevator IDs
+  if (filters?.buildingId && !filters?.elevatorId) {
+    const { data: els } = await supabase.from('elevators').select('id').eq('building_id', filters.buildingId).eq('active', true);
+    elevatorIds = (els || []).map((e: any) => e.id);
+    if (elevatorIds.length === 0) return { data: [], count: 0 };
+  }
+
   let query = supabase
     .from('elevator_visit_entries')
     .select(`
       id, entry_number, visit_date, elevator_id, technician_id, status,
       entry_type, origin_type, title, description, check_in_at, check_out_at,
-      duration_minutes, service_order_id, service_record_id, service_case_id,
-      elevator:elevators(id, code, building:buildings(name)),
+      duration_minutes, duration_seconds, service_order_id, service_record_id, service_case_id,
+      elevator:elevators(id, code, building:buildings(name, client_id)),
       technician:profiles!elevator_visit_entries_technician_id_fkey(full_name),
       service_case:service_cases(id, case_number, numbering_mode),
       service_order:service_orders(id, subject, order_type, service_case_id)
@@ -69,14 +84,19 @@ export async function listAllEntries(
     .order('visit_date', { ascending: false })
     .order('entry_number', { ascending: false });
 
+  if (filters?.elevatorId) query = query.eq('elevator_id', filters.elevatorId);
+  else if (elevatorIds) query = query.in('elevator_id', elevatorIds);
+  if (filters?.technicianId) query = query.eq('technician_id', filters.technicianId);
   if (filters?.status) query = query.eq('status', filters.status);
-  if (filters?.entry_type) query = query.eq('entry_type', filters.entry_type);
+  if (filters?.originType) query = query.eq('origin_type', filters.originType);
+  if (filters?.dateFrom) query = query.gte('visit_date', filters.dateFrom);
+  if (filters?.dateTo) query = query.lte('visit_date', filters.dateTo);
   if (filters?.search) {
     query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%,entry_number::text.ilike.%${filters.search}%`);
   }
 
   const from = filters?.offset || 0;
-  const to = from + (filters?.limit || 50) - 1;
+  const to = from + (filters?.limit || 200) - 1;
   query = query.range(from, to);
 
   const { data, count, error } = await query;

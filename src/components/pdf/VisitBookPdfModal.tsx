@@ -19,17 +19,22 @@ function getCurrentMonthRange(): { from: string; to: string } {
   return { from: toDateInputValue(firstDay), to: toDateInputValue(lastDay) };
 }
 
+function slugify(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
 interface VisitBookPdfModalProps {
   initialClientId?: string;
   initialBuildingId?: string;
   initialElevatorId?: string;
   allowBuildingScope?: boolean;
+  initialScope?: 'elevator' | 'building';
   onClose: () => void;
 }
 
 export default function VisitBookPdfModal({
   initialClientId, initialBuildingId, initialElevatorId,
-  allowBuildingScope = false, onClose,
+  allowBuildingScope = false, initialScope, onClose,
 }: VisitBookPdfModalProps) {
   const range = getCurrentMonthRange();
 
@@ -40,7 +45,7 @@ export default function VisitBookPdfModal({
   const [clientId, setClientId] = useState(initialClientId || '');
   const [buildingId, setBuildingId] = useState(initialBuildingId || '');
   const [elevatorId, setElevatorId] = useState(initialElevatorId || '');
-  const [scope, setScope] = useState<'elevator' | 'building'>(initialElevatorId ? 'elevator' : 'elevator');
+  const [scope, setScope] = useState<'elevator' | 'building'>(initialScope || (initialElevatorId ? 'elevator' : 'elevator'));
 
   const [dateFrom, setDateFrom] = useState(range.from);
   const [dateTo, setDateTo] = useState(range.to);
@@ -62,17 +67,24 @@ export default function VisitBookPdfModal({
     supabase.from('elevators').select('id, code, building_id').eq('building_id', buildingId).order('code').then(({ data }) => setElevators(data || []));
   }, [buildingId]);
 
-  // Auto-select if only one option
   useEffect(() => {
     if (elevators.length === 1 && !elevatorId) setElevatorId(elevators[0].id);
   }, [elevators, elevatorId]);
+
+  // Auto-resolve clientId from buildingId
+  useEffect(() => {
+    if (buildingId && !clientId) {
+      const b = buildings.find((b: any) => b.id === buildingId);
+      if (b?.client_id) setClientId(b.client_id);
+    }
+  }, [buildingId, clientId, buildings]);
 
   const handleGenerate = async () => {
     setError('');
     if (!dateFrom || !dateTo) { setError('Indicá el período del informe'); return; }
     if (dateFrom > dateTo) { setError('La fecha desde no puede ser posterior a la fecha hasta'); return; }
     if (scope === 'elevator' && !elevatorId) { setError('Seleccioná un ascensor'); return; }
-    if (scope === 'building' && !buildingId) { setError('Seleccioná un edificio'); return; }
+    if (!buildingId) { setError('Seleccioná un edificio'); return; }
 
     setGenerating(true);
     try {
@@ -123,30 +135,29 @@ export default function VisitBookPdfModal({
         return entry;
       }));
 
-      // Get elevator info from first entry
       const firstElevator = (enriched[0] as any)?.elevator;
-      const elevatorCode = firstElevator?.code || 'ascensor';
       const buildingName = firstElevator?.building?.name || '-';
       const clientName = firstElevator?.building?.client?.name || '-';
+      const elevatorCode = firstElevator?.code || 'ascensor';
 
       const blob = await pdf(
         <VisitBookPDF
-          elevatorCode={scope === 'building' ? `Edificio: ${buildingName}` : elevatorCode}
+          scope={scope}
+          elevatorCode={scope === 'elevator' ? elevatorCode : undefined}
           buildingName={buildingName}
           clientName={clientName}
           dateFrom={dateFrom}
           dateTo={dateTo}
           entries={enriched}
+          elevatorCount={scope === 'building' ? elevators.length : undefined}
         />
       ).toBlob();
 
-      const normalizedCode = elevatorCode.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       const sameMonth = dateFrom.slice(0, 7) === dateTo.slice(0, 7);
+      const period = sameMonth ? dateFrom.slice(0, 7) : `${dateFrom}-a-${dateTo}`;
       const filename = scope === 'building'
-        ? `libro-visitas-${buildingName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}-${dateFrom.slice(0, 7)}.pdf`
-        : sameMonth
-          ? `libro-visitas-${normalizedCode}-${dateFrom.slice(0, 7)}.pdf`
-          : `libro-visitas-${normalizedCode}-${dateFrom}-a-${dateTo}.pdf`;
+        ? `libro-visitas-edificio-${slugify(buildingName)}-${period}.pdf`
+        : `libro-visitas-${slugify(elevatorCode)}-${period}.pdf`;
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -197,7 +208,7 @@ export default function VisitBookPdfModal({
             </div>
           )}
 
-          {scope === 'elevator' && (
+          {scope === 'elevator' ? (
             <div>
               <label className="text-sm text-gray-600">Ascensor</label>
               <select className="w-full border rounded px-3 py-2 text-sm" value={elevatorId} onChange={(e) => setElevatorId(e.target.value)} disabled={!buildingId}>
@@ -205,7 +216,9 @@ export default function VisitBookPdfModal({
                 {elevators.map((el: any) => <option key={el.id} value={el.id}>{el.code}</option>)}
               </select>
             </div>
-          )}
+          ) : buildingId && elevators.length > 0 ? (
+            <p className="text-sm text-gray-500">Se incluirán {elevators.length} ascensor(es) activo(s)</p>
+          ) : null}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

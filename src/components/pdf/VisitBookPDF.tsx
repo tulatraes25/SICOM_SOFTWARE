@@ -14,9 +14,11 @@ const styles = StyleSheet.create({
   headerText: { fontSize: 7, color: '#555' },
   greenLine: { borderBottomWidth: 2, borderBottomColor: '#8DB600', marginTop: 5 },
   title: { fontSize: 10, fontWeight: 'bold', color: '#06172E', marginTop: 8, marginBottom: 4 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6, fontSize: 7, color: '#444' },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4, fontSize: 7, color: '#444' },
+  infoRow2: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6, fontSize: 7, color: '#444' },
   testBanner: { backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#f59e0b', borderRadius: 3, padding: 4, marginBottom: 8 },
   testText: { fontSize: 7, fontWeight: 'bold', color: '#92400e', textAlign: 'center' },
+  elevatorSummary: { fontSize: 6, color: '#555', marginBottom: 6 },
   tableHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#8DB600', paddingBottom: 2, marginBottom: 2 },
   th: { fontSize: 6, fontWeight: 'bold', color: '#06172E' },
   tableRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#e5e7eb', paddingBottom: 2, marginBottom: 2 },
@@ -24,18 +26,25 @@ const styles = StyleSheet.create({
   footer: { position: 'absolute', bottom: 20, left: 30, right: 30, borderTopWidth: 1, borderTopColor: '#8DB600', paddingTop: 5, flexDirection: 'row', justifyContent: 'space-between', fontSize: 6, color: '#999' },
 });
 
-const COL = {
+const COL_ELEVATOR = {
   n: '4%', date: '7%', origin: '9%', doc: '14%', tech: '11%',
   summary: '27%', in: '6%', out: '6%', dur: '7%', status: '9%',
 };
 
-interface VisitBookPDFProps {
-  elevatorCode: string;
+const COL_BUILDING = {
+  elev: '8%', n: '4%', date: '7%', origin: '8%', doc: '13%', tech: '10%',
+  summary: '24%', in: '6%', out: '6%', dur: '6%', status: '8%',
+};
+
+export interface VisitBookPDFProps {
+  scope: 'elevator' | 'building';
+  elevatorCode?: string;
   buildingName: string;
   clientName: string;
   dateFrom: string;
   dateTo: string;
   entries: ElevatorVisitEntry[];
+  elevatorCount?: number;
 }
 
 function formatCaseNumber(sc: any): string {
@@ -84,7 +93,6 @@ function formatDuration(entry: any): string {
 
 function buildVisitBookSummary(entry: any): string {
   const MAX = 280;
-
   if (entry.origin_type === 'maintenance') {
     const sr = entry._serviceRecord;
     if (sr) {
@@ -98,7 +106,6 @@ function buildVisitBookSummary(entry: any): string {
       ? (entry.work_performed.length > MAX ? entry.work_performed.slice(0, MAX) + '…' : entry.work_performed)
       : 'Mantenimiento realizado sin observaciones adicionales.';
   }
-
   if (entry.origin_type === 'service_order') {
     const so = entry._serviceOrder;
     if (so?.completion_summary && so.completion_summary !== 'Trabajo completado') {
@@ -115,7 +122,6 @@ function buildVisitBookSummary(entry: any): string {
       return entry.work_performed.length > MAX ? entry.work_performed.slice(0, MAX) + '…' : entry.work_performed;
     }
   }
-
   const fallback = entry.title || entry.description || '-';
   return fallback.length > MAX ? fallback.slice(0, MAX) + '…' : fallback;
 }
@@ -125,10 +131,11 @@ function buildDocumentLabel(entry: any): string {
   if (entry.service_order_id) return 'Orden de servicio';
   if (entry.service_record_id) {
     const sr = entry._serviceRecord;
-    const type = sr?.service_type === 'preventivo' ? 'Mant. preventivo'
-      : sr?.service_type === 'correctivo' ? 'Mant. correctivo'
-      : sr?.service_type === 'emergencia' ? 'Emergencia'
+    const type = sr?.service_type === 'preventivo' ? 'Mantenimiento preventivo'
+      : sr?.service_type === 'correctivo' ? 'Mantenimiento correctivo'
+      : sr?.service_type === 'emergencia' ? 'Mantenimiento de emergencia'
       : sr?.service_type === 'inspeccion' ? 'Inspección'
+      : sr?.service_type === 'instalacion' ? 'Instalación'
       : 'Mantenimiento';
     const date = sr?.service_date ? formatDateShort(sr.service_date) : '';
     return date ? `${type} - ${date}` : type;
@@ -136,13 +143,29 @@ function buildDocumentLabel(entry: any): string {
   return '-';
 }
 
+export function formatEntryCount(count: number): string {
+  return count === 1 ? '1 asiento' : `${count} asientos`;
+}
+
 export default function VisitBookPDF({
-  elevatorCode, buildingName, clientName, dateFrom, dateTo, entries,
+  scope, elevatorCode, buildingName, clientName, dateFrom, dateTo, entries, elevatorCount,
 }: VisitBookPDFProps) {
   const hasTestEntries = entries.some((e) =>
     (e.service_case as any)?.numbering_mode === 'test' ||
     ((e.service_case as any)?.case_number >= 1900 && (e.service_case as any)?.case_number <= 1999)
   );
+
+  // Building scope: group by elevator for summary
+  const elevatorSummary = scope === 'building' ? (() => {
+    const map = new Map<string, number>();
+    entries.forEach((e: any) => {
+      const code = (e.elevator as any)?.code || 'Sin ascensor';
+      map.set(code, (map.get(code) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  })() : null;
+
+  const col: Record<string, string> = scope === 'building' ? COL_BUILDING : COL_ELEVATOR;
 
   const renderHeader = () => (
     <View style={styles.header} fixed>
@@ -154,29 +177,40 @@ export default function VisitBookPDF({
         </View>
       </View>
       <View style={styles.greenLine} />
-      <Text style={styles.title}>LIBRO DE VISITAS — {elevatorCode}</Text>
+      <Text style={styles.title}>
+        {scope === 'building' ? 'LIBRO DIGITAL DE VISITAS DEL EDIFICIO' : `LIBRO DE VISITAS — ${elevatorCode}`}
+      </Text>
       <View style={styles.infoRow}>
         <Text>Edificio: {buildingName}</Text>
         <Text>Cliente: {clientName}</Text>
         <Text>Período: {formatDateShort(dateFrom)} — {formatDateShort(dateTo)}</Text>
-        <Text>Total: {entries.length} asiento(s)</Text>
+      </View>
+      <View style={styles.infoRow2}>
+        {scope === 'building' && <Text>Ascensores incluidos: {elevatorCount || elevatorSummary?.length || 0}</Text>}
+        <Text>Total: {formatEntryCount(entries.length)}</Text>
       </View>
       {hasTestEntries && (
         <View style={styles.testBanner}>
           <Text style={styles.testText}>DOCUMENTO DE PRUEBA — SIN VALIDEZ COMERCIAL</Text>
         </View>
       )}
+      {elevatorSummary && elevatorSummary.length > 0 && (
+        <View style={styles.elevatorSummary}>
+          <Text>Equipos incluidos: {elevatorSummary.map(([code, count]) => `${code} — ${formatEntryCount(count)}`).join(' | ')}</Text>
+        </View>
+      )}
       <View style={styles.tableHeader}>
-        <Text style={[styles.th, { width: COL.n }]}>N.º</Text>
-        <Text style={[styles.th, { width: COL.date }]}>Fecha</Text>
-        <Text style={[styles.th, { width: COL.origin }]}>Origen</Text>
-        <Text style={[styles.th, { width: COL.doc }]}>Documento</Text>
-        <Text style={[styles.th, { width: COL.tech }]}>Técnico</Text>
-        <Text style={[styles.th, { width: COL.summary }]}>Resumen</Text>
-        <Text style={[styles.th, { width: COL.in }]}>Ingreso</Text>
-        <Text style={[styles.th, { width: COL.out }]}>Salida</Text>
-        <Text style={[styles.th, { width: COL.dur }]}>Duración</Text>
-        <Text style={[styles.th, { width: COL.status }]}>Estado</Text>
+        {scope === 'building' && <Text style={[styles.th, { width: col.elev }]}>Ascensor</Text>}
+        <Text style={[styles.th, { width: col.n }]}>N.º</Text>
+        <Text style={[styles.th, { width: col.date }]}>Fecha</Text>
+        <Text style={[styles.th, { width: col.origin }]}>Origen</Text>
+        <Text style={[styles.th, { width: col.doc }]}>Documento</Text>
+        <Text style={[styles.th, { width: col.tech }]}>Técnico</Text>
+        <Text style={[styles.th, { width: col.summary }]}>Resumen</Text>
+        <Text style={[styles.th, { width: col.in }]}>Ingreso</Text>
+        <Text style={[styles.th, { width: col.out }]}>Salida</Text>
+        <Text style={[styles.th, { width: col.dur }]}>Duración</Text>
+        <Text style={[styles.th, { width: col.status }]}>Estado</Text>
       </View>
     </View>
   );
@@ -187,16 +221,17 @@ export default function VisitBookPDF({
         {renderHeader()}
         {entries.map((entry) => (
           <View key={entry.id} style={styles.tableRow} wrap={false}>
-            <Text style={[styles.td, { width: COL.n }]}>{entry.entry_number}</Text>
-            <Text style={[styles.td, { width: COL.date }]}>{formatDateShort(entry.visit_date)}</Text>
-            <Text style={[styles.td, { width: COL.origin }]}>{(VISIT_ORIGIN_LABELS as Record<string, string>)[entry.origin_type || ''] || '-'}</Text>
-            <Text style={[styles.td, { width: COL.doc }]}>{buildDocumentLabel(entry)}</Text>
-            <Text style={[styles.td, { width: COL.tech }]}>{(entry.technician as any)?.full_name || '-'}</Text>
-            <Text style={[styles.td, { width: COL.summary }]}>{buildVisitBookSummary(entry)}</Text>
-            <Text style={[styles.td, { width: COL.in }]}>{formatTime(entry.check_in_at)}</Text>
-            <Text style={[styles.td, { width: COL.out }]}>{formatTime(entry.check_out_at)}</Text>
-            <Text style={[styles.td, { width: COL.dur }]}>{formatDuration(entry)}</Text>
-            <Text style={[styles.td, { width: COL.status }]}>{(VISIT_ENTRY_STATUS_LABELS as Record<string, string>)[entry.status] || '-'}</Text>
+            {scope === 'building' && <Text style={[styles.td, { width: col.elev }]}>{(entry.elevator as any)?.code || '-'}</Text>}
+            <Text style={[styles.td, { width: col.n }]}>{entry.entry_number}</Text>
+            <Text style={[styles.td, { width: col.date }]}>{formatDateShort(entry.visit_date)}</Text>
+            <Text style={[styles.td, { width: col.origin }]}>{(VISIT_ORIGIN_LABELS as Record<string, string>)[entry.origin_type || ''] || '-'}</Text>
+            <Text style={[styles.td, { width: col.doc }]}>{buildDocumentLabel(entry)}</Text>
+            <Text style={[styles.td, { width: col.tech }]}>{(entry.technician as any)?.full_name || '-'}</Text>
+            <Text style={[styles.td, { width: col.summary }]}>{buildVisitBookSummary(entry)}</Text>
+            <Text style={[styles.td, { width: col.in }]}>{formatTime(entry.check_in_at)}</Text>
+            <Text style={[styles.td, { width: col.out }]}>{formatTime(entry.check_out_at)}</Text>
+            <Text style={[styles.td, { width: col.dur }]}>{formatDuration(entry)}</Text>
+            <Text style={[styles.td, { width: col.status }]}>{(VISIT_ENTRY_STATUS_LABELS as Record<string, string>)[entry.status] || '-'}</Text>
           </View>
         ))}
         <Text style={styles.footer} fixed render={({ pageNumber, totalPages }) =>
