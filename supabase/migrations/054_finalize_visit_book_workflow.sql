@@ -1,11 +1,12 @@
 -- 054: Finalize visit book workflow
--- 1. Add time tracking columns
+-- Idempotent: safe to re-run after partial failure
+-- 1. Add time tracking columns (each separately)
 -- 2. Fix historical entries with real data
 -- 3. Create auto-creation RPCs for service orders
 -- 4. Fix per-elevator numbering
 
 -- ============================================================
--- 1. ADD TIME TRACKING COLUMNS
+-- 1. ADD TIME TRACKING COLUMNS (idempotent, one at a time)
 -- ============================================================
 DO $$
 BEGIN
@@ -13,12 +14,36 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'elevator_visit_entries' AND column_name = 'check_in_at'
   ) THEN
-    ALTER TABLE elevator_visit_entries ADD COLUMN check_in_at TIMESTAMPTZ;
-    ALTER TABLE elevator_visit_entries ADD COLUMN check_out_at TIMESTAMPTZ;
-    ALTER TABLE elevator_visit_entries ADD COLUMN duration_minutes INTEGER;
-    RAISE NOTICE 'Added time tracking columns';
+    ALTER TABLE public.elevator_visit_entries ADD COLUMN check_in_at TIMESTAMPTZ;
+    RAISE NOTICE 'Added check_in_at';
   ELSE
-    RAISE NOTICE 'Time tracking columns already exist';
+    RAISE NOTICE 'check_in_at already exists';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'elevator_visit_entries' AND column_name = 'check_out_at'
+  ) THEN
+    ALTER TABLE public.elevator_visit_entries ADD COLUMN check_out_at TIMESTAMPTZ;
+    RAISE NOTICE 'Added check_out_at';
+  ELSE
+    RAISE NOTICE 'check_out_at already exists';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'elevator_visit_entries' AND column_name = 'duration_minutes'
+  ) THEN
+    ALTER TABLE public.elevator_visit_entries ADD COLUMN duration_minutes INTEGER;
+    RAISE NOTICE 'Added duration_minutes';
+  ELSE
+    RAISE NOTICE 'duration_minutes already exists';
   END IF;
 END $$;
 
@@ -70,6 +95,8 @@ END $$;
 
 -- ============================================================
 -- 3. FIX HISTORICAL ENTRIES — REAL DATA FROM MAINTENANCE
+-- Uses actual columns: description, technical_report, observations,
+-- final_report_text, operational_status_at_service, conservation_status_at_service
 -- ============================================================
 DO $$
 DECLARE
@@ -77,8 +104,16 @@ DECLARE
   v_rec RECORD;
 BEGIN
   FOR v_rec IN
-    SELECT eve.id, sr.service_type, sr.observations, sr.result,
-           sr.technician_id, sr.service_date
+    SELECT eve.id,
+           sr.service_type,
+           sr.description,
+           sr.technical_report,
+           sr.observations,
+           sr.final_report_text,
+           sr.operational_status_at_service,
+           sr.conservation_status_at_service,
+           sr.technician_id,
+           sr.service_date
     FROM elevator_visit_entries eve
     JOIN service_records sr ON sr.id = eve.service_record_id
   LOOP
@@ -87,18 +122,36 @@ BEGIN
       title = CASE v_rec.service_type
         WHEN 'preventivo' THEN 'Mantenimiento preventivo'
         WHEN 'correctivo' THEN 'Mantenimiento correctivo'
+        WHEN 'emergencia' THEN 'Emergencia'
+        WHEN 'inspeccion' THEN 'Inspección'
+        WHEN 'instalacion' THEN 'Instalación'
+        WHEN 'otro' THEN 'Otro'
         ELSE 'Mantenimiento programado'
       END,
-      description = COALESCE(v_rec.observations, 'Sin observaciones'),
-      work_performed = COALESCE(v_rec.result, 'Trabajo completado'),
+      description = COALESCE(
+        NULLIF(v_rec.description, ''),
+        NULLIF(v_rec.observations, ''),
+        'Sin observaciones'
+      ),
+      work_performed = COALESCE(
+        NULLIF(v_rec.final_report_text, ''),
+        NULLIF(v_rec.technical_report, ''),
+        NULLIF(v_rec.description, ''),
+        NULLIF(v_rec.observations, ''),
+        'Trabajo completado'
+      ),
       entry_type = CASE v_rec.service_type
         WHEN 'preventivo' THEN 'preventive_maintenance'::text
         WHEN 'correctivo' THEN 'corrective_maintenance'::text
+        WHEN 'emergencia' THEN 'emergency'::text
+        WHEN 'inspeccion' THEN 'inspection'::text
+        WHEN 'instalacion' THEN 'scheduled_service'::text
+        WHEN 'otro' THEN 'other'::text
         ELSE 'scheduled_service'::text
       END,
       origin_type = 'maintenance',
-      operational_status = NULL,
-      conservation_status = NULL
+      operational_status = v_rec.operational_status_at_service,
+      conservation_status = v_rec.conservation_status_at_service
     WHERE id = v_rec.id;
     v_count := v_count + 1;
   END LOOP;
@@ -114,7 +167,6 @@ DECLARE
   v_counter RECORD;
   v_new_number INTEGER;
 BEGIN
-  -- For each elevator that has entries, renumber them chronologically
   FOR v_rec IN
     SELECT DISTINCT elevator_id FROM elevator_visit_entries
   LOOP
@@ -130,7 +182,6 @@ BEGIN
       v_new_number := v_new_number + 1;
     END LOOP;
 
-    -- Update the numbering table for this elevator
     INSERT INTO elevator_visit_numbering (elevator_id, next_entry_number, updated_at)
     VALUES (v_rec.elevator_id, v_new_number, NOW())
     ON CONFLICT (elevator_id) DO UPDATE
@@ -167,12 +218,10 @@ CREATE OR REPLACE FUNCTION public.create_visit_from_service_order(
 DECLARE
   v_order RECORD;
   v_lead_tech_id UUID;
-  v_elevator_id UUID;
   v_next_number INTEGER;
   v_entry_id UUID;
   v_entry_type TEXT;
 BEGIN
-  -- Get order data
   SELECT so.*, so.id AS order_id
   INTO v_order
   FROM service_orders so
@@ -186,18 +235,15 @@ BEGIN
     RETURN jsonb_build_object('error', 'La orden no tiene ascensor asignado');
   END IF;
 
-  -- Check if visit already exists
   IF EXISTS (SELECT 1 FROM elevator_visit_entries WHERE service_order_id = p_order_id) THEN
     RETURN jsonb_build_object('error', 'Ya existe un asiento para esta orden');
   END IF;
 
-  -- Get lead technician
   SELECT technician_id INTO v_lead_tech_id
   FROM service_order_technicians
   WHERE service_order_id = p_order_id AND is_lead = true
   LIMIT 1;
 
-  -- Map order_type to entry_type
   v_entry_type := CASE v_order.order_type
     WHEN 'preventive' THEN 'preventive_maintenance'
     WHEN 'corrective' THEN 'corrective_maintenance'
@@ -209,7 +255,6 @@ BEGIN
     ELSE 'other'
   END;
 
-  -- Get next entry number for this elevator
   SELECT COALESCE(next_entry_number, 1) INTO v_next_number
   FROM elevator_visit_numbering
   WHERE elevator_id = v_order.elevator_id;
@@ -224,7 +269,6 @@ BEGIN
     WHERE elevator_id = v_order.elevator_id;
   END IF;
 
-  -- Create visit entry
   v_entry_id := uuid_generate_v4();
   INSERT INTO elevator_visit_entries (
     id, elevator_id, service_order_id, service_case_id,
@@ -243,9 +287,6 @@ BEGIN
     'submitted',
     v_order.started_at
   );
-
-  -- Update service_order to link visit
-  -- (visit is already linked via service_order_id)
 
   RETURN jsonb_build_object(
     'id', v_entry_id,
@@ -267,7 +308,6 @@ DECLARE
   v_visit RECORD;
   v_order RECORD;
 BEGIN
-  -- Find the visit entry for this order
   SELECT eve.id, eve.status INTO v_visit
   FROM elevator_visit_entries eve
   WHERE eve.service_order_id = p_order_id
@@ -277,11 +317,9 @@ BEGIN
     RETURN jsonb_build_object('error', 'No se encontró asiento para esta orden');
   END IF;
 
-  -- Get order data
   SELECT so.completed_at, so.completion_summary INTO v_order
   FROM service_orders so WHERE so.id = p_order_id;
 
-  -- Update the visit entry
   UPDATE elevator_visit_entries
   SET
     check_out_at = COALESCE(v_order.completed_at, NOW()),
@@ -322,7 +360,6 @@ BEGIN
     RETURN jsonb_build_object('error', 'No se encontró asiento para esta orden');
   END IF;
 
-  -- Only approve if currently submitted
   IF v_visit.status != 'submitted' THEN
     RETURN jsonb_build_object('error', 'El asiento no está en estado enviado');
   END IF;
