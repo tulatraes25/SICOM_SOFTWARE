@@ -10,18 +10,17 @@ import type { ResponsibleElevator, ResponsibleVisitEntry, ResponsibleMonthlyRepo
 import { Building2, FileText, Eye, Clock, AlertCircle, RefreshCw } from 'lucide-react';
 
 function formatDateOnly(v?: string | null): string { if (!v) return '-'; const [y, m, d] = v.slice(0, 10).split('-'); return `${Number(d)}/${Number(m)}/${y}`; }
-function formatDuration(e: { duration_seconds?: number | null; duration_minutes?: number | null; check_in_at?: string | null; check_out_at?: string | null }): string {
+function formatDuration(e: { duration_seconds?: number | null; duration_minutes?: number | null }): string {
   if (e.duration_seconds !== null && e.duration_seconds !== undefined && e.duration_seconds > 0) {
     if (e.duration_seconds < 60) return '<1 min';
     if (e.duration_seconds < 3600) return `${Math.floor(e.duration_seconds / 60)} min`;
-    const h = Math.floor(e.duration_seconds / 3600);
-    const m = Math.floor((e.duration_seconds % 3600) / 60);
+    const h = Math.floor(e.duration_seconds / 3600); const m = Math.floor((e.duration_seconds % 3600) / 60);
     return m > 0 ? `${h}h ${m}m` : `${h}h`;
   }
   if (e.duration_minutes) return `${e.duration_minutes} min`;
   return '-';
 }
-const STATUS_LABELS: Record<string, string> = { approved: 'Aprobado', submitted: 'Pendiente', in_progress: 'En curso', draft: 'Borrador', cancelled: 'Anulado' };
+const ORIGIN_LABELS: Record<string, string> = { maintenance: 'Mantenimiento', service_order: 'Orden de servicio', inspection: 'Inspección', manual: 'Registro manual', claim: 'Reclamo' };
 
 export default function ResponsibleDashboard() {
   const { profile } = useAuth();
@@ -44,6 +43,9 @@ export default function ResponsibleDashboard() {
       setBuildings(blds); setElevators(els); setVisits(vis); setReports(rep);
     } catch (err: unknown) { setError(getErrorMessage(err)); } finally { setLoading(false); }
   };
+
+  const buildingMap = useMemo(() => new Map(buildings.map((b) => [b.id, b])), [buildings]);
+  const elevatorMap = useMemo(() => new Map(elevators.map((e) => [e.id, e])), [elevators]);
 
   const now = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
@@ -79,20 +81,25 @@ export default function ResponsibleDashboard() {
           {loading ? <div className="text-center py-6"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
           : recentVisits.length === 0 ? <p className="text-gray-500 text-center py-6">No hay visitas recientes</p>
           : <div className="space-y-3">
-            {recentVisits.map((v) => (
-              <div key={v.id} className="p-3 bg-gray-50 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-sm font-semibold">{formatDateOnly(v.visit_date)}</span>
-                    <Badge variant="success">{STATUS_LABELS[v.status] || v.status}</Badge>
-                    {v.case_number && <span className="text-xs text-gray-400">N.º {v.case_number}</span>}
+            {recentVisits.map((v) => {
+              const el = elevatorMap.get(v.elevator_id);
+              const bld = el ? buildingMap.get(el.building_id) : null;
+              return (
+                <div key={v.id} className="p-3 bg-gray-50 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-sm font-semibold">{formatDateOnly(v.visit_date)}</span>
+                      <Badge variant="success" className="text-xs">Aprobado</Badge>
+                      {v.case_number && <span className="text-xs text-gray-400">N.º {v.case_number}</span>}
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">{bld?.name || '-'} · {el?.code || '-'}</p>
+                    <p className="text-xs text-gray-500">{ORIGIN_LABELS[v.origin_type || ''] || v.origin_type || '-'} · {v.title || v.description}</p>
+                    <p className="text-xs text-gray-400">{formatDuration(v)}</p>
                   </div>
-                  <p className="text-sm text-gray-600 truncate mt-1">{v.title || v.description}</p>
-                  <p className="text-xs text-gray-400">{formatDuration(v)} · {v.origin_type || '-'}</p>
+                  <Link to={`/responsable/ascensores/${v.elevator_id}`}><Button size="sm" variant="ghost"><Eye size={14} /></Button></Link>
                 </div>
-                <Link to={`/responsable/ascensores/${v.elevator_id}`}><Button size="sm" variant="ghost"><Eye size={14} /></Button></Link>
-              </div>
-            ))}
+              );
+            })}
           </div>}
         </CardContent></Card>
       </div>

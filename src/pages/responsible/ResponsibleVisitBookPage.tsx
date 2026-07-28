@@ -4,41 +4,50 @@ import { pdf } from '@react-pdf/renderer';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { getResponsibleElevators, getResponsibleBuildings, getResponsibleClients, getResponsibleVisitEntries, getResponsibleTechnicians, getErrorMessage } from '@/services/responsiblePortalService';
-import type { ResponsibleElevator, ResponsibleBuilding, ResponsibleClient, ResponsibleVisitEntry, ResponsibleTechnician } from '@/services/responsiblePortalService';
+import { getResponsibleElevators, getResponsibleBuildings, getResponsibleClients, getResponsibleVisitEntries, getResponsibleTechnicians, getResponsibleServiceRecords, getResponsibleServiceOrders, getErrorMessage } from '@/services/responsiblePortalService';
+import type { ResponsibleElevator, ResponsibleBuilding, ResponsibleClient, ResponsibleVisitEntry, ResponsibleTechnician, ResponsibleServiceRecord, ResponsibleServiceOrder } from '@/services/responsiblePortalService';
 import VisitBookPDF from '@/components/pdf/VisitBookPDF';
 import { BookOpen, FileDown } from 'lucide-react';
 
 function toDateInputValue(date: Date): string { const y = date.getFullYear(); const m = String(date.getMonth() + 1).padStart(2, '0'); const d = String(date.getDate()).padStart(2, '0'); return `${y}-${m}-${d}`; }
 function getCurrentMonthRange() { const now = new Date(); return { from: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)), to: toDateInputValue(new Date(now.getFullYear(), now.getMonth() + 1, 0)) }; }
 function slugify(v: string) { return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+const naturalSort = new Intl.Collator('es', { numeric: true, sensitivity: 'base' }).compare;
 
 function buildPdfEntries(
   visitEntries: ResponsibleVisitEntry[],
-  elevators: ResponsibleElevator[],
-  technicians: ResponsibleTechnician[],
-): ElevatorVisitEntry[] {
-  const elevMap = new Map(elevators.map((e) => [e.id, e]));
-  const techMap = new Map(technicians.map((t) => [t.id, t]));
+  elevMap: Map<string, ResponsibleElevator>,
+  techMap: Map<string, ResponsibleTechnician>,
+  srMap: Map<string, ResponsibleServiceRecord>,
+  soMap: Map<string, ResponsibleServiceOrder>,
+) {
   return visitEntries.map((v) => ({
     ...v,
     elevator: elevMap.get(v.elevator_id) ? { id: v.elevator_id, code: elevMap.get(v.elevator_id)!.code } : undefined,
     technician: v.technician_id ? { id: v.technician_id, full_name: techMap.get(v.technician_id)?.full_name || '-' } : undefined,
     service_case: v.service_case_id ? { id: v.service_case_id, case_number: v.case_number, numbering_mode: v.numbering_mode } : undefined,
+    _serviceRecord: v.service_record_id ? srMap.get(v.service_record_id) || null : null,
+    _serviceOrder: v.service_order_id ? soMap.get(v.service_order_id) || null : null,
+    registered_at: v.check_in_at || v.visit_date,
+    registered_by: '',
+    is_rectification: false,
+    created_at: v.visit_date,
+    updated_at: v.visit_date,
   }));
 }
 
-interface ElevatorVisitEntry {
-  id: string; elevator_id: string; service_case_id: string | null; service_record_id: string | null;
-  service_order_id: string | null; entry_number: number; visit_date: string; entry_type: string;
-  origin_type: string | null; title: string | null; description: string; work_performed: string | null;
-  observations: string | null; recommendations: string | null; operational_status: string | null;
-  conservation_status: string | null; technician_id: string | null; status: string;
-  check_in_at: string | null; check_out_at: string | null; duration_minutes: number | null;
-  duration_seconds: number | null; case_number: number | null; numbering_mode: string | null;
-  elevator?: { id: string; code: string }; technician?: { id: string; full_name: string };
-  service_case?: { id: string; case_number: number | null; numbering_mode: string | null };
-  _serviceRecord?: unknown;
+function sortVisitEntries(entries: ResponsibleVisitEntry[], scope: 'elevator' | 'building') {
+  return [...entries].sort((a, b) => {
+    const dateCmp = a.visit_date.localeCompare(b.visit_date);
+    if (dateCmp !== 0) return dateCmp;
+    if (scope === 'building') {
+      const aCode = a.elevator_id || '';
+      const bCode = b.elevator_id || '';
+      const codeCmp = naturalSort(aCode, bCode);
+      if (codeCmp !== 0) return codeCmp;
+    }
+    return a.entry_number - b.entry_number;
+  });
 }
 
 export default function ResponsibleVisitBookPage() {
@@ -63,36 +72,57 @@ export default function ResponsibleVisitBookPage() {
         getResponsibleBuildings(), getResponsibleElevators(), getResponsibleClients(), getResponsibleTechnicians(),
       ]);
       setBuildings(blds); setElevators(els); setClients(cls); setTechnicians(tech);
+      if (searchParams.get('buildingId') && !blds.find((b) => b.id === searchParams.get('buildingId'))) {
+        setError('No tiene permiso para consultar este edificio');
+        setSelectedBuilding('');
+      }
     } catch (err: unknown) { setError(getErrorMessage(err)); }
   };
 
   const filteredElevators = useMemo(() => selectedBuilding ? elevators.filter((e) => e.building_id === selectedBuilding) : [], [selectedBuilding, elevators]);
   const clientMap = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
   const building = useMemo(() => buildings.find((b) => b.id === selectedBuilding), [buildings, selectedBuilding]);
-  const clientName = building ? clientMap.get(building.client_id)?.name || '-' : '-';
+  const client = building ? clientMap.get(building.client_id) : null;
 
-  const handleBuildingChange = (id: string) => { setSelectedBuilding(id); setSelectedElevator(''); };
+  const handleBuildingChange = (id: string) => { setSelectedBuilding(id); setSelectedElevator(''); setError(''); };
 
   const handleGenerate = async () => {
     if (!selectedBuilding) { setError('Seleccioná un edificio'); return; }
+    if (!building) { setError('Edificio no encontrado'); return; }
+    if (!client) { setError('No se pudo identificar el cliente del edificio'); return; }
+    if (filteredElevators.length === 0) { setError('No hay ascensores asignados en este edificio'); return; }
+    if (selectedElevator && !filteredElevators.find((e) => e.id === selectedElevator)) { setError('El ascensor seleccionado no pertenece a este edificio'); return; }
     if (!dateFrom || !dateTo) { setError('Indicá el período'); return; }
     if (dateFrom > dateTo) { setError('Fecha desde no puede ser posterior'); return; }
     setGenerating(true); setError('');
     try {
       const allowedIds = new Set(filteredElevators.map((e) => e.id));
-      const visitEntries = await getResponsibleVisitEntries(selectedElevator || undefined, dateFrom, dateTo);
+      const [visitEntries, srData, soData] = await Promise.all([
+        getResponsibleVisitEntries(selectedElevator || undefined, dateFrom, dateTo),
+        getResponsibleServiceRecords(selectedElevator || undefined),
+        getResponsibleServiceOrders(selectedElevator || undefined),
+      ]);
       const filtered = visitEntries.filter((v) => allowedIds.has(v.elevator_id));
       if (filtered.length === 0) { setError('No hay asientos aprobados para el período'); return; }
-      const entries = buildPdfEntries(filtered, elevators, technicians) as unknown as import('@/types/database').ElevatorVisitEntry[];
+
+      const elevMap = new Map(elevators.map((e) => [e.id, e]));
+      const techMap = new Map(technicians.map((t) => [t.id, t]));
+      const srMap = new Map(srData.map((r) => [r.id, r]));
+      const soMap = new Map(soData.map((o) => [o.id, o]));
+
+      const scope = selectedElevator ? 'elevator' as const : 'building' as const;
+      const sorted = sortVisitEntries(filtered, scope);
+      const entries = buildPdfEntries(sorted, elevMap, techMap, srMap, soMap);
+
       const sameMonth = dateFrom.slice(0, 7) === dateTo.slice(0, 7);
       const period = sameMonth ? dateFrom.slice(0, 7) : `${dateFrom}-a-${dateTo}`;
       if (selectedElevator) {
-        const el = elevators.find((e) => e.id === selectedElevator);
-        const blob = await pdf(<VisitBookPDF scope="elevator" elevatorCode={el?.code} buildingName={building?.name || '-'} clientName={clientName} dateFrom={dateFrom} dateTo={dateTo} entries={entries} />).toBlob();
+        const el = elevMap.get(selectedElevator);
+        const blob = await pdf(<VisitBookPDF scope="elevator" elevatorCode={el?.code} buildingName={building.name} clientName={client.name} dateFrom={dateFrom} dateTo={dateTo} entries={entries as any} />).toBlob();
         downloadBlob(blob, `libro-visitas-${slugify(el?.code || 'ascensor')}-${period}.pdf`);
       } else {
-        const blob = await pdf(<VisitBookPDF scope="building" buildingName={building?.name || '-'} clientName={clientName} dateFrom={dateFrom} dateTo={dateTo} entries={entries} elevatorCount={filteredElevators.length} />).toBlob();
-        downloadBlob(blob, `libro-visitas-edificio-${slugify(building?.name || 'edificio')}-${period}.pdf`);
+        const blob = await pdf(<VisitBookPDF scope="building" buildingName={building.name} clientName={client.name} dateFrom={dateFrom} dateTo={dateTo} entries={entries as any} elevatorCount={filteredElevators.length} />).toBlob();
+        downloadBlob(blob, `libro-visitas-edificio-${slugify(building.name)}-${period}.pdf`);
       }
     } catch (err: unknown) { setError(getErrorMessage(err)); } finally { setGenerating(false); }
   };

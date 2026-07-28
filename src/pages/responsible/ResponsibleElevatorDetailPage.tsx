@@ -2,11 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { getResponsibleElevators, getResponsibleServiceRecords, getResponsibleServiceOrders, getResponsibleVisitEntries, getResponsibleMonthlyReports, getResponsibleTechnicians, getResponsibleChecklistItems, getErrorMessage } from '@/services/responsiblePortalService';
 import type { ResponsibleElevator, ResponsibleServiceRecord, ResponsibleServiceOrder, ResponsibleVisitEntry, ResponsibleMonthlyReport, ResponsibleTechnician, ResponsibleChecklistItem } from '@/services/responsiblePortalService';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS, STATUS_COLORS } from '@/types/elevators';
-import { ArrowLeft, AlertCircle, Clock, FileText, Wrench, CheckCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Clock, FileText, Wrench, CheckCircle, RefreshCw } from 'lucide-react';
 
 function formatDateOnly(v?: string | null): string { if (!v) return '-'; const [y, m, d] = v.slice(0, 10).split('-'); return `${Number(d)}/${Number(m)}/${y}`; }
 function formatTime(ts?: string | null): string { if (!ts) return '-'; return new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }); }
@@ -21,6 +22,8 @@ function formatDuration(e: { duration_seconds?: number | null; duration_minutes?
   return '-';
 }
 const CHECKLIST_LABELS: Record<string, string> = { ok: 'Correcto', needs_attention: 'Requiere atención', failed: 'Falló', na: 'No aplica' };
+const SERVICE_TYPE_LABELS: Record<string, string> = { preventivo: 'Preventivo', correctivo: 'Correctivo', emergencia: 'Emergencia', inspeccion: 'Inspección', instalacion: 'Instalación', otro: 'Otro' };
+const ORDER_TYPE_LABELS: Record<string, string> = { preventive: 'Preventivo', corrective: 'Correctivo', emergency: 'Emergencia', inspection: 'Inspección', claim_response: 'Respuesta a reclamo', budgeted_work: 'Trabajo presupuestado', modernization: 'Modernización', other: 'Otro' };
 
 export default function ResponsibleElevatorDetailPage() {
   const { elevatorId } = useParams<{ elevatorId: string }>();
@@ -62,7 +65,7 @@ export default function ResponsibleElevatorDetailPage() {
   }, [checklist]);
 
   if (loading) return <DashboardLayout role="responsible" title="Ascensor"><div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
-  if (error) return <DashboardLayout role="responsible" title="Ascensor"><div className="max-w-2xl mx-auto"><button onClick={() => navigate('/responsable/ascensores')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"><ArrowLeft size={18} /> Volver</button><Card><CardContent><div className="text-center py-8"><AlertCircle size={48} className="mx-auto text-danger mb-4" /><p className="text-gray-600">{error}</p></div></CardContent></Card></div></DashboardLayout>;
+  if (error) return <DashboardLayout role="responsible" title="Ascensor"><div className="max-w-2xl mx-auto"><button onClick={() => navigate('/responsable/ascensores')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"><ArrowLeft size={18} /> Volver</button><Card><CardContent><div className="text-center py-8"><AlertCircle size={48} className="mx-auto text-danger mb-4" /><p className="text-gray-600">{error}</p><Button onClick={loadData} className="mt-4"><RefreshCw size={14} className="mr-1" /> Reintentar</Button></div></CardContent></Card></div></DashboardLayout>;
   if (!elevator) return null;
 
   return (
@@ -80,15 +83,20 @@ export default function ResponsibleElevatorDetailPage() {
           <div><p className="text-gray-500">Año instalación</p><p className="font-medium">{elevator.year_installed || '-'}</p></div>
           <div><p className="text-gray-500">Conservación</p><p className="font-medium">{elevator.conservation_status ? CONSERVATION_STATUS_LABELS[elevator.conservation_status as keyof typeof CONSERVATION_STATUS_LABELS] || '-' : '-'}</p></div>
           <div><p className="text-gray-500">Contrato</p><p className="font-medium">{elevator.contractual_status || '-'}</p></div>
+          <div><p className="text-gray-500">Último servicio</p><p className="font-medium">{formatDateOnly(elevator.last_service_date)}</p></div>
+          <div><p className="text-gray-500">Próximo servicio</p><p className="font-medium">{formatDateOnly(elevator.next_service_date)}</p></div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card><CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Wrench size={16} /> Mantenimientos ({records.length})</h3></CardHeader><CardContent className="space-y-3">
             {records.length === 0 ? <p className="text-gray-500">No hay mantenimientos</p> : records.map((r) => (
               <div key={r.id} className="p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2"><span className="text-sm font-semibold">{formatDateOnly(r.service_date)}</span><Badge variant="info" className="text-xs">{r.service_type}</Badge></div>
+                <div className="flex items-center gap-2"><span className="text-sm font-semibold">{formatDateOnly(r.service_date)}</span><Badge variant="info" className="text-xs">{SERVICE_TYPE_LABELS[r.service_type] || r.service_type}</Badge></div>
                 <p className="text-xs text-gray-600 mt-1">{techName(r.technician_id)}</p>
                 {r.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>}
+                {r.technical_report && <p className="text-xs text-gray-500 mt-1 line-clamp-2 italic">{r.technical_report}</p>}
+                {r.observations && <p className="text-xs text-gray-500 mt-1">Obs: {r.observations}</p>}
+                {r.final_report_text && <p className="text-xs text-gray-500 mt-1">Conclusión: {r.final_report_text}</p>}
                 {checklistByRecord.has(r.id) && (
                   <div className="mt-2 space-y-1">
                     {checklistByRecord.get(r.id)!.map((item) => (
@@ -96,6 +104,7 @@ export default function ResponsibleElevatorDetailPage() {
                         <CheckCircle size={12} className={item.status === 'ok' ? 'text-green-500' : item.status === 'failed' ? 'text-red-500' : 'text-yellow-500'} />
                         <span className="text-gray-600">{item.item_name}</span>
                         <span className="text-gray-400">— {CHECKLIST_LABELS[item.status] || item.status}</span>
+                        {item.notes && <span className="text-gray-400 italic">({item.notes})</span>}
                       </div>
                     ))}
                   </div>
@@ -106,7 +115,11 @@ export default function ResponsibleElevatorDetailPage() {
 
           <Card><CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><FileText size={16} /> Órdenes ({orders.length})</h3></CardHeader><CardContent className="space-y-3">
             {orders.length === 0 ? <p className="text-gray-500">No hay órdenes</p> : orders.map((o) => (
-              <div key={o.id} className="p-3 bg-gray-50 rounded-lg"><p className="text-sm font-semibold">{o.subject}</p><p className="text-xs text-gray-600">{o.order_type} · {o.reviewed_at ? formatDateOnly(o.reviewed_at) : '-'}</p>{o.completion_summary && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{o.completion_summary}</p>}</div>
+              <div key={o.id} className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm font-semibold">{o.subject}</p>
+                <p className="text-xs text-gray-600">{ORDER_TYPE_LABELS[o.order_type] || o.order_type} · {o.reviewed_at ? formatDateOnly(o.reviewed_at) : '-'}</p>
+                {o.completion_summary && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{o.completion_summary}</p>}
+              </div>
             ))}
           </CardContent></Card>
 
@@ -122,7 +135,11 @@ export default function ResponsibleElevatorDetailPage() {
 
           <Card><CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><FileText size={16} /> Informes ({reports.length})</h3></CardHeader><CardContent className="space-y-3">
             {reports.length === 0 ? <p className="text-gray-500">No hay informes</p> : reports.map((r) => (
-              <div key={r.id} className="p-3 bg-gray-50 rounded-lg"><p className="text-sm font-semibold">{r.period}</p><p className="text-xs text-gray-600">{r.status} · {r.has_pdf ? 'PDF disponible' : 'Sin PDF'}</p></div>
+              <div key={r.id} className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm font-semibold">{r.period}</p>
+                <p className="text-xs text-gray-600">{r.status === 'approved' ? 'Aprobado' : r.status === 'sent' ? 'Enviado' : r.status} · {r.has_pdf ? 'PDF disponible' : 'Sin PDF'}</p>
+                {r.general_status && <p className="text-xs text-gray-500">{r.general_status}</p>}
+              </div>
             ))}
           </CardContent></Card>
         </div>
