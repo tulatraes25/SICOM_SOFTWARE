@@ -32,6 +32,9 @@ GRANT EXECUTE ON FUNCTION public.is_active_responsible() TO authenticated;
 -- 1. REMOVE ALL EXISTING RESPONSIBLE SELECT POLICIES
 -- ============================================================
 
+-- elevators (CRITICAL: drops unscoped policy that allowed direct SELECT)
+DROP POLICY IF EXISTS "Responsible can view assigned elevators" ON elevators;
+
 -- buildings
 DROP POLICY IF EXISTS "responsible_select_assigned_buildings" ON buildings;
 DROP POLICY IF EXISTS "Responsible can view buildings" ON buildings;
@@ -404,6 +407,34 @@ GRANT EXECUTE ON FUNCTION public.get_responsible_technicians() TO authenticated;
 -- ============================================================
 -- 12. STORAGE — Signed URLs via Edge Function (no direct policies)
 -- ============================================================
+
+-- ============================================================
+-- 13. VALIDATION: No unauthorized SELECT on elevators for responsible
+-- ============================================================
+
+DO $$
+DECLARE
+  v_bad_policy RECORD;
+BEGIN
+  FOR v_bad_policy IN
+    SELECT policyname, qual
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'elevators'
+      AND cmd = 'SELECT'
+      AND (
+        roles @> ARRAY['responsible']::text[]
+        OR roles @> ARRAY['authenticated']::text[]
+      )
+      AND policyname NOT LIKE 'Admin%'
+      AND policyname NOT LIKE 'Supervisor%'
+      AND policyname NOT LIKE 'Technician%'
+  LOOP
+    RAISE EXCEPTION 'Unauthorized SELECT policy on elevators for responsible: % (qual: %)',
+      v_bad_policy.policyname, v_bad_policy.qual;
+  END LOOP;
+  RAISE NOTICE 'Validation passed: no unauthorized SELECT policies on elevators';
+END $$;
 
 -- ============================================================
 -- DONE
