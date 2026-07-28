@@ -5,63 +5,14 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { getResponsibleElevators, getResponsibleBuildings, getResponsibleClients, getResponsibleVisitEntries, getResponsibleTechnicians, getResponsibleServiceRecords, getResponsibleServiceOrders, getErrorMessage } from '@/services/responsiblePortalService';
-import type { ResponsibleElevator, ResponsibleBuilding, ResponsibleClient, ResponsibleVisitEntry, ResponsibleTechnician, ResponsibleServiceRecord, ResponsibleServiceOrder } from '@/services/responsiblePortalService';
-import VisitBookPDF, { type VisitBookEntryData } from '@/components/pdf/VisitBookPDF';
+import type { ResponsibleElevator, ResponsibleBuilding, ResponsibleClient, ResponsibleTechnician } from '@/services/responsiblePortalService';
+import { sortResponsibleVisitEntries, buildResponsibleVisitBookEntries } from './responsibleVisitBookUtils';
+import VisitBookPDF from '@/components/pdf/VisitBookPDF';
 import { BookOpen, FileDown } from 'lucide-react';
 
 function toDateInputValue(date: Date): string { const y = date.getFullYear(); const m = String(date.getMonth() + 1).padStart(2, '0'); const d = String(date.getDate()).padStart(2, '0'); return `${y}-${m}-${d}`; }
 function getCurrentMonthRange() { const now = new Date(); return { from: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)), to: toDateInputValue(new Date(now.getFullYear(), now.getMonth() + 1, 0)) }; }
 function slugify(v: string) { return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
-const naturalSort = new Intl.Collator('es', { numeric: true, sensitivity: 'base' }).compare;
-
-function buildPdfEntries(
-  visitEntries: ResponsibleVisitEntry[],
-  elevMap: Map<string, ResponsibleElevator>,
-  techMap: Map<string, ResponsibleTechnician>,
-  srMap: Map<string, ResponsibleServiceRecord>,
-  soMap: Map<string, ResponsibleServiceOrder>,
-): VisitBookEntryData[] {
-  return visitEntries.map((v) => {
-    const elevator = elevMap.get(v.elevator_id);
-    if (!elevator) throw new Error(`No se pudo identificar el ascensor del asiento N.º ${v.entry_number}`);
-    return {
-      id: v.id,
-      entry_number: v.entry_number,
-      visit_date: v.visit_date,
-      origin_type: v.origin_type ?? undefined,
-      title: v.title ?? undefined,
-      description: v.description,
-      work_performed: v.work_performed ?? undefined,
-      observations: v.observations ?? undefined,
-      status: v.status,
-      check_in_at: v.check_in_at ?? undefined,
-      check_out_at: v.check_out_at ?? undefined,
-      duration_minutes: v.duration_minutes ?? undefined,
-      duration_seconds: v.duration_seconds ?? undefined,
-      service_order_id: v.service_order_id ?? undefined,
-      service_record_id: v.service_record_id ?? undefined,
-      elevator: { id: elevator.id, code: elevator.code },
-      technician: v.technician_id ? { id: v.technician_id, full_name: techMap.get(v.technician_id)?.full_name } : undefined,
-      service_case: v.service_case_id ? { id: v.service_case_id, case_number: v.case_number ?? null, numbering_mode: v.numbering_mode ?? null } : undefined,
-      _serviceRecord: v.service_record_id ? srMap.get(v.service_record_id) || null : null,
-      _serviceOrder: v.service_order_id ? soMap.get(v.service_order_id) || null : null,
-    };
-  });
-}
-
-function sortVisitEntries(entries: ResponsibleVisitEntry[], elevMap: Map<string, ResponsibleElevator>, scope: 'elevator' | 'building') {
-  return [...entries].sort((a, b) => {
-    const dateCmp = a.visit_date.localeCompare(b.visit_date);
-    if (dateCmp !== 0) return dateCmp;
-    if (scope === 'building') {
-      const aCode = elevMap.get(a.elevator_id)?.code || '';
-      const bCode = elevMap.get(b.elevator_id)?.code || '';
-      const codeCmp = naturalSort(aCode, bCode);
-      if (codeCmp !== 0) return codeCmp;
-    }
-    return a.entry_number - b.entry_number;
-  });
-}
 
 export default function ResponsibleVisitBookPage() {
   const [searchParams] = useSearchParams();
@@ -124,8 +75,8 @@ export default function ResponsibleVisitBookPage() {
       const soMap = new Map(soData.map((o) => [o.id, o]));
 
       const scope = selectedElevator ? 'elevator' as const : 'building' as const;
-      const sorted = sortVisitEntries(filtered, elevMap, scope);
-      const entries = buildPdfEntries(sorted, elevMap, techMap, srMap, soMap);
+      const sorted = sortResponsibleVisitEntries(filtered, elevMap, scope);
+      const entries = buildResponsibleVisitBookEntries(sorted, elevMap, techMap, srMap, soMap);
 
       const sameMonth = dateFrom.slice(0, 7) === dateTo.slice(0, 7);
       const period = sameMonth ? dateFrom.slice(0, 7) : `${dateFrom}-a-${dateTo}`;
