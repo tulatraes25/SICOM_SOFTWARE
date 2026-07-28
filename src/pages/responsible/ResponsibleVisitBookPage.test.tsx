@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { isValidElement } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import ResponsibleVisitBookPage from './ResponsibleVisitBookPage';
 import type { ResponsibleBuilding, ResponsibleClient, ResponsibleElevator, ResponsibleVisitEntry, ResponsibleTechnician } from '@/services/responsiblePortalService';
+import type { VisitBookPDFProps } from '@/components/pdf/VisitBookPDF';
 
 // ============================================================
 // Mocks
@@ -37,6 +39,12 @@ const mockVisitEntry: ResponsibleVisitEntry = {
   operational_status: null, conservation_status: null, technician_id: 'tech-1',
   status: 'approved', check_in_at: '2026-07-27T10:42:00Z', check_out_at: '2026-07-27T15:03:00Z',
   duration_minutes: 261, duration_seconds: 15660, case_number: 1913, numbering_mode: 'test',
+};
+
+const mockVisitEntryOtherBuilding: ResponsibleVisitEntry = {
+  ...mockVisitEntry,
+  id: 'visit-2', elevator_id: 'elevator-otro', entry_number: 1, visit_date: '2026-07-20',
+  case_number: null, numbering_mode: null,
 };
 
 vi.mock('@/services/responsiblePortalService', () => ({
@@ -79,7 +87,6 @@ vi.mock('@/components/layout/Sidebar', () => ({
 
 import { getResponsibleBuildings, getResponsibleElevators, getResponsibleClients, getResponsibleTechnicians, getResponsibleVisitEntries, getResponsibleServiceRecords, getResponsibleServiceOrders } from '@/services/responsiblePortalService';
 import { pdf } from '@react-pdf/renderer';
-import VisitBookPDF from '@/components/pdf/VisitBookPDF';
 
 const mockGetBuildings = vi.mocked(getResponsibleBuildings);
 const mockGetElevators = vi.mocked(getResponsibleElevators);
@@ -89,7 +96,6 @@ const mockGetVisitEntries = vi.mocked(getResponsibleVisitEntries);
 const mockGetServiceRecords = vi.mocked(getResponsibleServiceRecords);
 const mockGetServiceOrders = vi.mocked(getResponsibleServiceOrders);
 const mockPdf = vi.mocked(pdf);
-const mockVisitBookPDF = vi.mocked(VisitBookPDF);
 
 function renderPage(initialEntries = ['/responsable/libro-visitas']) {
   return render(
@@ -97,6 +103,13 @@ function renderPage(initialEntries = ['/responsable/libro-visitas']) {
       <ResponsibleVisitBookPage />
     </MemoryRouter>
   );
+}
+
+function getPdfProps(): VisitBookPDFProps {
+  const callArgs = mockPdf.mock.calls[0];
+  const element = callArgs[0];
+  if (!isValidElement(element)) throw new Error('pdf() was not called with a valid React element');
+  return element.props as VisitBookPDFProps;
 }
 
 beforeEach(() => {
@@ -108,17 +121,18 @@ beforeEach(() => {
   mockGetServiceRecords.mockResolvedValue([]);
   mockGetServiceOrders.mockResolvedValue([]);
   mockPdf.mockClear();
-  mockVisitBookPDF.mockClear();
 
-  // Mock URL
   vi.stubGlobal('URL', {
+    ...URL,
     createObjectURL: vi.fn(() => 'blob:mock-url'),
     revokeObjectURL: vi.fn(),
   });
 });
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 // ============================================================
@@ -176,16 +190,22 @@ describe('ResponsibleVisitBookPage', () => {
   });
 
   describe('Query param no autorizado', () => {
-    it('muestra error y limpia selección', async () => {
+    it('muestra error, limpia selección y deshabilita ascensores', async () => {
       renderPage(['/responsable/libro-visitas?buildingId=building-prohibido']);
       await waitFor(() => {
         expect(screen.getByText('No tiene permiso para consultar este edificio')).toBeInTheDocument();
       });
+      const buildingSelect = screen.getByDisplayValue('Seleccionar edificio');
+      expect(buildingSelect).toHaveValue('');
+      const elevatorSelect = screen.getByDisplayValue('Todos mis ascensores del edificio');
+      expect(elevatorSelect).toBeDisabled();
+      const btn = screen.getByRole('button', { name: /generar/i });
+      expect(btn).toBeDisabled();
     });
   });
 
   describe('Cliente inexistente', () => {
-    it('muestra error al generar', async () => {
+    it('muestra error y no genera descarga', async () => {
       mockGetClients.mockResolvedValue([]);
       renderPage(['/responsable/libro-visitas?buildingId=building-1']);
       await waitFor(() => { expect(screen.getByText('Hospital Regional')).toBeInTheDocument(); });
@@ -195,12 +215,13 @@ describe('ResponsibleVisitBookPage', () => {
         expect(screen.getByText('No se pudo identificar el cliente del edificio')).toBeInTheDocument();
       });
       expect(mockPdf).not.toHaveBeenCalled();
+      expect(URL.createObjectURL).not.toHaveBeenCalled();
     });
   });
 
   describe('Edificio sin ascensores', () => {
     it('muestra error al generar', async () => {
-      mockGetElevators.mockResolvedValue([mockElevators[2]]); // Only elevator-otro (building-2)
+      mockGetElevators.mockResolvedValue([mockElevators[2]]);
       renderPage(['/responsable/libro-visitas?buildingId=building-1']);
       await waitFor(() => { expect(screen.getByText('Hospital Regional')).toBeInTheDocument(); });
       const btn = screen.getByRole('button', { name: /generar/i });
@@ -213,19 +234,21 @@ describe('ResponsibleVisitBookPage', () => {
   });
 
   describe('Consolidado correcto', () => {
-    it('genera PDF consolidado con scope building', async () => {
+    it('genera PDF consolidado con scope building y solo ascensores del edificio', async () => {
+      mockGetVisitEntries.mockResolvedValue([mockVisitEntry, mockVisitEntryOtherBuilding]);
       renderPage(['/responsable/libro-visitas?buildingId=building-1']);
       await waitFor(() => { expect(screen.getByText('Hospital Regional')).toBeInTheDocument(); });
       const btn = screen.getByRole('button', { name: /generar/i });
       await userEvent.click(btn);
       await waitFor(() => {
         expect(mockPdf).toHaveBeenCalled();
-        const callArgs = mockPdf.mock.calls[0];
-        const el = callArgs[0] as unknown as { props: Record<string, unknown> };
-        expect(el.props.scope).toBe('building');
-        expect(el.props.buildingName).toBe('Hospital Regional');
-        expect(el.props.clientName).toBe('Hospital Regional S.A.');
-        expect(el.props.elevatorCount).toBe(2);
+        const props = getPdfProps();
+        expect(props.scope).toBe('building');
+        expect(props.buildingName).toBe('Hospital Regional');
+        expect(props.clientName).toBe('Hospital Regional S.A.');
+        expect(props.elevatorCount).toBe(2);
+        expect(props.entries).toHaveLength(1);
+        expect(props.entries[0].elevator?.id).toBe('elevator-1');
       });
     });
 
@@ -241,7 +264,7 @@ describe('ResponsibleVisitBookPage', () => {
   });
 
   describe('Libro individual', () => {
-    it('genera PDF individual con scope elevator', async () => {
+    it('genera PDF individual con scope elevator y llama a todas las RPCs', async () => {
       renderPage(['/responsable/libro-visitas?buildingId=building-1']);
       await waitFor(() => { expect(screen.getByText('Hospital Regional')).toBeInTheDocument(); });
       const elevatorSelect = screen.getByDisplayValue('Todos mis ascensores del edificio');
@@ -250,22 +273,12 @@ describe('ResponsibleVisitBookPage', () => {
       await userEvent.click(btn);
       await waitFor(() => {
         expect(mockPdf).toHaveBeenCalled();
-        const callArgs = mockPdf.mock.calls[0];
-        const el = callArgs[0] as unknown as { props: Record<string, unknown> };
-        expect(el.props.scope).toBe('elevator');
-        expect(el.props.elevatorCode).toBe('ASC-0001');
-      });
-    });
-
-    it('getResponsibleVisitEntries recibe elevator-1', async () => {
-      renderPage(['/responsable/libro-visitas?buildingId=building-1']);
-      await waitFor(() => { expect(screen.getByText('Hospital Regional')).toBeInTheDocument(); });
-      const elevatorSelect = screen.getByDisplayValue('Todos mis ascensores del edificio');
-      await userEvent.selectOptions(elevatorSelect, 'elevator-1');
-      const btn = screen.getByRole('button', { name: /generar/i });
-      await userEvent.click(btn);
-      await waitFor(() => {
+        const props = getPdfProps();
+        expect(props.scope).toBe('elevator');
+        expect(props.elevatorCode).toBe('ASC-0001');
         expect(mockGetVisitEntries).toHaveBeenCalledWith('elevator-1', expect.any(String), expect.any(String));
+        expect(mockGetServiceRecords).toHaveBeenCalledWith('elevator-1');
+        expect(mockGetServiceOrders).toHaveBeenCalledWith('elevator-1');
       });
     });
   });
@@ -285,7 +298,7 @@ describe('ResponsibleVisitBookPage', () => {
   });
 
   describe('Error del servicio', () => {
-    it('muestra error visible cuando getResponsibleVisitEntries falla', async () => {
+    it('muestra error visible y restaura botón', async () => {
       mockGetVisitEntries.mockRejectedValue(new Error('RPC failed'));
       renderPage(['/responsable/libro-visitas?buildingId=building-1']);
       await waitFor(() => { expect(screen.getByText('Hospital Regional')).toBeInTheDocument(); });
@@ -299,14 +312,19 @@ describe('ResponsibleVisitBookPage', () => {
   });
 
   describe('Descarga correcta', () => {
-    it('llama a createObjectURL y revokeObjectURL', async () => {
+    it('ejecuta createObjectURL, click y revokeObjectURL', async () => {
+      const mockClick = vi.fn();
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(mockClick);
+
       renderPage(['/responsable/libro-visitas?buildingId=building-1']);
       await waitFor(() => { expect(screen.getByText('Hospital Regional')).toBeInTheDocument(); });
       const btn = screen.getByRole('button', { name: /generar/i });
       await userEvent.click(btn);
       await waitFor(() => {
-        expect(URL.createObjectURL).toHaveBeenCalled();
-        expect(URL.revokeObjectURL).toHaveBeenCalled();
+        expect(mockPdf).toHaveBeenCalled();
+        expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+        expect(mockClick).toHaveBeenCalledTimes(1);
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
       });
     });
   });
