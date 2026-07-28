@@ -65,17 +65,20 @@ export async function listAllEntries(
 
   // Resolve clientId to elevator IDs (if no building/elevator specified)
   if (filters?.clientId && !filters?.buildingId && !filters?.elevatorId) {
-    const { data: blds } = await supabase.from('buildings').select('id').eq('client_id', filters.clientId).eq('active', true);
+    const { data: blds, error: bldsErr } = await supabase.from('buildings').select('id').eq('client_id', filters.clientId).eq('active', true);
+    if (bldsErr) throw bldsErr;
     const buildingIds = (blds || []).map((b: any) => b.id);
     if (buildingIds.length === 0) return { data: [], count: 0 };
-    const { data: els } = await supabase.from('elevators').select('id').in('building_id', buildingIds).eq('active', true);
+    const { data: els, error: elsErr } = await supabase.from('elevators').select('id').in('building_id', buildingIds).eq('active', true);
+    if (elsErr) throw elsErr;
     elevatorIds = (els || []).map((e: any) => e.id);
     if (elevatorIds.length === 0) return { data: [], count: 0 };
   }
 
   // Resolve building to elevator IDs
   if (filters?.buildingId && !filters?.elevatorId) {
-    const { data: els } = await supabase.from('elevators').select('id').eq('building_id', filters.buildingId).eq('active', true);
+    const { data: els, error: elsErr } = await supabase.from('elevators').select('id').eq('building_id', filters.buildingId).eq('active', true);
+    if (elsErr) throw elsErr;
     elevatorIds = (els || []).map((e: any) => e.id);
     if (elevatorIds.length === 0) return { data: [], count: 0 };
   }

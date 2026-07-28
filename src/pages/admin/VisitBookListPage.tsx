@@ -94,8 +94,14 @@ export default function VisitBookListPage() {
 
   // Load cascade options
   useEffect(() => {
-    supabase.from('clients').select('id, name').eq('active', true).order('name').then(({ data }) => setClients(data || []));
-    supabase.from('profiles').select('id, full_name').eq('role', 'technician').eq('active', true).order('full_name').then(({ data }) => setTechnicians(data || []));
+    supabase.from('clients').select('id, name').eq('active', true).order('name').then(({ data, error }) => {
+      if (error) console.error('Error loading clients:', error);
+      else setClients(data || []);
+    });
+    supabase.from('profiles').select('id, full_name').eq('role', 'technician').eq('active', true).order('full_name').then(({ data, error }) => {
+      if (error) console.error('Error loading technicians:', error);
+      else setTechnicians(data || []);
+    });
   }, []);
 
   useEffect(() => {

@@ -119,20 +119,20 @@ export default function VisitBookPdfModal({
           const { data: sr, error: srErr } = await supabase.from('service_records')
             .select('service_type, service_date, description, technical_report, observations, final_report_text')
             .eq('id', entry.service_record_id).maybeSingle();
-          if (srErr) console.error('Error loading service record:', srErr);
+          if (srErr) throw new Error(`No se pudo cargar el mantenimiento del asiento N.º ${entry.entry_number}`);
           entry._serviceRecord = sr;
         }
         if (entry.service_order_id) {
           const { data: so, error: soErr } = await supabase.from('service_orders')
             .select('completion_summary')
             .eq('id', entry.service_order_id).maybeSingle();
-          if (soErr) console.error('Error loading service order:', soErr);
+          if (soErr) throw new Error(`No se pudo cargar la orden del asiento N.º ${entry.entry_number}`);
           entry._serviceOrder = so;
           const { data: prog, error: progErr } = await supabase.from('service_order_progress')
             .select('note, progress_type')
             .eq('service_order_id', entry.service_order_id)
             .order('created_at', { ascending: true });
-          if (progErr) console.error('Error loading progress:', progErr);
+          if (progErr) throw new Error(`No se pudieron cargar los avances del asiento N.º ${entry.entry_number}`);
           entry._progress = prog;
         }
         return entry;
@@ -184,7 +184,7 @@ export default function VisitBookPdfModal({
       onClose();
     } catch (err) {
       console.error('Error generating PDF:', err);
-      setError('Error al generar el PDF');
+      setError(err instanceof Error ? err.message : 'Error al generar el PDF');
     } finally {
       setGenerating(false);
     }
