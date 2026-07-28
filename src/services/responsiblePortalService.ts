@@ -1,7 +1,7 @@
 import { supabase } from '@/config/supabase';
 
 // ============================================================
-// Types (read-only, matching RPC return shapes)
+// Types
 // ============================================================
 
 export interface ResponsibleElevator {
@@ -30,6 +30,7 @@ export interface ResponsibleClient {
 
 export interface ResponsibleBuilding {
   id: string;
+  client_id: string;
   code: string;
   name: string;
   address: string;
@@ -77,6 +78,8 @@ export interface ResponsibleVisitEntry {
   check_out_at: string | null;
   duration_minutes: number | null;
   duration_seconds: number | null;
+  case_number: number | null;
+  numbering_mode: 'test' | 'production' | null;
 }
 
 export interface ResponsibleServiceOrder {
@@ -109,15 +112,33 @@ export interface ResponsibleTechnician {
   full_name: string;
 }
 
+export interface ResponsibleChecklistItem {
+  id: string;
+  service_record_id: string;
+  item_name: string;
+  status: string;
+  notes: string | null;
+}
+
 // ============================================================
-// Service functions
+// Helpers
 // ============================================================
+
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return 'Error desconocido';
+}
 
 async function rpc<T>(fn: string, params?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, params || {});
   if (error) throw new Error(`Error al cargar datos: ${error.message}`);
   return data as T;
 }
+
+// ============================================================
+// RPC functions
+// ============================================================
 
 export async function getResponsibleElevators(buildingId?: string): Promise<ResponsibleElevator[]> {
   return rpc<ResponsibleElevator[]>('get_responsible_elevators', { p_building_id: buildingId || null });
@@ -130,7 +151,7 @@ export async function getResponsibleClients(): Promise<ResponsibleClient[]> {
 export async function getResponsibleBuildings(): Promise<ResponsibleBuilding[]> {
   const { data, error } = await supabase
     .from('buildings')
-    .select('id, code, name, address, locality, province')
+    .select('id, client_id, code, name, address, locality, province')
     .order('name');
   if (error) throw new Error(`Error al cargar edificios: ${error.message}`);
   return data || [];
@@ -160,4 +181,14 @@ export async function getResponsibleMonthlyReports(elevatorId?: string): Promise
 
 export async function getResponsibleTechnicians(): Promise<ResponsibleTechnician[]> {
   return rpc<ResponsibleTechnician[]>('get_responsible_technicians');
+}
+
+export async function getResponsibleChecklistItems(serviceRecordIds: string[]): Promise<ResponsibleChecklistItem[]> {
+  if (serviceRecordIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('service_checklist_items')
+    .select('id, service_record_id, item_name, status, notes')
+    .in('service_record_id', serviceRecordIds);
+  if (error) throw new Error(`Error al cargar checklist: ${error.message}`);
+  return data || [];
 }
