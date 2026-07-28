@@ -32,7 +32,7 @@ GRANT EXECUTE ON FUNCTION public.is_active_responsible() TO authenticated;
 -- 1. REMOVE ALL EXISTING RESPONSIBLE SELECT POLICIES
 -- ============================================================
 
--- elevators (CRITICAL: drops unscoped policy that allowed direct SELECT)
+-- elevators
 DROP POLICY IF EXISTS "Responsible can view assigned elevators" ON elevators;
 
 -- buildings
@@ -66,53 +66,103 @@ DROP POLICY IF EXISTS "responsible_select_approved_service_orders" ON service_or
 DROP POLICY IF EXISTS "so_responsible_select" ON service_orders;
 
 -- ============================================================
--- 2. BUILDINGS — Scoped policy (safe: no internal columns)
+-- 2. HELPER: responsible_can_view_building(uuid)
+--     SECURITY DEFINER so it can query elevators directly.
+-- ============================================================
+
+DROP FUNCTION IF EXISTS public.responsible_can_view_building(uuid);
+
+CREATE OR REPLACE FUNCTION public.responsible_can_view_building(
+  p_building_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT public.is_active_responsible()
+    AND EXISTS (
+      SELECT 1 FROM elevators e
+      WHERE e.building_id = p_building_id
+        AND e.responsible_user_id = auth.uid()
+        AND e.active = true
+    );
+$$;
+
+REVOKE ALL ON FUNCTION public.responsible_can_view_building(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.responsible_can_view_building(uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.responsible_can_view_building(uuid) TO authenticated;
+
+-- ============================================================
+-- 3. HELPER: responsible_can_view_service_record(uuid)
+--     SECURITY DEFINER so it can query service_records + elevators.
+-- ============================================================
+
+DROP FUNCTION IF EXISTS public.responsible_can_view_service_record(uuid);
+
+CREATE OR REPLACE FUNCTION public.responsible_can_view_service_record(
+  p_service_record_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT public.is_active_responsible()
+    AND EXISTS (
+      SELECT 1 FROM service_records sr
+      JOIN elevators e ON e.id = sr.elevator_id
+      WHERE sr.id = p_service_record_id
+        AND sr.status = 'approved'
+        AND e.responsible_user_id = auth.uid()
+        AND e.active = true
+    );
+$$;
+
+REVOKE ALL ON FUNCTION public.responsible_can_view_service_record(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.responsible_can_view_service_record(uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.responsible_can_view_service_record(uuid) TO authenticated;
+
+-- ============================================================
+-- 4. BUILDINGS — Policy using SECURITY DEFINER helper
 -- ============================================================
 
 CREATE POLICY "responsible_select_assigned_buildings"
   ON buildings FOR SELECT
   TO authenticated
   USING (
-    public.is_active_responsible()
-    AND EXISTS (
-      SELECT 1 FROM elevators e
-      WHERE e.building_id = buildings.id
-        AND e.responsible_user_id = auth.uid()
-        AND e.active = true
-    )
+    public.responsible_can_view_building(buildings.id)
   );
 
 -- ============================================================
--- 3. SERVICE_CHECKLIST_ITEMS — Scoped policy (safe: checklist data)
+-- 5. SERVICE_CHECKLIST_ITEMS — Policy using SECURITY DEFINER helper
 -- ============================================================
 
 CREATE POLICY "responsible_select_approved_checklist"
   ON service_checklist_items FOR SELECT
   TO authenticated
   USING (
-    public.is_active_responsible()
-    AND EXISTS (
-      SELECT 1 FROM service_records sr
-      JOIN elevators e ON e.id = sr.elevator_id
-      WHERE sr.id = service_checklist_items.service_record_id
-        AND e.responsible_user_id = auth.uid()
-        AND e.active = true
-        AND sr.status = 'approved'
+    public.responsible_can_view_service_record(
+      service_checklist_items.service_record_id
     )
   );
 
 -- ============================================================
--- 4. DROP OLD FUNCTIONS BEFORE RECREATING WITH NEW SIGNATURES
+-- 6. DROP OLD FUNCTIONS BEFORE RECREATING
 -- ============================================================
 
-DROP FUNCTION IF EXISTS public.get_responsible_service_records(uuid);
-DROP FUNCTION IF EXISTS public.get_responsible_monthly_reports(uuid);
-DROP FUNCTION IF EXISTS public.get_responsible_visit_entries(uuid, date, date);
-DROP FUNCTION IF EXISTS public.get_responsible_clients();
 DROP FUNCTION IF EXISTS public.get_responsible_elevators(uuid);
+DROP FUNCTION IF EXISTS public.get_responsible_clients();
+DROP FUNCTION IF EXISTS public.get_responsible_service_records(uuid);
+DROP FUNCTION IF EXISTS public.get_responsible_visit_entries(uuid, date, date);
+DROP FUNCTION IF EXISTS public.get_responsible_service_orders(uuid);
+DROP FUNCTION IF EXISTS public.get_responsible_monthly_reports(uuid);
+DROP FUNCTION IF EXISTS public.get_responsible_technicians();
 
 -- ============================================================
--- 5. RPC: get_responsible_elevators()
+-- 7. RPC: get_responsible_elevators()
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.get_responsible_elevators(
@@ -158,7 +208,7 @@ REVOKE ALL ON FUNCTION public.get_responsible_elevators(uuid) FROM anon;
 GRANT EXECUTE ON FUNCTION public.get_responsible_elevators(uuid) TO authenticated;
 
 -- ============================================================
--- 6. RPC: get_responsible_clients()
+-- 8. RPC: get_responsible_clients()
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.get_responsible_clients()
@@ -183,7 +233,7 @@ REVOKE ALL ON FUNCTION public.get_responsible_clients() FROM anon;
 GRANT EXECUTE ON FUNCTION public.get_responsible_clients() TO authenticated;
 
 -- ============================================================
--- 7. RPC: get_responsible_service_records()
+-- 9. RPC: get_responsible_service_records()
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.get_responsible_service_records(
@@ -231,7 +281,7 @@ REVOKE ALL ON FUNCTION public.get_responsible_service_records(uuid) FROM anon;
 GRANT EXECUTE ON FUNCTION public.get_responsible_service_records(uuid) TO authenticated;
 
 -- ============================================================
--- 8. RPC: get_responsible_visit_entries()
+-- 10. RPC: get_responsible_visit_entries()
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.get_responsible_visit_entries(
@@ -294,7 +344,7 @@ REVOKE ALL ON FUNCTION public.get_responsible_visit_entries(uuid, date, date) FR
 GRANT EXECUTE ON FUNCTION public.get_responsible_visit_entries(uuid, date, date) TO authenticated;
 
 -- ============================================================
--- 9. RPC: get_responsible_service_orders()
+-- 11. RPC: get_responsible_service_orders()
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.get_responsible_service_orders(
@@ -333,7 +383,7 @@ REVOKE ALL ON FUNCTION public.get_responsible_service_orders(uuid) FROM anon;
 GRANT EXECUTE ON FUNCTION public.get_responsible_service_orders(uuid) TO authenticated;
 
 -- ============================================================
--- 10. RPC: get_responsible_monthly_reports()
+-- 12. RPC: get_responsible_monthly_reports()
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.get_responsible_monthly_reports(
@@ -377,7 +427,7 @@ REVOKE ALL ON FUNCTION public.get_responsible_monthly_reports(uuid) FROM anon;
 GRANT EXECUTE ON FUNCTION public.get_responsible_monthly_reports(uuid) TO authenticated;
 
 -- ============================================================
--- 11. RPC: get_responsible_technicians()
+-- 13. RPC: get_responsible_technicians()
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.get_responsible_technicians()
@@ -405,11 +455,11 @@ REVOKE ALL ON FUNCTION public.get_responsible_technicians() FROM anon;
 GRANT EXECUTE ON FUNCTION public.get_responsible_technicians() TO authenticated;
 
 -- ============================================================
--- 12. STORAGE — Signed URLs via Edge Function (no direct policies)
+-- 14. STORAGE — Signed URLs via Edge Function (no direct policies)
 -- ============================================================
 
 -- ============================================================
--- 13. VALIDATION: No unauthorized SELECT on elevators for responsible
+-- 15. VALIDATION: No unauthorized SELECT for responsible
 -- ============================================================
 
 DO $$
@@ -417,23 +467,22 @@ DECLARE
   v_bad_policy RECORD;
 BEGIN
   FOR v_bad_policy IN
-    SELECT policyname, qual
+    SELECT policyname, tablename, qual, roles
     FROM pg_policies
     WHERE schemaname = 'public'
-      AND tablename = 'elevators'
       AND cmd = 'SELECT'
       AND (
-        roles @> ARRAY['responsible']::text[]
-        OR roles @> ARRAY['authenticated']::text[]
+        policyname ILIKE '%responsible%'
+        OR qual ILIKE '%responsible_user_id%'
+        OR qual ILIKE '%role = ''responsible''%'
       )
-      AND policyname NOT LIKE 'Admin%'
-      AND policyname NOT LIKE 'Supervisor%'
-      AND policyname NOT LIKE 'Technician%'
+      AND tablename NOT IN ('buildings', 'service_checklist_items')
   LOOP
-    RAISE EXCEPTION 'Unauthorized SELECT policy on elevators for responsible: % (qual: %)',
-      v_bad_policy.policyname, v_bad_policy.qual;
+    RAISE EXCEPTION 'Unauthorized SELECT policy for responsible on %: % (roles: %, qual: %)',
+      v_bad_policy.tablename, v_bad_policy.policyname,
+      v_bad_policy.roles, v_bad_policy.qual;
   END LOOP;
-  RAISE NOTICE 'Validation passed: no unauthorized SELECT policies on elevators';
+  RAISE NOTICE 'Validation passed: no unauthorized SELECT policies for responsible';
 END $$;
 
 -- ============================================================
@@ -443,8 +492,10 @@ END $$;
 DO $$
 BEGIN
   RAISE NOTICE '=== Migration 059 Complete ===';
-  RAISE NOTICE 'Functions created (8):';
+  RAISE NOTICE 'Functions created (10):';
   RAISE NOTICE '  - is_active_responsible() → boolean';
+  RAISE NOTICE '  - responsible_can_view_building(uuid) → boolean';
+  RAISE NOTICE '  - responsible_can_view_service_record(uuid) → boolean';
   RAISE NOTICE '  - get_responsible_elevators(uuid) → 15 columns';
   RAISE NOTICE '  - get_responsible_clients() → 3 columns';
   RAISE NOTICE '  - get_responsible_service_records(uuid) → 14 columns';
@@ -453,8 +504,8 @@ BEGIN
   RAISE NOTICE '  - get_responsible_monthly_reports(uuid) → 10 columns';
   RAISE NOTICE '  - get_responsible_technicians() → 2 columns';
   RAISE NOTICE 'Direct SELECT policies (2):';
-  RAISE NOTICE '  - buildings: responsible_select_assigned_buildings';
-  RAISE NOTICE '  - service_checklist_items: responsible_select_approved_checklist';
+  RAISE NOTICE '  - buildings: via responsible_can_view_building()';
+  RAISE NOTICE '  - service_checklist_items: via responsible_can_view_service_record()';
   RAISE NOTICE 'Tables with NO direct SELECT for responsible:';
   RAISE NOTICE '  - elevators, clients, service_records, service_orders';
   RAISE NOTICE '  - elevator_visit_entries, monthly_reports, profiles';
