@@ -61,6 +61,12 @@ import MonthlyReportDetailPage from '@/pages/supervisor/MonthlyReportDetailPage'
 
 // Responsible
 import ResponsibleDashboard from '@/pages/responsible/ResponsibleDashboard';
+import ResponsibleBuildingsPage from '@/pages/responsible/ResponsibleBuildingsPage';
+import ResponsibleBuildingDetailPage from '@/pages/responsible/ResponsibleBuildingDetailPage';
+import ResponsibleElevatorsPage from '@/pages/responsible/ResponsibleElevatorsPage';
+import ResponsibleElevatorDetailPage from '@/pages/responsible/ResponsibleElevatorDetailPage';
+import ResponsibleVisitBookPage from '@/pages/responsible/ResponsibleVisitBookPage';
+import ResponsibleReportsPage from '@/pages/responsible/ResponsibleReportsPage';
 
 export default function AppRouter() {
   return (
@@ -330,14 +336,13 @@ export default function AppRouter() {
         />
 
         {/* Responsible routes */}
-        <Route
-          path={ROUTES.RESPONSIBLE_DASHBOARD}
-          element={
-            <ProtectedRoute allowedRoles={['responsible']}>
-              <ResponsibleDashboard />
-            </ProtectedRoute>
-          }
-        />
+        <Route path={ROUTES.RESPONSIBLE_DASHBOARD} element={<ProtectedRoute allowedRoles={['responsible']}><ResponsibleDashboard /></ProtectedRoute>} />
+        <Route path={ROUTES.RESPONSIBLE_BUILDINGS} element={<ProtectedRoute allowedRoles={['responsible']}><ResponsibleBuildingsPage /></ProtectedRoute>} />
+        <Route path={ROUTES.RESPONSIBLE_BUILDING_DETAIL} element={<ProtectedRoute allowedRoles={['responsible']}><ResponsibleBuildingDetailPage /></ProtectedRoute>} />
+        <Route path={ROUTES.RESPONSIBLE_ELEVATORS} element={<ProtectedRoute allowedRoles={['responsible']}><ResponsibleElevatorsPage /></ProtectedRoute>} />
+        <Route path={ROUTES.RESPONSIBLE_ELEVATOR_DETAIL} element={<ProtectedRoute allowedRoles={['responsible']}><ResponsibleElevatorDetailPage /></ProtectedRoute>} />
+        <Route path={ROUTES.RESPONSIBLE_VISIT_BOOK} element={<ProtectedRoute allowedRoles={['responsible']}><ResponsibleVisitBookPage /></ProtectedRoute>} />
+        <Route path={ROUTES.RESPONSIBLE_REPORTS} element={<ProtectedRoute allowedRoles={['responsible']}><ResponsibleReportsPage /></ProtectedRoute>} />
 
         {/* Default redirect */}
         <Route path="/" element={<Navigate to={ROUTES.LOGIN} replace />} />

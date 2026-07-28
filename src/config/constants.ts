@@ -45,7 +45,12 @@ export const ROUTES = {
 
   // Responsible
   RESPONSIBLE_DASHBOARD: '/responsable',
-  RESPONSIBLE_HISTORY: '/responsable/historial',
+  RESPONSIBLE_BUILDINGS: '/responsable/edificios',
+  RESPONSIBLE_BUILDING_DETAIL: '/responsable/edificios/:buildingId',
+  RESPONSIBLE_ELEVATORS: '/responsable/ascensores',
+  RESPONSIBLE_ELEVATOR_DETAIL: '/responsable/ascensores/:elevatorId',
+  RESPONSIBLE_VISIT_BOOK: '/responsable/libro-visitas',
+  RESPONSIBLE_REPORTS: '/responsable/informes',
 } as const;
 
 export const SERVICE_TYPE_LABELS: Record<string, string> = {

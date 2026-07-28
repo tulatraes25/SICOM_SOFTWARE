@@ -63,8 +63,11 @@ const menuItems: Record<string, { label: string; path: string; icon: React.Eleme
     { label: 'Mi firma', path: '/perfil/firma', icon: FileSignature },
   ],
   responsible: [
-    { label: 'Dashboard', path: ROUTES.RESPONSIBLE_DASHBOARD, icon: LayoutDashboard },
-    { label: 'Mis Ascensores', path: ROUTES.RESPONSIBLE_DASHBOARD, icon: Building2 },
+    { label: 'Inicio', path: ROUTES.RESPONSIBLE_DASHBOARD, icon: LayoutDashboard },
+    { label: 'Mis edificios', path: ROUTES.RESPONSIBLE_BUILDINGS, icon: Building2 },
+    { label: 'Mis ascensores', path: ROUTES.RESPONSIBLE_ELEVATORS, icon: Building2 },
+    { label: 'Libro de visitas', path: ROUTES.RESPONSIBLE_VISIT_BOOK, icon: FileText },
+    { label: 'Informes mensuales', path: ROUTES.RESPONSIBLE_REPORTS, icon: FileText },
   ],
 };
 
@@ -106,7 +109,7 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
         {/* Header */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
           {!collapsed && (
-            <Link to={ROUTES.ADMIN_DASHBOARD} className="flex items-center gap-2">
+            <Link to={menuItems[role]?.[0]?.path || ROUTES.ADMIN_DASHBOARD} className="flex items-center gap-2">
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">S</span>
               </div>
