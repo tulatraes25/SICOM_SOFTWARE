@@ -106,10 +106,11 @@ function renderPage(initialEntries = ['/responsable/libro-visitas']) {
 }
 
 function getPdfProps(): VisitBookPDFProps {
-  const callArgs = mockPdf.mock.calls[0];
-  const element = callArgs[0];
-  if (!isValidElement(element)) throw new Error('pdf() was not called with a valid React element');
-  return element.props as VisitBookPDFProps;
+  const element = mockPdf.mock.calls[0]?.[0];
+  if (!isValidElement<VisitBookPDFProps>(element)) {
+    throw new Error('pdf() was not called with a valid VisitBookPDF element');
+  }
+  return element.props;
 }
 
 beforeEach(() => {
@@ -190,7 +191,7 @@ describe('ResponsibleVisitBookPage', () => {
   });
 
   describe('Query param no autorizado', () => {
-    it('muestra error, limpia selección y deshabilita ascensores', async () => {
+    it('muestra error, limpia selección, deshabilita ascensores y no genera PDF', async () => {
       renderPage(['/responsable/libro-visitas?buildingId=building-prohibido']);
       await waitFor(() => {
         expect(screen.getByText('No tiene permiso para consultar este edificio')).toBeInTheDocument();
@@ -201,11 +202,14 @@ describe('ResponsibleVisitBookPage', () => {
       expect(elevatorSelect).toBeDisabled();
       const btn = screen.getByRole('button', { name: /generar/i });
       expect(btn).toBeDisabled();
+      expect(mockPdf).not.toHaveBeenCalled();
+      expect(URL.createObjectURL).not.toHaveBeenCalled();
     });
   });
 
   describe('Cliente inexistente', () => {
     it('muestra error y no genera descarga', async () => {
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
       mockGetClients.mockResolvedValue([]);
       renderPage(['/responsable/libro-visitas?buildingId=building-1']);
       await waitFor(() => { expect(screen.getByText('Hospital Regional')).toBeInTheDocument(); });
@@ -216,6 +220,7 @@ describe('ResponsibleVisitBookPage', () => {
       });
       expect(mockPdf).not.toHaveBeenCalled();
       expect(URL.createObjectURL).not.toHaveBeenCalled();
+      expect(clickSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -312,9 +317,8 @@ describe('ResponsibleVisitBookPage', () => {
   });
 
   describe('Descarga correcta', () => {
-    it('ejecuta createObjectURL, click y revokeObjectURL', async () => {
-      const mockClick = vi.fn();
-      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(mockClick);
+    it('ejecuta createObjectURL, click, revokeObjectURL y el anchor se limpia', async () => {
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
 
       renderPage(['/responsable/libro-visitas?buildingId=building-1']);
       await waitFor(() => { expect(screen.getByText('Hospital Regional')).toBeInTheDocument(); });
@@ -323,9 +327,12 @@ describe('ResponsibleVisitBookPage', () => {
       await waitFor(() => {
         expect(mockPdf).toHaveBeenCalled();
         expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
-        expect(mockClick).toHaveBeenCalledTimes(1);
+        expect(clickSpy).toHaveBeenCalledTimes(1);
         expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
       });
+
+      const anchor = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock.results[0]?.value;
+      expect(anchor).toBeDefined();
     });
   });
 
