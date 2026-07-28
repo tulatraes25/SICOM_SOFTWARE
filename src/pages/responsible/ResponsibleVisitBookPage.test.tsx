@@ -318,6 +318,14 @@ describe('ResponsibleVisitBookPage', () => {
 
   describe('Descarga correcta', () => {
     it('ejecuta createObjectURL, click, revokeObjectURL y el anchor se limpia', async () => {
+      const originalCreateElement = document.createElement.bind(document);
+      let createdAnchor: HTMLAnchorElement | null = null;
+      vi.spyOn(document, 'createElement').mockImplementation(((tagName: string, options?: ElementCreationOptions) => {
+        const el = originalCreateElement(tagName, options);
+        if (tagName.toLowerCase() === 'a') createdAnchor = el as HTMLAnchorElement;
+        return el;
+      }) as typeof document.createElement);
+
       const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
 
       renderPage(['/responsable/libro-visitas?buildingId=building-1']);
@@ -328,11 +336,13 @@ describe('ResponsibleVisitBookPage', () => {
         expect(mockPdf).toHaveBeenCalled();
         expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
         expect(clickSpy).toHaveBeenCalledTimes(1);
+        expect(createdAnchor).not.toBeNull();
+        expect(createdAnchor!.download).toMatch(/\.pdf$/);
+        expect(createdAnchor!.download).toContain('libro-visitas-edificio');
+        expect(createdAnchor!.href).toContain('blob:mock-url');
         expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+        expect(document.body.contains(createdAnchor!)).toBe(false);
       });
-
-      const anchor = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock.results[0]?.value;
-      expect(anchor).toBeDefined();
     });
   });
 
