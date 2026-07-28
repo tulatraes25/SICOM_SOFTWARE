@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { getResponsibleElevators, getResponsibleBuildings, getResponsibleClients, getResponsibleVisitEntries, getResponsibleTechnicians, getResponsibleServiceRecords, getResponsibleServiceOrders, getErrorMessage } from '@/services/responsiblePortalService';
 import type { ResponsibleElevator, ResponsibleBuilding, ResponsibleClient, ResponsibleVisitEntry, ResponsibleTechnician, ResponsibleServiceRecord, ResponsibleServiceOrder } from '@/services/responsiblePortalService';
-import VisitBookPDF from '@/components/pdf/VisitBookPDF';
+import VisitBookPDF, { type VisitBookEntryData } from '@/components/pdf/VisitBookPDF';
 import { BookOpen, FileDown } from 'lucide-react';
 
 function toDateInputValue(date: Date): string { const y = date.getFullYear(); const m = String(date.getMonth() + 1).padStart(2, '0'); const d = String(date.getDate()).padStart(2, '0'); return `${y}-${m}-${d}`; }
@@ -20,29 +20,42 @@ function buildPdfEntries(
   techMap: Map<string, ResponsibleTechnician>,
   srMap: Map<string, ResponsibleServiceRecord>,
   soMap: Map<string, ResponsibleServiceOrder>,
-) {
-  return visitEntries.map((v) => ({
-    ...v,
-    elevator: elevMap.get(v.elevator_id) ? { id: v.elevator_id, code: elevMap.get(v.elevator_id)!.code } : undefined,
-    technician: v.technician_id ? { id: v.technician_id, full_name: techMap.get(v.technician_id)?.full_name || '-' } : undefined,
-    service_case: v.service_case_id ? { id: v.service_case_id, case_number: v.case_number, numbering_mode: v.numbering_mode } : undefined,
-    _serviceRecord: v.service_record_id ? srMap.get(v.service_record_id) || null : null,
-    _serviceOrder: v.service_order_id ? soMap.get(v.service_order_id) || null : null,
-    registered_at: v.check_in_at || v.visit_date,
-    registered_by: '',
-    is_rectification: false,
-    created_at: v.visit_date,
-    updated_at: v.visit_date,
-  }));
+): VisitBookEntryData[] {
+  return visitEntries.map((v) => {
+    const elevator = elevMap.get(v.elevator_id);
+    if (!elevator) throw new Error(`No se pudo identificar el ascensor del asiento N.º ${v.entry_number}`);
+    return {
+      id: v.id,
+      entry_number: v.entry_number,
+      visit_date: v.visit_date,
+      origin_type: v.origin_type ?? undefined,
+      title: v.title ?? undefined,
+      description: v.description,
+      work_performed: v.work_performed ?? undefined,
+      observations: v.observations ?? undefined,
+      status: v.status,
+      check_in_at: v.check_in_at ?? undefined,
+      check_out_at: v.check_out_at ?? undefined,
+      duration_minutes: v.duration_minutes ?? undefined,
+      duration_seconds: v.duration_seconds ?? undefined,
+      service_order_id: v.service_order_id ?? undefined,
+      service_record_id: v.service_record_id ?? undefined,
+      elevator: { id: elevator.id, code: elevator.code },
+      technician: v.technician_id ? { id: v.technician_id, full_name: techMap.get(v.technician_id)?.full_name } : undefined,
+      service_case: v.service_case_id ? { id: v.service_case_id, case_number: v.case_number ?? null, numbering_mode: v.numbering_mode ?? null } : undefined,
+      _serviceRecord: v.service_record_id ? srMap.get(v.service_record_id) || null : null,
+      _serviceOrder: v.service_order_id ? soMap.get(v.service_order_id) || null : null,
+    };
+  });
 }
 
-function sortVisitEntries(entries: ResponsibleVisitEntry[], scope: 'elevator' | 'building') {
+function sortVisitEntries(entries: ResponsibleVisitEntry[], elevMap: Map<string, ResponsibleElevator>, scope: 'elevator' | 'building') {
   return [...entries].sort((a, b) => {
     const dateCmp = a.visit_date.localeCompare(b.visit_date);
     if (dateCmp !== 0) return dateCmp;
     if (scope === 'building') {
-      const aCode = a.elevator_id || '';
-      const bCode = b.elevator_id || '';
+      const aCode = elevMap.get(a.elevator_id)?.code || '';
+      const bCode = elevMap.get(b.elevator_id)?.code || '';
       const codeCmp = naturalSort(aCode, bCode);
       if (codeCmp !== 0) return codeCmp;
     }
@@ -111,17 +124,17 @@ export default function ResponsibleVisitBookPage() {
       const soMap = new Map(soData.map((o) => [o.id, o]));
 
       const scope = selectedElevator ? 'elevator' as const : 'building' as const;
-      const sorted = sortVisitEntries(filtered, scope);
+      const sorted = sortVisitEntries(filtered, elevMap, scope);
       const entries = buildPdfEntries(sorted, elevMap, techMap, srMap, soMap);
 
       const sameMonth = dateFrom.slice(0, 7) === dateTo.slice(0, 7);
       const period = sameMonth ? dateFrom.slice(0, 7) : `${dateFrom}-a-${dateTo}`;
       if (selectedElevator) {
         const el = elevMap.get(selectedElevator);
-        const blob = await pdf(<VisitBookPDF scope="elevator" elevatorCode={el?.code} buildingName={building.name} clientName={client.name} dateFrom={dateFrom} dateTo={dateTo} entries={entries as any} />).toBlob();
+        const blob = await pdf(<VisitBookPDF scope="elevator" elevatorCode={el?.code} buildingName={building.name} clientName={client.name} dateFrom={dateFrom} dateTo={dateTo} entries={entries} />).toBlob();
         downloadBlob(blob, `libro-visitas-${slugify(el?.code || 'ascensor')}-${period}.pdf`);
       } else {
-        const blob = await pdf(<VisitBookPDF scope="building" buildingName={building.name} clientName={client.name} dateFrom={dateFrom} dateTo={dateTo} entries={entries as any} elevatorCount={filteredElevators.length} />).toBlob();
+        const blob = await pdf(<VisitBookPDF scope="building" buildingName={building.name} clientName={client.name} dateFrom={dateFrom} dateTo={dateTo} entries={entries} elevatorCount={filteredElevators.length} />).toBlob();
         downloadBlob(blob, `libro-visitas-edificio-${slugify(building.name)}-${period}.pdf`);
       }
     } catch (err: unknown) { setError(getErrorMessage(err)); } finally { setGenerating(false); }

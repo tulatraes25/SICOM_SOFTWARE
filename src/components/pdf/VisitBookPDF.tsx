@@ -1,5 +1,4 @@
 import { Document, Page, Text, View, StyleSheet, Image, Font } from '@react-pdf/renderer';
-import type { ElevatorVisitEntry } from '@/types/database';
 import { VISIT_ENTRY_STATUS_LABELS, VISIT_ORIGIN_LABELS } from '@/types/database';
 import logoSicom from '@/assets/logo-sicom.png';
 
@@ -36,6 +35,42 @@ const COL_BUILDING = {
   summary: '24%', in: '6%', out: '6%', dur: '6%', status: '8%',
 };
 
+export interface VisitBookEntryData {
+  id: string;
+  entry_number: number;
+  visit_date: string;
+  origin_type?: string;
+  title?: string;
+  description: string;
+  work_performed?: string;
+  observations?: string;
+  status: string;
+  check_in_at?: string;
+  check_out_at?: string;
+  duration_minutes?: number;
+  duration_seconds?: number;
+  service_order_id?: string;
+  service_record_id?: string;
+  elevator?: { id: string; code: string };
+  technician?: { id?: string; full_name?: string };
+  service_case?: { id?: string; case_number?: number | null; numbering_mode?: string | null };
+  _serviceRecord?: ServiceRecordData | null;
+  _serviceOrder?: ServiceOrderData | null;
+}
+
+interface ServiceRecordData {
+  description?: string | null;
+  observations?: string | null;
+  final_report_text?: string | null;
+  technical_report?: string | null;
+  service_type?: string | null;
+  service_date?: string | null;
+}
+
+interface ServiceOrderData {
+  completion_summary?: string | null;
+}
+
 export interface VisitBookPDFProps {
   scope: 'elevator' | 'building';
   elevatorCode?: string;
@@ -43,11 +78,11 @@ export interface VisitBookPDFProps {
   clientName: string;
   dateFrom: string;
   dateTo: string;
-  entries: ElevatorVisitEntry[];
+  entries: VisitBookEntryData[];
   elevatorCount?: number;
 }
 
-function formatCaseNumber(sc: any): string {
+function formatCaseNumber(sc: { numbering_mode?: string | null; case_number?: number | null } | undefined): string {
   if (!sc) return '';
   if (sc.numbering_mode === 'test') return `PRUEBA N.º ${sc.case_number}`;
   return `N.º ${sc.case_number}`;
@@ -64,7 +99,7 @@ function formatTime(ts: string | null | undefined): string {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
-function formatDuration(entry: any): string {
+function formatDuration(entry: { duration_seconds?: number; duration_minutes?: number; check_in_at?: string; check_out_at?: string }): string {
   if (entry.duration_seconds !== null && entry.duration_seconds !== undefined && entry.duration_seconds > 0) {
     if (entry.duration_seconds < 60) return '<1 min';
     if (entry.duration_seconds < 120) return '1 min';
@@ -91,12 +126,12 @@ function formatDuration(entry: any): string {
   return '-';
 }
 
-function buildVisitBookSummary(entry: any): string {
+function buildVisitBookSummary(entry: VisitBookEntryData): string {
   const MAX = 280;
   if (entry.origin_type === 'maintenance') {
     const sr = entry._serviceRecord;
     if (sr) {
-      const texts = [sr.description, sr.observations, sr.final_report_text, sr.technical_report].filter(Boolean);
+      const texts = [sr.description, sr.observations, sr.final_report_text, sr.technical_report].filter((x): x is string => Boolean(x));
       for (const t of texts) {
         const clean = t.replace(/TAREAS REALIZADAS[\s\S]*/i, '').replace(/CONCLUSIÓN[\s\S]*/i, '').trim();
         if (clean.length > 10) return clean.length > MAX ? clean.slice(0, MAX) + '…' : clean;
@@ -107,16 +142,10 @@ function buildVisitBookSummary(entry: any): string {
       : 'Mantenimiento realizado sin observaciones adicionales.';
   }
   if (entry.origin_type === 'service_order') {
-    const so = entry._serviceOrder;
-    if (so?.completion_summary && so.completion_summary !== 'Trabajo completado') {
-      return so.completion_summary.length > MAX ? so.completion_summary.slice(0, MAX) + '…' : so.completion_summary;
-    }
-    const progress = entry._progress;
-    if (progress && progress.length > 0) {
-      const last = progress[progress.length - 1];
-      if (last?.note && last.note.length > 10) {
-        return last.note.length > MAX ? last.note.slice(0, MAX) + '…' : last.note;
-      }
+    const so = entry._serviceOrder as Record<string, unknown> | null | undefined;
+    const summary = so?.completion_summary;
+    if (typeof summary === 'string' && summary !== 'Trabajo completado') {
+      return summary.length > MAX ? summary.slice(0, MAX) + '…' : summary;
     }
     if (entry.work_performed && entry.work_performed !== 'Trabajo completado') {
       return entry.work_performed.length > MAX ? entry.work_performed.slice(0, MAX) + '…' : entry.work_performed;
@@ -126,7 +155,7 @@ function buildVisitBookSummary(entry: any): string {
   return fallback.length > MAX ? fallback.slice(0, MAX) + '…' : fallback;
 }
 
-function buildDocumentLabel(entry: any): string {
+function buildDocumentLabel(entry: VisitBookEntryData): string {
   if (entry.service_case) return formatCaseNumber(entry.service_case);
   if (entry.service_order_id) return 'Orden de servicio';
   if (entry.service_record_id) {
@@ -151,15 +180,15 @@ export default function VisitBookPDF({
   scope, elevatorCode, buildingName, clientName, dateFrom, dateTo, entries, elevatorCount,
 }: VisitBookPDFProps) {
   const hasTestEntries = entries.some((e) =>
-    (e.service_case as any)?.numbering_mode === 'test' ||
-    ((e.service_case as any)?.case_number >= 1900 && (e.service_case as any)?.case_number <= 1999)
+    e.service_case?.numbering_mode === 'test' ||
+    (e.service_case?.case_number !== null && e.service_case?.case_number !== undefined && e.service_case.case_number >= 1900 && e.service_case.case_number <= 1999)
   );
 
   // Building scope: group by elevator for summary
   const elevatorSummary = scope === 'building' ? (() => {
     const map = new Map<string, number>();
-    entries.forEach((e: any) => {
-      const code = (e.elevator as any)?.code || 'Sin ascensor';
+    entries.forEach((e) => {
+      const code = e.elevator?.code || 'Sin ascensor';
       map.set(code, (map.get(code) || 0) + 1);
     });
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
@@ -221,12 +250,12 @@ export default function VisitBookPDF({
         {renderHeader()}
         {entries.map((entry) => (
           <View key={entry.id} style={styles.tableRow} wrap={false}>
-            {scope === 'building' && <Text style={[styles.td, { width: col.elev }]}>{(entry.elevator as any)?.code || '-'}</Text>}
+            {scope === 'building' && <Text style={[styles.td, { width: col.elev }]}>{entry.elevator?.code || '-'}</Text>}
             <Text style={[styles.td, { width: col.n }]}>{entry.entry_number}</Text>
             <Text style={[styles.td, { width: col.date }]}>{formatDateShort(entry.visit_date)}</Text>
             <Text style={[styles.td, { width: col.origin }]}>{(VISIT_ORIGIN_LABELS as Record<string, string>)[entry.origin_type || ''] || '-'}</Text>
             <Text style={[styles.td, { width: col.doc }]}>{buildDocumentLabel(entry)}</Text>
-            <Text style={[styles.td, { width: col.tech }]}>{(entry.technician as any)?.full_name || '-'}</Text>
+            <Text style={[styles.td, { width: col.tech }]}>{entry.technician?.full_name || '-'}</Text>
             <Text style={[styles.td, { width: col.summary }]}>{buildVisitBookSummary(entry)}</Text>
             <Text style={[styles.td, { width: col.in }]}>{formatTime(entry.check_in_at)}</Text>
             <Text style={[styles.td, { width: col.out }]}>{formatTime(entry.check_out_at)}</Text>
