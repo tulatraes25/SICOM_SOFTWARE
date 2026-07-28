@@ -64,7 +64,7 @@ export default function VisitBookPdfModal({
 
   useEffect(() => {
     if (!buildingId) { setElevators([]); return; }
-    supabase.from('elevators').select('id, code, building_id').eq('building_id', buildingId).order('code').then(({ data }) => setElevators(data || []));
+    supabase.from('elevators').select('id, code, building_id').eq('building_id', buildingId).eq('active', true).order('code').then(({ data }) => setElevators(data || []));
   }, [buildingId]);
 
   useEffect(() => {
@@ -116,24 +116,38 @@ export default function VisitBookPdfModal({
       // Enrich
       const enriched = await Promise.all(entries.map(async (entry: any) => {
         if (entry.service_record_id) {
-          const { data: sr } = await supabase.from('service_records')
+          const { data: sr, error: srErr } = await supabase.from('service_records')
             .select('service_type, service_date, description, technical_report, observations, final_report_text')
             .eq('id', entry.service_record_id).maybeSingle();
+          if (srErr) console.error('Error loading service record:', srErr);
           entry._serviceRecord = sr;
         }
         if (entry.service_order_id) {
-          const { data: so } = await supabase.from('service_orders')
+          const { data: so, error: soErr } = await supabase.from('service_orders')
             .select('completion_summary')
             .eq('id', entry.service_order_id).maybeSingle();
+          if (soErr) console.error('Error loading service order:', soErr);
           entry._serviceOrder = so;
-          const { data: prog } = await supabase.from('service_order_progress')
+          const { data: prog, error: progErr } = await supabase.from('service_order_progress')
             .select('note, progress_type')
             .eq('service_order_id', entry.service_order_id)
             .order('created_at', { ascending: true });
+          if (progErr) console.error('Error loading progress:', progErr);
           entry._progress = prog;
         }
         return entry;
       }));
+
+      // Sort for building scope: date → elevator code → entry number
+      if (scope === 'building') {
+        enriched.sort((a: any, b: any) => {
+          const dateCmp = String(a.visit_date).localeCompare(String(b.visit_date));
+          if (dateCmp !== 0) return dateCmp;
+          const elevCmp = String(a.elevator?.code || '').localeCompare(String(b.elevator?.code || ''), 'es', { numeric: true });
+          if (elevCmp !== 0) return elevCmp;
+          return Number(a.entry_number) - Number(b.entry_number);
+        });
+      }
 
       const firstElevator = (enriched[0] as any)?.elevator;
       const buildingName = firstElevator?.building?.name || '-';
@@ -217,7 +231,7 @@ export default function VisitBookPdfModal({
               </select>
             </div>
           ) : buildingId && elevators.length > 0 ? (
-            <p className="text-sm text-gray-500">Se incluirán {elevators.length} ascensor(es) activo(s)</p>
+            <p className="text-sm text-gray-500">Se incluirán {elevators.length === 1 ? '1 ascensor activo' : `${elevators.length} ascensores activos`}</p>
           ) : null}
 
           <div className="grid grid-cols-2 gap-3">

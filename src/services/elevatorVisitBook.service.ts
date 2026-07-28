@@ -63,6 +63,16 @@ export async function listAllEntries(
 ): Promise<{ data: any[]; count: number }> {
   let elevatorIds: string[] | null = null;
 
+  // Resolve clientId to elevator IDs (if no building/elevator specified)
+  if (filters?.clientId && !filters?.buildingId && !filters?.elevatorId) {
+    const { data: blds } = await supabase.from('buildings').select('id').eq('client_id', filters.clientId).eq('active', true);
+    const buildingIds = (blds || []).map((b: any) => b.id);
+    if (buildingIds.length === 0) return { data: [], count: 0 };
+    const { data: els } = await supabase.from('elevators').select('id').in('building_id', buildingIds).eq('active', true);
+    elevatorIds = (els || []).map((e: any) => e.id);
+    if (elevatorIds.length === 0) return { data: [], count: 0 };
+  }
+
   // Resolve building to elevator IDs
   if (filters?.buildingId && !filters?.elevatorId) {
     const { data: els } = await supabase.from('elevators').select('id').eq('building_id', filters.buildingId).eq('active', true);

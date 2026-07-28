@@ -9,7 +9,6 @@ import Input from '@/components/ui/Input';
 import { listAllEntries } from '@/services/elevatorVisitBook.service';
 import { VISIT_ENTRY_STATUS_LABELS, VISIT_ORIGIN_LABELS } from '@/types/database';
 import VisitBookPdfModal from '@/components/pdf/VisitBookPdfModal';
-import { formatEntryCount } from '@/components/pdf/VisitBookPDF';
 import { Eye, BookOpen, Search, Clock, FileDown, X } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
@@ -84,16 +83,19 @@ export default function VisitBookListPage() {
   const [dateTo, setDateTo] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterOrigin, setFilterOrigin] = useState('');
+  const [filterTechnician, setFilterTechnician] = useState('');
   const [search, setSearch] = useState('');
 
   // Cascade data
   const [clients, setClients] = useState<any[]>([]);
   const [buildings, setBuildings] = useState<any[]>([]);
   const [elevators, setElevators] = useState<any[]>([]);
+  const [technicians, setTechnicians] = useState<any[]>([]);
 
   // Load cascade options
   useEffect(() => {
     supabase.from('clients').select('id, name').eq('active', true).order('name').then(({ data }) => setClients(data || []));
+    supabase.from('profiles').select('id, full_name').eq('role', 'technician').eq('active', true).order('full_name').then(({ data }) => setTechnicians(data || []));
   }, []);
 
   useEffect(() => {
@@ -103,7 +105,7 @@ export default function VisitBookListPage() {
 
   useEffect(() => {
     if (!buildingId) { setElevators([]); return; }
-    supabase.from('elevators').select('id, code, building_id').eq('building_id', buildingId).order('code').then(({ data }) => setElevators(data || []));
+    supabase.from('elevators').select('id, code, building_id').eq('building_id', buildingId).eq('active', true).order('code').then(({ data }) => setElevators(data || []));
   }, [buildingId]);
 
   // Resolve query params on mount
@@ -128,7 +130,7 @@ export default function VisitBookListPage() {
   }, [buildingId, elevatorId]);
 
   // Load entries
-  useEffect(() => { loadEntries(); }, [clientId, buildingId, elevatorId, filterStatus, filterOrigin, dateFrom, dateTo, search]);
+  useEffect(() => { loadEntries(); }, [clientId, buildingId, elevatorId, filterStatus, filterOrigin, filterTechnician, dateFrom, dateTo, search]);
 
   const loadEntries = async () => {
     setLoading(true);
@@ -137,6 +139,7 @@ export default function VisitBookListPage() {
         clientId: clientId || undefined,
         buildingId: buildingId || undefined,
         elevatorId: elevatorId || undefined,
+        technicianId: filterTechnician || undefined,
         status: filterStatus || undefined,
         originType: filterOrigin || undefined,
         dateFrom: dateFrom || undefined,
@@ -151,11 +154,11 @@ export default function VisitBookListPage() {
   const clearFilters = () => {
     setClientId(''); setBuildingId(''); setElevatorId('');
     setDateFrom(''); setDateTo('');
-    setFilterStatus(''); setFilterOrigin(''); setSearch('');
+    setFilterStatus(''); setFilterOrigin(''); setFilterTechnician(''); setSearch('');
     setSearchParams({}, { replace: true });
   };
 
-  const hasActiveFilters = clientId || buildingId || elevatorId || dateFrom || dateTo || filterStatus || filterOrigin || search;
+  const hasActiveFilters = clientId || buildingId || elevatorId || dateFrom || dateTo || filterStatus || filterOrigin || filterTechnician || search;
 
   return (
     <DashboardLayout role="admin" title="Libro de Visitas">
@@ -166,7 +169,7 @@ export default function VisitBookListPage() {
               <BookOpen size={24} />
               Libro Digital de Visitas
             </h2>
-            <p className="text-gray-500">{formatEntryCount(count)} registrado(s)</p>
+            <p className="text-gray-500">{count === 1 ? '1 asiento registrado' : `${count} asientos registrados`}</p>
           </div>
           <Button onClick={() => setShowPdfModal(true)}>
             <FileDown size={16} className="mr-2" /> Generar PDF
@@ -208,6 +211,10 @@ export default function VisitBookListPage() {
                 <option value="maintenance">Mantenimiento</option>
                 <option value="claim">Reclamo</option>
                 <option value="manual">Manual</option>
+              </select>
+              <select className="border rounded px-3 py-2 text-sm" value={filterTechnician} onChange={(e) => setFilterTechnician(e.target.value)}>
+                <option value="">Todos los técnicos</option>
+                {technicians.map((t: any) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
               </select>
               {hasActiveFilters && (
                 <Button variant="outline" onClick={clearFilters}>
@@ -295,7 +302,7 @@ export default function VisitBookListPage() {
           initialBuildingId={buildingId}
           initialElevatorId={elevatorId}
           initialScope={buildingId && !elevatorId ? 'building' : 'elevator'}
-          allowBuildingScope={!!buildingId}
+          allowBuildingScope={true}
           onClose={() => setShowPdfModal(false)}
         />
       )}
