@@ -39,10 +39,14 @@ export default function ResponsibleElevatorsPage() {
 
   const sortedElevators = useMemo(() => {
     return [...elevators].sort((a, b) => {
-      const aName = buildingMap.get(a.building_id)?.name || '';
-      const bName = buildingMap.get(b.building_id)?.name || '';
-      const nc = naturalSort(aName, bName);
-      if (nc !== 0) return nc;
+      const aName = buildingMap.get(a.building_id)?.name;
+      const bName = buildingMap.get(b.building_id)?.name;
+      if (aName && !bName) return -1;
+      if (!aName && bName) return 1;
+      if (aName && bName) {
+        const nc = naturalSort(aName, bName);
+        if (nc !== 0) return nc;
+      }
       const cc = naturalSort(a.code, b.code);
       if (cc !== 0) return cc;
       return naturalSort(a.id, b.id);
@@ -64,7 +68,8 @@ export default function ResponsibleElevatorsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {sortedElevators.map((e) => (
-              <Card key={e.id}>
+              <div key={e.id} data-testid={`responsible-elevator-${e.id}`}>
+              <Card>
                 <CardContent>
                   <div className="flex items-start justify-between">
                     <div>
@@ -80,6 +85,7 @@ export default function ResponsibleElevatorsPage() {
                   </div>
                 </CardContent>
               </Card>
+              </div>
             ))}
           </div>
         )}

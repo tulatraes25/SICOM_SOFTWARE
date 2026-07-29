@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import ResponsibleElevatorsPage from './ResponsibleElevatorsPage';
@@ -12,11 +12,11 @@ const mockBuildings: ResponsibleBuilding[] = [
 ];
 
 const mockElevators: ResponsibleElevator[] = [
-  { id: 'elevator-10', code: 'ASC-10', building_id: 'building-3', manufacturer: 'Kone', model: 'MiniSpace', elevator_type: 'passenger', capacity_kg: 630, floors_served: '1-3', year_installed: 2021, operational_status: 'operativo', conservation_status: 'conforme', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
-  { id: 'elevator-2', code: 'ASC-2', building_id: 'building-3', manufacturer: 'Schindler', model: '3300', elevator_type: 'passenger', capacity_kg: 1000, floors_served: '1-8', year_installed: 2019, operational_status: 'operativo', conservation_status: 'conforme', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
+  { id: 'elevator-10', code: 'ASC-10', building_id: 'building-3', manufacturer: null, model: null, elevator_type: 'passenger', capacity_kg: 630, floors_served: '1-3', year_installed: 2021, operational_status: null, conservation_status: null, contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
+  { id: 'elevator-2', code: 'ASC-2', building_id: 'building-3', manufacturer: 'Schindler', model: null, elevator_type: 'passenger', capacity_kg: 1000, floors_served: '1-8', year_installed: 2019, operational_status: 'operativo', conservation_status: 'conforme', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
   { id: 'elevator-1', code: 'ASC-1', building_id: 'building-1', manufacturer: 'Otis', model: 'Gen2', elevator_type: 'passenger', capacity_kg: 800, floors_served: '1-5', year_installed: 2020, operational_status: 'operativo', conservation_status: 'conforme', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
-  { id: 'elevator-3', code: 'ASC-3', building_id: 'building-2', manufacturer: 'Kone', model: null, elevator_type: 'passenger', capacity_kg: 630, floors_served: '1-3', year_installed: 2021, operational_status: 'operativo', conservation_status: 'conforme', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
-  { id: 'elevator-foreign', code: 'ASC-9999', building_id: 'building-no-asignado', manufacturer: null, model: 'Desconocido', elevator_type: 'other', capacity_kg: 500, floors_served: '1-2', year_installed: 2018, operational_status: null, conservation_status: null, contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
+  { id: 'elevator-3', code: 'ASC-3', building_id: 'building-2', manufacturer: null, model: 'Modelo 300', elevator_type: 'passenger', capacity_kg: 630, floors_served: '1-3', year_installed: 2021, operational_status: 'operativo', conservation_status: 'conforme', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
+  { id: 'elevator-foreign', code: 'ASC-9999', building_id: 'building-no-asignado', manufacturer: 'Extra', model: 'X', elevator_type: 'other', capacity_kg: 500, floors_served: '1-2', year_installed: 2018, operational_status: null, conservation_status: null, contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
 ];
 
 vi.mock('@/services/responsiblePortalService', () => ({
@@ -51,75 +51,72 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe('ResponsibleElevatorsPage', () => {
   it('muestra código, edificio, fabricante/modelo y estados', async () => {
     renderPage();
-    await waitFor(() => {
-      expect(text()).toContain('ASC-1');
-      expect(text()).toContain('Hospital Regional');
-      expect(text()).toContain('Otis Gen2');
-      expect(text()).toContain('Operativo');
-      expect(text()).toContain('Conforme');
-    });
+    await waitFor(() => { expect(text()).toContain('ASC-1'); });
+    const card = screen.getByTestId('responsible-elevator-elevator-1');
+    expect(within(card).getByText('ASC-1')).toBeInTheDocument();
+    expect(within(card).getByText('Hospital Regional')).toBeInTheDocument();
+    expect(within(card).getByText('Otis Gen2')).toBeInTheDocument();
+    expect(within(card).getByText('Operativo')).toBeInTheDocument();
+    expect(within(card).getByText('Conforme')).toBeInTheDocument();
   });
   it('orden visual exacto', async () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-1'); });
-    const t = text();
-    const idx = [
-      t.indexOf('Clínica 2'),
-      t.indexOf('Clínica 10'),
-      t.indexOf('Hospital Regional'),
-      t.indexOf('Edificio desconocido'),
-    ].filter((i) => i >= 0);
-    for (let i = 1; i < idx.length; i++) { expect(idx[i - 1]).toBeLessThan(idx[i]); }
+    const cards = screen.getAllByTestId(/^responsible-elevator-/);
+    const codes = cards.map((c) => within(c).getByText(/^ASC-/).textContent);
+    expect(codes).toEqual(['ASC-2', 'ASC-10', 'ASC-3', 'ASC-1', 'ASC-9999']);
   });
   it('ASC-2 antes de ASC-10', async () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-1'); });
-    const t = text();
-    expect(t.indexOf('ASC-2')).toBeLessThan(t.indexOf('ASC-10'));
+    const codes = screen.getAllByTestId(/^responsible-elevator-/).map((c) => within(c).getByText(/^ASC-/).textContent);
+    expect(codes.indexOf('ASC-2')).toBeLessThan(codes.indexOf('ASC-10'));
   });
-  it('fabricante/modelo: los 4 casos', async () => {
+  it('fabricante/modelo por tarjeta', async () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-1'); });
-    expect(text()).toContain('Otis Gen2');
-    expect(text()).toContain('Kone');
-    expect(text()).toContain('Schindler 3300');
-    expect(text()).toContain('Desconocido');
+    const check = (id: string, expected: string) => {
+      const card = screen.getByTestId(id);
+      const texts = within(card).getAllByText(expected);
+      expect(texts.length).toBeGreaterThanOrEqual(1);
+    };
+    check('responsible-elevator-elevator-1', 'Otis Gen2');
+    check('responsible-elevator-elevator-2', 'Schindler');
+    check('responsible-elevator-elevator-3', 'Modelo 300');
+    check('responsible-elevator-elevator-10', '-');
+    check('responsible-elevator-elevator-foreign', 'Extra X');
   });
   it('edificio faltante muestra "-"', async () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-9999'); });
-    const t = text();
-    expect(t).toContain('ASC-9999');
-    expect(t).not.toContain('building-no-asignado');
+    const card = screen.getByTestId('responsible-elevator-elevator-foreign');
+    expect(within(card).getAllByText('-').length).toBeGreaterThanOrEqual(1);
+    expect(within(card).queryByText('building-no-asignado')).not.toBeInTheDocument();
   });
-  it('estados con fallback "-"', async () => {
-    renderPage();
-    await waitFor(() => { expect(text()).toContain('ASC-9999'); });
-    const t = text();
-    expect(t).toContain('Operativo');
-    expect(t).toContain('Conforme');
-  });
-  it('enlaces correctos', async () => {
+  it('estados por tarjeta', async () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-1'); });
-    const links = screen.getAllByRole('link');
-    const hrefs = links.map((l) => l.getAttribute('href'));
-    expect(hrefs).toContain('/responsable/ascensores/elevator-1');
-    expect(hrefs).toContain('/responsable/ascensores/elevator-2');
-    expect(hrefs).toContain('/responsable/ascensores/elevator-10');
+    const c1 = screen.getByTestId('responsible-elevator-elevator-1');
+    expect(within(c1).getByText('Operativo')).toBeInTheDocument();
+    expect(within(c1).getByText('Conforme')).toBeInTheDocument();
+    const cf = screen.getByTestId('responsible-elevator-elevator-foreign');
+    const badges = within(cf).getAllByText('-');
+    expect(badges.length).toBeGreaterThanOrEqual(2);
   });
-  it('aria-label correcto', async () => {
+  it('enlaces y aria-label', async () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-1'); });
-    expect(screen.getByLabelText('Ver ascensor ASC-1')).toBeInTheDocument();
-    expect(screen.getByLabelText('Ver ascensor ASC-2')).toBeInTheDocument();
+    expect(screen.getByLabelText('Ver ascensor ASC-1').getAttribute('href')).toBe('/responsable/ascensores/elevator-1');
+    expect(screen.getByLabelText('Ver ascensor ASC-2').getAttribute('href')).toBe('/responsable/ascensores/elevator-2');
+    expect(screen.getByLabelText('Ver ascensor ASC-3').getAttribute('href')).toBe('/responsable/ascensores/elevator-3');
+    expect(screen.getByLabelText('Ver ascensor ASC-10').getAttribute('href')).toBe('/responsable/ascensores/elevator-10');
+    expect(screen.getByLabelText('Ver ascensor ASC-9999').getAttribute('href')).toBe('/responsable/ascensores/elevator-foreign');
   });
   it('privacidad: no muestra IDs', async () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-1'); });
     expect(text()).not.toContain('elevator-1');
     expect(text()).not.toContain('building-1');
-    expect(text()).not.toContain('building-no-asignado');
   });
   it('estado vacío', async () => {
     mockGetElevators.mockResolvedValue([]);
@@ -129,6 +126,7 @@ describe('ResponsibleElevatorsPage', () => {
       expect(text()).toContain('No tiene ascensores asignados');
       expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
     });
+    expect(screen.queryByTestId(/^responsible-elevator-/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Ver ascensor/)).not.toBeInTheDocument();
   });
   it('estado de carga', async () => {
@@ -140,11 +138,14 @@ describe('ResponsibleElevatorsPage', () => {
     expect(screen.getByRole('button', { name: /actualizar/i })).toBeDisabled();
     expect(text()).not.toContain('ASC-1');
     expect(text()).not.toContain('No tiene ascensores');
+    expect(document.querySelectorAll('.animate-spin')).toHaveLength(1);
     elsDef.resolve(mockElevators);
     bldDef.resolve(mockBuildings);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
       expect(text()).toContain('ASC-1');
+      expect(document.querySelectorAll('.animate-spin')).toHaveLength(0);
+      expect(screen.getAllByTestId(/^responsible-elevator-/)).toHaveLength(5);
     });
   });
   it('error y reintento exacto', async () => {
@@ -187,9 +188,9 @@ describe('ResponsibleElevatorsPage', () => {
     expect(mockGetElevators).toHaveBeenCalledTimes(2);
     expect(mockGetBuildings).toHaveBeenCalledTimes(2);
   });
-  it('inmutabilidad', async () => {
-    const origEls = [...mockElevators];
-    const origBlds = [...mockBuildings];
+  it('inmutabilidad profunda', async () => {
+    const origEls = mockElevators.map((e) => ({ ...e }));
+    const origBlds = mockBuildings.map((b) => ({ ...b }));
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-1'); });
     expect(mockElevators).toEqual(origEls);
