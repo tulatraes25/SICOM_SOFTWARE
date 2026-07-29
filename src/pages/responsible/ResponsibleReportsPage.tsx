@@ -37,10 +37,16 @@ export default function ResponsibleReportsPage() {
   };
 
   const getYearMonth = (r: ResponsibleMonthlyReport): { year: number; month: number } => {
-    if (r.report_year && r.report_month) return { year: r.report_year, month: r.report_month };
-    const match = (r.period || '').match(/^(\d{4})-(\d{2})/);
-    if (match) return { year: parseInt(match[1], 10), month: parseInt(match[2], 10) };
-    return { year: 0, month: 0 };
+    let year = r.report_year;
+    let month = r.report_month;
+    if (!year || !month) {
+      const match = (r.period || '').match(/^(\d{4})-(\d{2})$/);
+      if (match) {
+        if (!year) year = parseInt(match[1], 10);
+        if (!month) month = parseInt(match[2], 10);
+      }
+    }
+    return { year: year || 0, month: (month && month >= 1 && month <= 12) ? month : 0 };
   };
 
   const sortedReports = useMemo(() => {
@@ -51,8 +57,10 @@ export default function ResponsibleReportsPage() {
       const pc = naturalSort(b.period || '', a.period || '');
       if (pc !== 0) return pc;
       const ai = resolveInfo(a.elevator_id); const bi = resolveInfo(b.elevator_id);
-      if (ai.hasResolvedElevator && !bi.hasResolvedElevator) return -1;
-      if (!ai.hasResolvedElevator && bi.hasResolvedElevator) return 1;
+      const aComplete = ai.hasResolvedElevator && ai.hasResolvedBuilding;
+      const bComplete = bi.hasResolvedElevator && bi.hasResolvedBuilding;
+      if (aComplete && !bComplete) return -1;
+      if (!aComplete && bComplete) return 1;
       const bnc = naturalSort(ai.building, bi.building);
       if (bnc !== 0) return bnc;
       const cc = naturalSort(ai.code, bi.code);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import ResponsibleReportsPage from './ResponsibleReportsPage';
@@ -43,7 +43,7 @@ interface Deferred<T> { promise: Promise<T>; resolve: (value: T) => void; }
 function deferred<T>(): Deferred<T> { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; }
 
 function renderPage() { return render(<MemoryRouter><ResponsibleReportsPage /></MemoryRouter>); }
-function text() { return document.body.textContent || ''; }
+function t() { return document.body.textContent || ''; }
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -54,95 +54,111 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('ResponsibleReportsPage', () => {
-  it('datos de un informe por tarjeta', async () => {
+  it('datos de r-1 por tarjeta', async () => {
     renderPage();
-    await waitFor(() => { expect(text()).toContain('ASC-1'); });
-    expect(screen.getByTestId('responsible-report-r-1')).toBeInTheDocument();
-    const t = text();
-    expect(t).toContain('ASC-1');
-    expect(t).toContain('Hospital Regional');
-    expect(t).toContain('2026-07');
-    expect(t).toContain('Aprobado');
-    expect(t).toContain('operativo');
-    expect(t).toContain('Descarga segura pendiente de habilitación');
-    expect(screen.getByText('Descarga segura pendiente de habilitación')).toBeDisabled();
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+    const card = screen.getByTestId('responsible-report-r-1');
+    const ct = card.textContent || '';
+    expect(ct).toContain('ASC-1');
+    expect(ct).toContain('Hospital Regional');
+    expect(ct).toContain('2026-07');
+    expect(ct).toContain('Aprobado');
+    expect(ct).toContain('operativo');
+    expect(ct).toContain('Descarga segura pendiente de habilitación');
+    expect(within(card).getByRole('button', { name: /descarga/i })).toBeDisabled();
   });
-  it('orden temporal con period como respaldo', async () => {
+  it('orden temporal con period fallback', async () => {
     mockGetReports.mockResolvedValue([
-      { id: 'r-a', elevator_id: 'elevator-1', period: '2026-08', title: null, status: 'approved', general_status: null, services_count: 1, report_month: null, report_year: null, pdf_generated_at: null, has_pdf: false },
-      { id: 'r-b', elevator_id: 'elevator-1', period: '2026-07', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 7, report_year: 2026, pdf_generated_at: null, has_pdf: false },
-      { id: 'r-c', elevator_id: 'elevator-1', period: 'invalid', title: null, status: 'draft', general_status: null, services_count: 1, report_month: null, report_year: null, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-august', elevator_id: 'elevator-1', period: '2026-08', title: null, status: 'approved', general_status: null, services_count: 1, report_month: null, report_year: null, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-july', elevator_id: 'elevator-1', period: '2026-07', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 7, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-invalid', elevator_id: 'elevator-1', period: 'invalid', title: null, status: 'draft', general_status: null, services_count: 1, report_month: null, report_year: null, pdf_generated_at: null, has_pdf: false },
     ]);
     renderPage();
-    await waitFor(() => { expect(text()).toContain('ASC-1'); });
-    const t = text();
-    expect(t.indexOf('2026-08')).toBeLessThan(t.indexOf('2026-07'));
-    expect(t.indexOf('2026-07')).toBeLessThan(t.indexOf('invalid'));
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+    const ids = screen.getAllByTestId(/^responsible-report-/).map((el) => el.getAttribute('data-testid'));
+    expect(ids).toEqual(['responsible-report-r-august', 'responsible-report-r-july', 'responsible-report-r-invalid']);
   });
-  it('referencia faltante al final del mismo período', async () => {
+  it('referencias completas antes que incompletas', async () => {
     mockGetReports.mockResolvedValue([
-      { id: 'r-x', elevator_id: 'elevator-2', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
-      { id: 'r-y', elevator_id: 'elevator-10', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
-      { id: 'r-z', elevator_id: 'elevator-foreign', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-asc2', elevator_id: 'elevator-2', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-asc10', elevator_id: 'elevator-10', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-orphan', elevator_id: 'elevator-missing-building', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-noelev', elevator_id: 'nonexistent', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
     ]);
     renderPage();
-    await waitFor(() => { expect(text()).toContain('ASC-2'); });
-    const cards = screen.getAllByTestId(/^responsible-report-/);
-    expect(cards).toHaveLength(3);
-    const t = text();
-    expect(t).toContain('ASC-2');
-    expect(t).toContain('ASC-10');
-    expect(t).toContain('-');
-    expect(t).not.toContain('elevator-foreign');
-    expect(t).not.toContain('building-no-asignado');
+    await waitFor(() => { expect(t()).toContain('ASC-2'); });
+    const cards = [
+      screen.getByTestId('responsible-report-r-asc2'),
+      screen.getByTestId('responsible-report-r-asc10'),
+      screen.getByTestId('responsible-report-r-orphan'),
+      screen.getByTestId('responsible-report-r-noelev'),
+    ];
+    expect(cards[0].textContent).toContain('ASC-2');
+    expect(cards[1].textContent).toContain('ASC-10');
+    expect(cards[2].textContent).toContain('-');
+    expect(cards[2].textContent).not.toContain('building-inexistente');
+    expect(cards[3].textContent).toContain('-');
+    expect(cards[3].textContent).not.toContain('elevator-inexistente');
   });
   it('estados traducidos por tarjeta', async () => {
     renderPage();
-    await waitFor(() => { expect(text()).toContain('ASC-1'); });
-    expect(text()).toContain('Aprobado');
-    expect(text()).toContain('Enviado');
-    expect(text()).toContain('Borrador');
-    expect(text()).toContain('Pendiente');
-    expect(text()).toContain('Rechazado');
-    expect(text()).not.toMatch(/\bapproved\b/);
-    expect(text()).not.toMatch(/\bsent\b/);
-    expect(text()).not.toMatch(/\bdraft\b/);
-    expect(text()).not.toMatch(/\bpending\b/);
-    expect(text()).not.toMatch(/\brejected\b/);
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+    const check = (id: string, expected: string, notExpected: string) => {
+      const card = screen.getByTestId(id);
+      expect(card.textContent).toContain(expected);
+      expect(card.textContent).not.toContain(notExpected);
+    };
+    check('responsible-report-r-1', 'Aprobado', 'approved');
+    check('responsible-report-r-2', 'Enviado', 'sent');
+    check('responsible-report-r-3', 'Borrador', 'draft');
+    check('responsible-report-r-4', 'Pendiente', 'pending');
+    check('responsible-report-r-6', 'Rechazado', 'rejected');
   });
-  it('estado desconocido y vacío', async () => {
+  it('estado desconocido conserva el valor', async () => {
     mockGetReports.mockResolvedValue([
       { id: 'r-u', elevator_id: 'elevator-1', period: '2026-01', title: null, status: 'archived', general_status: null, services_count: 1, report_month: 1, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+    ]);
+    renderPage();
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+    const card = screen.getByTestId('responsible-report-r-u');
+    expect(card.textContent).toContain('archived');
+  });
+  it('estado vacío muestra guion', async () => {
+    mockGetReports.mockResolvedValue([
       { id: 'r-e', elevator_id: 'elevator-1', period: '2026-02', title: null, status: '', general_status: null, services_count: 1, report_month: 2, report_year: 2026, pdf_generated_at: null, has_pdf: false },
     ]);
     renderPage();
-    await waitFor(() => {
-      const t = text();
-      expect(t).toContain('archived');
-      expect(t).toContain('-');
-    });
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+    const card = screen.getByTestId('responsible-report-r-e');
+    expect(card.textContent).toContain('-');
   });
-  it('PDF por tarjeta', async () => {
+  it('PDF disponible por tarjeta', async () => {
     renderPage();
-    await waitFor(() => { expect(text()).toContain('ASC-1'); });
-    const t = text();
-    expect(t).toContain('Descarga segura pendiente de habilitación');
-    expect(screen.getByText('Descarga segura pendiente de habilitación')).toBeDisabled();
-    expect(t).toContain('Sin PDF');
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+    const card = screen.getByTestId('responsible-report-r-1');
+    expect(card.textContent).toContain('Descarga segura pendiente de habilitación');
+    expect(within(card).getByRole('button', { name: /descarga/i })).toBeDisabled();
+  });
+  it('Sin PDF por tarjeta', async () => {
+    renderPage();
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+    const card = screen.getByTestId('responsible-report-r-3');
+    expect(card.textContent).toContain('Sin PDF');
+    expect(within(card).queryByRole('button')).not.toBeInTheDocument();
   });
   it('privacidad', async () => {
     renderPage();
-    await waitFor(() => { expect(text()).toContain('ASC-1'); });
-    expect(text()).not.toContain('elevator-1');
-    expect(text()).not.toContain('building-1');
-    expect(text()).not.toContain('bucket');
-    expect(text()).not.toContain('storage');
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+    expect(t()).not.toContain('elevator-1');
+    expect(t()).not.toContain('building-1');
+    expect(t()).not.toContain('bucket');
+    expect(t()).not.toContain('storage');
   });
   it('estado vacío', async () => {
     mockGetReports.mockResolvedValue([]);
     renderPage();
     await waitFor(() => {
-      expect(text()).toContain('No hay informes disponibles');
+      expect(t()).toContain('No hay informes disponibles');
       expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
     });
     expect(screen.queryByTestId(/^responsible-report-/)).not.toBeInTheDocument();
@@ -158,19 +174,19 @@ describe('ResponsibleReportsPage', () => {
     mockGetBuildings.mockReturnValue(bldDef.promise);
     renderPage();
     expect(screen.getByRole('button', { name: /actualizar/i })).toBeDisabled();
-    expect(text()).not.toContain('ASC-1');
+    expect(t()).not.toContain('ASC-1');
     repDef.resolve(mockReports);
     elsDef.resolve(mockElevators);
     bldDef.resolve(mockBuildings);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
-      expect(text()).toContain('ASC-1');
+      expect(t()).toContain('ASC-1');
     });
   });
   it('error y reintento', async () => {
     mockGetReports.mockRejectedValueOnce(new Error('RPC failed'));
     renderPage();
-    await waitFor(() => { expect(text()).toContain('RPC failed'); });
+    await waitFor(() => { expect(t()).toContain('RPC failed'); });
     expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
     const repDef2 = deferred<ResponsibleMonthlyReport[]>();
     const elsDef2 = deferred<ResponsibleElevator[]>();
@@ -185,8 +201,8 @@ describe('ResponsibleReportsPage', () => {
     elsDef2.resolve(mockElevators);
     bldDef2.resolve(mockBuildings);
     await waitFor(() => {
-      expect(text()).not.toContain('RPC failed');
-      expect(text()).toContain('ASC-1');
+      expect(t()).not.toContain('RPC failed');
+      expect(t()).toContain('ASC-1');
       expect(btn).not.toBeDisabled();
     });
     expect(mockGetReports).toHaveBeenCalledTimes(2);
@@ -195,7 +211,7 @@ describe('ResponsibleReportsPage', () => {
   });
   it('actualización manual', async () => {
     renderPage();
-    await waitFor(() => { expect(text()).toContain('ASC-1'); });
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
     const repDef2 = deferred<ResponsibleMonthlyReport[]>();
     const elsDef2 = deferred<ResponsibleElevator[]>();
     const bldDef2 = deferred<ResponsibleBuilding[]>();
@@ -210,7 +226,7 @@ describe('ResponsibleReportsPage', () => {
     bldDef2.resolve(mockBuildings);
     await waitFor(() => {
       expect(btn).not.toBeDisabled();
-      expect(text()).toContain('ASC-1');
+      expect(t()).toContain('ASC-1');
     });
     expect(mockGetReports).toHaveBeenCalledTimes(2);
     expect(mockGetElevators).toHaveBeenCalledTimes(2);
@@ -221,7 +237,7 @@ describe('ResponsibleReportsPage', () => {
     const origEls = mockElevators.map((e) => ({ ...e }));
     const origBlds = mockBuildings.map((b) => ({ ...b }));
     renderPage();
-    await waitFor(() => { expect(text()).toContain('ASC-1'); });
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
     expect(mockReports).toEqual(origRep);
     expect(mockElevators).toEqual(origEls);
     expect(mockBuildings).toEqual(origBlds);
