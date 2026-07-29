@@ -46,15 +46,20 @@ export default function ResponsibleElevatorDetailPage() {
   const loadData = async () => {
     setLoading(true); setError('');
     try {
-      const [els, rec, ord, vis, rep] = await Promise.all([
-        getResponsibleElevators(), getResponsibleServiceRecords(elevatorId),
-        getResponsibleServiceOrders(elevatorId), getResponsibleVisitEntries(elevatorId),
-        getResponsibleMonthlyReports(elevatorId),
-      ]);
-      const tech = await getResponsibleTechnicians();
+      // Phase 1: Authorization check
+      const els = await getResponsibleElevators();
       const el = els.find((e) => e.id === elevatorId);
       if (!el) { setError('No tiene permiso para consultar este recurso'); setLoading(false); return; }
       setElevator(el);
+
+      // Phase 2: Load details only after authorization
+      const [rec, ord, vis, rep, tech] = await Promise.all([
+        getResponsibleServiceRecords(elevatorId),
+        getResponsibleServiceOrders(elevatorId),
+        getResponsibleVisitEntries(elevatorId),
+        getResponsibleMonthlyReports(elevatorId),
+        getResponsibleTechnicians(),
+      ]);
       setTechnicians(tech);
       const sortedRec = [...rec].sort((a, b) => {
         const dc = (b.service_date || '').localeCompare(a.service_date || '');
@@ -78,7 +83,7 @@ export default function ResponsibleElevatorDetailPage() {
         const dc = b.visit_date.localeCompare(a.visit_date);
         if (dc !== 0) return dc;
         return b.entry_number - a.entry_number;
-      }).slice(0, 10);
+      });
       setVisits(sortedVis);
       const sortedRep = [...rep].sort((a, b) => {
         if (a.report_year !== b.report_year) return (b.report_year || 0) - (a.report_year || 0);
@@ -87,15 +92,21 @@ export default function ResponsibleElevatorDetailPage() {
       });
       setReports(sortedRep);
       const recordIds = rec.map((r) => r.id);
-      const cl = await getResponsibleChecklistItems(recordIds);
-      setChecklist(cl);
+      if (recordIds.length > 0) {
+        const cl = await getResponsibleChecklistItems(recordIds);
+        setChecklist(cl);
+      } else {
+        setChecklist([]);
+      }
     } catch (err: unknown) { setError(getErrorMessage(err)); } finally { setLoading(false); }
   };
 
   const techName = (id: string) => technicians.find((t) => t.id === id)?.full_name || '-';
+  const naturalSort = new Intl.Collator('es', { numeric: true, sensitivity: 'base' }).compare;
   const checklistByRecord = useMemo(() => {
     const map = new Map<string, ResponsibleChecklistItem[]>();
     checklist.forEach((item) => { const arr = map.get(item.service_record_id) || []; arr.push(item); map.set(item.service_record_id, arr); });
+    map.forEach((items) => { items.sort((a, b) => naturalSort(a.item_name, b.item_name)); });
     return map;
   }, [checklist]);
 
@@ -124,28 +135,31 @@ export default function ResponsibleElevatorDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card><CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Wrench size={16} /> Mantenimientos ({records.length})</h3></CardHeader><CardContent className="space-y-3">
-            {records.length === 0 ? <p className="text-gray-500">No hay mantenimientos</p> : records.map((r) => (
-              <div key={r.id} className="p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2"><span className="text-sm font-semibold">{formatDateOnly(r.service_date)}</span><Badge variant="info" className="text-xs">{SERVICE_TYPE_LABELS[r.service_type] || r.service_type}</Badge></div>
-                <p className="text-xs text-gray-600 mt-1">{techName(r.technician_id)}</p>
-                {r.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>}
-                {r.technical_report && <p className="text-xs text-gray-500 mt-1 line-clamp-2 italic">{r.technical_report}</p>}
-                {r.observations && <p className="text-xs text-gray-500 mt-1">Obs: {r.observations}</p>}
-                {r.final_report_text && <p className="text-xs text-gray-500 mt-1">Conclusión: {r.final_report_text}</p>}
-                {checklistByRecord.has(r.id) && (
-                  <div className="mt-2 space-y-1">
-                    {checklistByRecord.get(r.id)!.map((item) => (
-                      <div key={item.id} className="flex items-center gap-2 text-xs">
-                        <CheckCircle size={12} className={item.status === 'ok' ? 'text-green-500' : item.status === 'failed' ? 'text-red-500' : 'text-yellow-500'} />
-                        <span className="text-gray-600">{item.item_name}</span>
-                        <span className="text-gray-400">— {CHECKLIST_LABELS[item.status] || item.status}</span>
-                        {item.notes && <span className="text-gray-400 italic">({item.notes})</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+            {records.length === 0 ? <p className="text-gray-500">No hay mantenimientos</p> : records.map((r) => {
+              const recordChecklist = checklistByRecord.get(r.id) || [];
+              return (
+                <div key={r.id} className="p-3 bg-gray-50 rounded-lg" data-testid={`maintenance-${r.id}`}>
+                  <div className="flex items-center gap-2"><span className="text-sm font-semibold">{formatDateOnly(r.service_date)}</span><Badge variant="info" className="text-xs">{SERVICE_TYPE_LABELS[r.service_type] || r.service_type}</Badge></div>
+                  <p className="text-xs text-gray-600 mt-1">{techName(r.technician_id)}</p>
+                  {r.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>}
+                  {r.technical_report && <p className="text-xs text-gray-500 mt-1 line-clamp-2 italic">{r.technical_report}</p>}
+                  {r.observations && <p className="text-xs text-gray-500 mt-1">Obs: {r.observations}</p>}
+                  {r.final_report_text && <p className="text-xs text-gray-500 mt-1">Conclusión: {r.final_report_text}</p>}
+                  {recordChecklist.length > 0 && (
+                    <div className="mt-2 space-y-1" data-testid={`checklist-${r.id}`}>
+                      {recordChecklist.map((item) => (
+                        <div key={item.id} className="flex items-center gap-2 text-xs">
+                          <CheckCircle size={12} className={item.status === 'ok' ? 'text-green-500' : item.status === 'failed' ? 'text-red-500' : 'text-yellow-500'} />
+                          <span className="text-gray-600">{item.item_name}</span>
+                          <span className="text-gray-400">— {CHECKLIST_LABELS[item.status] || item.status}</span>
+                          {item.notes && <span className="text-gray-400 italic">({item.notes})</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </CardContent></Card>
 
           <Card><CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><FileText size={16} /> Órdenes ({orders.length})</h3></CardHeader><CardContent className="space-y-3">
@@ -160,7 +174,7 @@ export default function ResponsibleElevatorDetailPage() {
 
           <Card><CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Clock size={16} /> Visitas ({visits.length})</h3></CardHeader><CardContent className="space-y-3">
             {visits.length === 0 ? <p className="text-gray-500">No hay visitas</p> : visits.slice(0, 10).map((v) => (
-              <div key={v.id} className="p-3 bg-gray-50 rounded-lg">
+              <div key={v.id} className="p-3 bg-gray-50 rounded-lg" data-testid="responsible-visit-entry">
                 <div className="flex items-center gap-2"><span className="text-sm font-semibold">{formatDateOnly(v.visit_date)}</span>{v.case_number && <span className="text-xs text-gray-400">N.º {v.case_number}</span>}</div>
                 <p className="text-xs text-gray-600 mt-1">{v.title || v.description}</p>
                 <p className="text-xs text-gray-400">{formatDuration(v)} · {formatTime(v.check_in_at)} – {formatTime(v.check_out_at)}</p>

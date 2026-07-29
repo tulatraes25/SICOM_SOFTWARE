@@ -81,23 +81,9 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('ResponsibleElevatorDetailPage', () => {
-  it('muestra datos generales del ascensor', async () => {
+  it('datos generales del ascensor', async () => {
     renderPage();
-    await waitFor(() => {
-      const t = text();
-      expect(t).toContain('ASC-0001');
-      expect(t).toContain('Operativo');
-      expect(t).toContain('Otis');
-      expect(t).toContain('Gen2');
-      expect(t).toContain('Pasajeros');
-      expect(t).toContain('800 kg');
-      expect(t).toContain('1-5');
-      expect(t).toContain('2020');
-      expect(t).toContain('Conforme');
-      expect(t).toContain('Activo');
-      expect(t).toContain('15/7/2026');
-      expect(t).toContain('15/8/2026');
-    });
+    await waitFor(() => { const t = text(); expect(t).toContain('ASC-0001'); expect(t).toContain('Operativo'); expect(t).toContain('Otis'); expect(t).toContain('Gen2'); expect(t).toContain('Pasajeros'); expect(t).toContain('800 kg'); expect(t).toContain('1-5'); expect(t).toContain('2020'); expect(t).toContain('Conforme'); expect(t).toContain('Activo'); expect(t).toContain('15/7/2026'); expect(t).toContain('15/8/2026'); });
   });
   it('valores faltantes muestran "-"', async () => {
     mockGetElevators.mockResolvedValue([{ ...mockElevator, manufacturer: null, model: null, elevator_type: null, capacity_kg: null, floors_served: null, year_installed: null, conservation_status: null, contractual_status: null, last_service_date: null, next_service_date: null }]);
@@ -105,41 +91,50 @@ describe('ResponsibleElevatorDetailPage', () => {
     await waitFor(() => { expect(text()).toContain('ASC-0001'); });
     expect(text().split('-').length).toBeGreaterThan(5);
   });
-  it('mantenimientos ordenados por fecha descendente', async () => {
+  it('mantenimientos ordenados por fecha, hora e id', async () => {
     mockGetRecords.mockResolvedValue([
-      makeRecord({ id: 'sr-1', service_date: '2026-07-10', service_time: '08:00' }),
-      makeRecord({ id: 'sr-2', service_date: '2026-07-20', service_time: '14:00' }),
-      makeRecord({ id: 'sr-3', service_date: '2026-07-20', service_time: '10:00' }),
+      makeRecord({ id: 'sr-1', service_date: '2026-07-10', service_time: '08:00', description: 'Más antiguo' }),
+      makeRecord({ id: 'sr-2', service_date: '2026-07-20', service_time: '10:00', description: 'Más reciente mañana' }),
+      makeRecord({ id: 'sr-3', service_date: '2026-07-20', service_time: '14:00', description: 'Más reciente tarde' }),
     ]);
     renderPage();
     await waitFor(() => { expect(text()).toContain('Mantenimientos (3)'); });
     const t = text();
-    const idx20 = t.indexOf('20/7/2026');
-    const idx10 = t.indexOf('10/7/2026');
-    expect(idx20).toBeLessThan(idx10);
+    expect(t.indexOf('Más reciente tarde')).toBeLessThan(t.indexOf('Más reciente mañana'));
+    expect(t.indexOf('Más reciente mañana')).toBeLessThan(t.indexOf('Más antiguo'));
   });
-  it('tipo de mantenimiento traducido', async () => {
-    mockGetRecords.mockResolvedValue([makeRecord({ service_type: 'correctivo' })]);
+  it('detalles de mantenimiento: técnico, descripción, informe, obs, conclusión', async () => {
+    mockGetRecords.mockResolvedValue([makeRecord()]);
     renderPage();
-    await waitFor(() => { expect(text()).toContain('Correctivo'); });
+    await waitFor(() => {
+      const t = text();
+      expect(t).toContain('Juan Pérez');
+      expect(t).toContain('Mant preventivo');
+      expect(t).toContain('Informe técnico');
+      expect(t).toContain('Obs: Obs');
+      expect(t).toContain('Conclusión: Conclusión');
+    });
   });
-  it('checklist agrupado por service_record_id', async () => {
+  it('checklist agrupado y ordenado por item_name', async () => {
     mockGetRecords.mockResolvedValue([makeRecord({ id: 'sr-1' }), makeRecord({ id: 'sr-2', service_date: '2026-07-15' })]);
     mockGetChecklist.mockResolvedValue([
-      makeChecklist({ id: 'cl-1', service_record_id: 'sr-1', item_name: 'Puertas' }),
-      makeChecklist({ id: 'cl-2', service_record_id: 'sr-1', item_name: 'Freno' }),
+      makeChecklist({ id: 'cl-1', service_record_id: 'sr-1', item_name: 'Ítem 10' }),
+      makeChecklist({ id: 'cl-2', service_record_id: 'sr-1', item_name: 'Ítem 2' }),
       makeChecklist({ id: 'cl-3', service_record_id: 'sr-2', item_name: 'Iluminación' }),
     ]);
     renderPage();
     await waitFor(() => {
       const t = text();
-      expect(t).toContain('Puertas');
-      expect(t).toContain('Freno');
+      expect(t).toContain('Ítem 2');
+      expect(t).toContain('Ítem 10');
       expect(t).toContain('Iluminación');
     });
     expect(mockGetChecklist).toHaveBeenCalledWith(['sr-1', 'sr-2']);
+    const items = screen.getAllByText(/^Ítem \d+$/);
+    expect(items[0]).toHaveTextContent('Ítem 2');
+    expect(items[1]).toHaveTextContent('Ítem 10');
   });
-  it('estados de checklist traducidos', async () => {
+  it('estados de checklist traducidos y notas', async () => {
     mockGetRecords.mockResolvedValue([makeRecord()]);
     mockGetChecklist.mockResolvedValue([
       makeChecklist({ status: 'ok' }),
@@ -155,7 +150,7 @@ describe('ResponsibleElevatorDetailPage', () => {
       expect(t).toContain('(Revisar)');
     });
   });
-  it('órdenes ordenadas por reviewed_at descendente', async () => {
+  it('órdenes ordenadas por reviewed_at desc, null al final, subject asc', async () => {
     mockGetOrders.mockResolvedValue([
       makeOrder({ id: 'so-1', subject: 'Orden B', reviewed_at: '2026-07-20T10:00:00Z' }),
       makeOrder({ id: 'so-2', subject: 'Orden A', reviewed_at: '2026-07-25T10:00:00Z' }),
@@ -164,67 +159,61 @@ describe('ResponsibleElevatorDetailPage', () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('Órdenes (3)'); });
     const t = text();
-    const idxA = t.indexOf('Orden A');
-    const idxB = t.indexOf('Orden B');
-    const idxSin = t.indexOf('Orden Sin');
-    expect(idxA).toBeLessThan(idxB);
-    expect(idxB).toBeLessThan(idxSin);
+    expect(t.indexOf('Orden A')).toBeLessThan(t.indexOf('Orden B'));
+    expect(t.indexOf('Orden B')).toBeLessThan(t.indexOf('Orden Sin'));
   });
-  it('tipo de orden traducido', async () => {
-    mockGetOrders.mockResolvedValue([makeOrder({ order_type: 'emergency' })]);
+  it('tipo de orden traducido y completion_summary visible', async () => {
+    mockGetOrders.mockResolvedValue([makeOrder({ order_type: 'emergency', completion_summary: 'Resuelto' })]);
     renderPage();
-    await waitFor(() => { expect(text()).toContain('Emergencia'); });
+    await waitFor(() => { const t = text(); expect(t).toContain('Emergencia'); expect(t).toContain('Resuelto'); });
   });
-  it('visitas: encabezado muestra total, máximo 10 visibles', async () => {
+  it('visitas: total 15, máximo 10 visibles', async () => {
     mockGetVisits.mockResolvedValue(Array.from({ length: 15 }, (_, i) => makeVisit({ id: `v-${i}`, visit_date: `2026-07-${String(i + 1).padStart(2, '0')}`, entry_number: i + 1, title: `V${i + 1}` })));
     renderPage();
-    await waitFor(() => {
-      const t = text();
-      expect(t).toContain('V15');
-      expect(t).toContain('V6');
-      expect(t).not.toMatch(/V5[^0-9]/);
-      expect(t).not.toMatch(/V1[^0-9]/);
-    });
+    await waitFor(() => { expect(text()).toContain('Visitas (15)'); });
+    expect(screen.getAllByTestId('responsible-visit-entry')).toHaveLength(10);
+    const t = text();
+    expect(t).toContain('V15');
+    expect(t).toContain('V6');
+    expect(t).not.toMatch(/V5[^0-9]/);
+    expect(t).not.toMatch(/V1[^0-9]/);
   });
-  it('visitas muestra expediente 1913', async () => {
-    mockGetVisits.mockResolvedValue([makeVisit({ case_number: 1913 })]);
-    renderPage();
-    await waitFor(() => { expect(text()).toContain('N.º 1913'); });
-  });
-  it('duraciones formateadas', async () => {
+  it('visitas: orden por entry_number descendente en misma fecha', async () => {
     mockGetVisits.mockResolvedValue([
-      makeVisit({ id: 'v-1', duration_seconds: 30, title: 'Corta' }),
-      makeVisit({ id: 'v-2', duration_seconds: 180, title: 'Media' }),
-      makeVisit({ id: 'v-3', duration_seconds: 3900, title: 'Larga' }),
+      makeVisit({ id: 'v-1', visit_date: '2026-07-27', entry_number: 1, title: 'Primera' }),
+      makeVisit({ id: 'v-2', visit_date: '2026-07-27', entry_number: 2, title: 'Segunda' }),
+      makeVisit({ id: 'v-3', visit_date: '2026-07-27', entry_number: 3, title: 'Tercera' }),
     ]);
     renderPage();
     await waitFor(() => {
       const t = text();
+      const idxT = t.indexOf('Tercera');
+      const idxS = t.indexOf('Segunda');
+      const idxP = t.indexOf('Primera');
+      expect(idxT).toBeLessThan(idxS);
+      expect(idxS).toBeLessThan(idxP);
+    });
+  });
+  it('visitas: expediente 1913 y duraciones', async () => {
+    mockGetVisits.mockResolvedValue([
+      makeVisit({ case_number: 1913, duration_seconds: 30, check_in_at: '2026-07-27T10:00:00Z', check_out_at: '2026-07-27T10:00:30Z', title: 'Corta' }),
+      makeVisit({ id: 'v-2', duration_seconds: 180, check_in_at: '2026-07-27T10:00:00Z', check_out_at: '2026-07-27T10:03:00Z', title: 'Media', visit_date: '2026-07-26' }),
+      makeVisit({ id: 'v-3', duration_seconds: 3900, check_in_at: '2026-07-27T09:00:00Z', check_out_at: '2026-07-27T10:05:00Z', title: 'Larga', visit_date: '2026-07-25' }),
+    ]);
+    renderPage();
+    await waitFor(() => {
+      const t = text();
+      expect(t).toContain('N.º 1913');
       expect(t).toContain('<1 min');
       expect(t).toContain('3 min');
       expect(t).toContain('1h 5m');
     });
   });
-  it('informes ordenados por año y mes descendente', async () => {
+  it('informes: orden por año-mes, traducciones, PDF', async () => {
     mockGetReports.mockResolvedValue([
-      makeReport({ id: 'r-1', period: '2026-06', report_year: 2026, report_month: 6 }),
-      makeReport({ id: 'r-2', period: '2026-07', report_year: 2026, report_month: 7 }),
-      makeReport({ id: 'r-3', period: '2025-12', report_year: 2025, report_month: 12 }),
-    ]);
-    renderPage();
-    await waitFor(() => { expect(text()).toContain('Informes (3)'); });
-    const t = text();
-    const idxJul = t.indexOf('2026-07');
-    const idxJun = t.indexOf('2026-06');
-    const idxDec = t.indexOf('2025-12');
-    expect(idxJul).toBeLessThan(idxJun);
-    expect(idxJun).toBeLessThan(idxDec);
-  });
-  it('traducciones de estado de informe', async () => {
-    mockGetReports.mockResolvedValue([
-      makeReport({ status: 'approved' }),
-      makeReport({ id: 'r-2', status: 'sent' }),
-      makeReport({ id: 'r-3', status: 'draft' }),
+      makeReport({ id: 'r-1', period: '2026-06', report_year: 2026, report_month: 6, status: 'sent', has_pdf: false, general_status: 'operativo' }),
+      makeReport({ id: 'r-2', period: '2026-07', report_year: 2026, report_month: 7, status: 'approved', has_pdf: true }),
+      makeReport({ id: 'r-3', period: '2025-12', report_year: 2025, report_month: 12, status: 'draft', has_pdf: false }),
     ]);
     renderPage();
     await waitFor(() => {
@@ -232,6 +221,14 @@ describe('ResponsibleElevatorDetailPage', () => {
       expect(t).toContain('Aprobado');
       expect(t).toContain('Enviado');
       expect(t).toContain('Borrador');
+      expect(t).toContain('PDF disponible');
+      expect(t).toContain('Sin PDF');
+      expect(t).toContain('operativo');
+      const idxJul = t.indexOf('2026-07');
+      const idxJun = t.indexOf('2026-06');
+      const idxDec = t.indexOf('2025-12');
+      expect(idxJul).toBeLessThan(idxJun);
+      expect(idxJun).toBeLessThan(idxDec);
     });
   });
   it('estados vacíos por separado', async () => {
@@ -243,22 +240,31 @@ describe('ResponsibleElevatorDetailPage', () => {
       expect(text()).toContain('No hay informes');
     });
   });
-  it('acceso no autorizado', async () => {
+  it('acceso no autorizado: solo llama getResponsibleElevators', async () => {
     renderPage('elevator-prohibido');
     await waitFor(() => { expect(text()).toContain('No tiene permiso para consultar este recurso'); });
+    expect(mockGetElevators).toHaveBeenCalledTimes(1);
+    expect(mockGetRecords).not.toHaveBeenCalled();
+    expect(mockGetOrders).not.toHaveBeenCalled();
+    expect(mockGetVisits).not.toHaveBeenCalled();
+    expect(mockGetReports).not.toHaveBeenCalled();
+    expect(mockGetTechnicians).not.toHaveBeenCalled();
+    expect(mockGetChecklist).not.toHaveBeenCalled();
     const t = text();
     expect(t).not.toContain('ASC-0001');
     expect(t).not.toContain('Otis');
     expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
   });
   it('error de RPC y reintento exacto', async () => {
-    mockGetElevators.mockRejectedValueOnce(new Error('RPC failed'));
+    mockGetRecords.mockRejectedValueOnce(new Error('RPC failed'));
     renderPage();
     await waitFor(() => { expect(text()).toContain('RPC failed'); });
-    mockGetElevators.mockResolvedValue([mockElevator]);
-    mockGetRecords.mockResolvedValue([]); mockGetOrders.mockResolvedValue([]);
-    mockGetVisits.mockResolvedValue([]); mockGetReports.mockResolvedValue([]);
-    mockGetTechnicians.mockResolvedValue([mockTech]); mockGetChecklist.mockResolvedValue([]);
+    mockGetRecords.mockResolvedValue([]);
+    mockGetOrders.mockResolvedValue([]);
+    mockGetVisits.mockResolvedValue([]);
+    mockGetReports.mockResolvedValue([]);
+    mockGetTechnicians.mockResolvedValue([mockTech]);
+    mockGetChecklist.mockResolvedValue([]);
     await userEvent.click(screen.getByRole('button', { name: /reintentar/i }));
     await waitFor(() => { expect(text()).toContain('ASC-0001'); });
     expect(mockGetElevators).toHaveBeenCalledTimes(2);
@@ -266,25 +272,65 @@ describe('ResponsibleElevatorDetailPage', () => {
     expect(mockGetOrders).toHaveBeenCalledTimes(2);
     expect(mockGetVisits).toHaveBeenCalledTimes(2);
     expect(mockGetReports).toHaveBeenCalledTimes(2);
-    expect(mockGetTechnicians.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(mockGetTechnicians).toHaveBeenCalledTimes(2);
+    expect(mockGetChecklist).not.toHaveBeenCalled();
   });
-  it('estado de carga: promesas pendientes', async () => {
-    const els = deferred<ResponsibleElevator[]>(); const rec = deferred<ResponsibleServiceRecord[]>();
-    const ord = deferred<ResponsibleServiceOrder[]>(); const vis = deferred<ResponsibleVisitEntry[]>();
-    const rep = deferred<ResponsibleMonthlyReport[]>(); const tech = deferred<ResponsibleTechnician[]>();
-    mockGetElevators.mockReturnValue(els.promise); mockGetRecords.mockReturnValue(rec.promise);
-    mockGetOrders.mockReturnValue(ord.promise); mockGetVisits.mockReturnValue(vis.promise);
-    mockGetReports.mockReturnValue(rep.promise); mockGetTechnicians.mockReturnValue(tech.promise);
+  it('carga en dos fases: autorización primero', async () => {
+    const elevDef = deferred<ResponsibleElevator[]>();
+    mockGetElevators.mockReturnValue(elevDef.promise);
+    mockGetRecords.mockResolvedValue([]);
+    mockGetOrders.mockResolvedValue([]);
+    mockGetVisits.mockResolvedValue([]);
+    mockGetReports.mockResolvedValue([]);
+    mockGetTechnicians.mockResolvedValue([]);
     mockGetChecklist.mockResolvedValue([]);
     renderPage();
     expect(text()).not.toContain('ASC-0001');
-    els.resolve([mockElevator]); rec.resolve([]); ord.resolve([]); vis.resolve([]); rep.resolve([]); tech.resolve([mockTech]);
+    expect(mockGetRecords).not.toHaveBeenCalled();
+    elevDef.resolve([mockElevator]);
     await waitFor(() => { expect(text()).toContain('ASC-0001'); });
+    expect(mockGetRecords).toHaveBeenCalledTimes(1);
+    expect(mockGetChecklist).not.toHaveBeenCalled();
   });
   it('Volver navega a /responsable/ascensores', async () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-0001'); });
     await userEvent.click(screen.getByRole('button', { name: /volver/i }));
     await waitFor(() => { expect(screen.getByTestId('ascensores-list')).toBeInTheDocument(); });
+  });
+  it('mantenimiento sin técnico muestra "-"', async () => {
+    mockGetRecords.mockResolvedValue([makeRecord({ technician_id: 'tech-inexistente' })]);
+    renderPage();
+    await waitFor(() => { expect(text()).toContain('Mantenimientos (1)'); });
+    const items = screen.getAllByText('-');
+    expect(items.length).toBeGreaterThanOrEqual(1);
+  });
+  it('visitas con hora de entrada y salida', async () => {
+    mockGetVisits.mockResolvedValue([
+      makeVisit({ check_in_at: '2026-07-27T13:00:00Z', check_out_at: '2026-07-27T15:30:00Z', duration_seconds: 9000 }),
+    ]);
+    renderPage();
+    await waitFor(() => {
+      const t = text();
+      expect(t).toContain('2h 30m');
+      expect(t).toMatch(/\d{2}:\d{2}/);
+    });
+  });
+  it('acceso no autorizado: no muestra mantenimientos', async () => {
+    renderPage('elevator-prohibido');
+    await waitFor(() => { expect(text()).toContain('No tiene permiso para consultar este recurso'); });
+    expect(text()).not.toContain('No hay mantenimientos');
+  });
+  it('carga en dos fases: sin checklists sin mantenimientos', async () => {
+    mockGetRecords.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(text()).toContain('No hay mantenimientos'); });
+    expect(mockGetChecklist).not.toHaveBeenCalled();
+  });
+  it('checklist con notas visibles', async () => {
+    mockGetRecords.mockResolvedValue([makeRecord()]);
+    mockGetChecklist.mockResolvedValue([makeChecklist({ notes: 'Observar nivel de aceite' })]);
+    renderPage();
+    await waitFor(() => { expect(text()).toContain('(Observar nivel de aceite)'); });
   });
 });
