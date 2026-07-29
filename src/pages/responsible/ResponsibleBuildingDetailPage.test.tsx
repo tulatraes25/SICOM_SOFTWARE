@@ -37,12 +37,15 @@ const mockGetElevators = vi.mocked(getResponsibleElevators);
 const mockGetClients = vi.mocked(getResponsibleClients);
 const mockGetVisitEntries = vi.mocked(getResponsibleVisitEntries);
 
+interface Deferred<T> { promise: Promise<T>; resolve: (value: T) => void; }
+function deferred<T>(): Deferred<T> { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; }
+
 function renderPage(buildingId = 'building-1') {
   return render(
     <MemoryRouter initialEntries={[`/responsable/edificios/${buildingId}`]}>
       <Routes>
         <Route path="/responsable/edificios/:buildingId" element={<ResponsibleBuildingDetailPage />} />
-        <Route path="/responsable/edificios" element={<div>Edificios list</div>} />
+        <Route path="/responsable/edificios" element={<div data-testid="edificios-list">Edificios list</div>} />
       </Routes>
     </MemoryRouter>
   );
@@ -60,21 +63,16 @@ describe('ResponsibleBuildingDetailPage', () => {
     renderPage();
     await waitFor(() => { expect(screen.getByText('ASC-0001')).toBeInTheDocument(); expect(screen.getByText('Otis Gen2')).toBeInTheDocument(); expect(screen.getByText('ASC-0002')).toBeInTheDocument(); expect(screen.getByText('Schindler 3300')).toBeInTheDocument(); });
   });
-  it('ordena por código natural: ASC-2 antes de ASC-10', async () => {
+  it('ordena por código natural: ASC-0001, ASC-0002, ASC-10', async () => {
     renderPage();
     await waitFor(() => { expect(screen.getByText('ASC-0001')).toBeInTheDocument(); });
     const links = screen.getAllByRole('link').filter((l) => l.getAttribute('href')?.startsWith('/responsable/ascensores/'));
-    const codes = links.map((l) => {
-      const p = l.querySelector('p.font-mono');
-      return p?.textContent?.trim() || '';
-    });
+    const codes = links.map((l) => l.querySelector('p.font-mono')?.textContent?.trim() || '');
     expect(codes).toEqual(['ASC-0001', 'ASC-0002', 'ASC-10']);
   });
   it('muestra estado traducido', async () => {
     renderPage();
-    await waitFor(() => {
-      expect(document.body.textContent).toContain('Operativo');
-    });
+    await waitFor(() => { expect(document.body.textContent).toContain('Operativo'); });
   });
   it('enlaces apuntan a /responsable/ascensores/<id>', async () => {
     renderPage();
@@ -87,21 +85,32 @@ describe('ResponsibleBuildingDetailPage', () => {
     await waitFor(() => { expect(screen.getByText('ASC-0001')).toBeInTheDocument(); });
     expect(screen.getByText('Libro consolidado').closest('a')?.getAttribute('href')).toBe('/responsable/libro-visitas?buildingId=building-1');
   });
-  it('muestra máximo 10 visitas', async () => {
+  it('muestra exactamente 10 visitas, las más recientes', async () => {
     mockGetVisitEntries.mockResolvedValue(Array.from({ length: 15 }, (_, i) => makeVisit({ id: `v-${i}`, visit_date: `2026-07-${String(i + 1).padStart(2, '0')}`, entry_number: i + 1, title: `V${i + 1}` })));
     renderPage();
-    await waitFor(() => { expect(screen.getByText(/Últimas visitas \(10\)/)).toBeInTheDocument(); });
+    await waitFor(() => {
+      const text = document.body.textContent || '';
+      expect(text).toContain('V15');
+      expect(text).toContain('V6');
+      expect(text).not.toMatch(/V5[^0-9]/);
+      expect(text).not.toMatch(/V1[^0-9]/);
+    });
   });
-  it('ordena visitas por fecha y entry_number descendente', async () => {
+  it('ordena visitas: fecha descendente, entry_number descendente', async () => {
     mockGetVisitEntries.mockResolvedValue([
-      makeVisit({ id: 'v-1', visit_date: '2026-07-10', entry_number: 1, title: 'A' }),
-      makeVisit({ id: 'v-2', visit_date: '2026-07-10', entry_number: 2, title: 'B' }),
-      makeVisit({ id: 'v-3', visit_date: '2026-07-15', entry_number: 1, title: 'C' }),
+      makeVisit({ id: 'v-1', visit_date: '2026-07-10', entry_number: 1, title: 'Primera' }),
+      makeVisit({ id: 'v-2', visit_date: '2026-07-10', entry_number: 2, title: 'Segunda' }),
+      makeVisit({ id: 'v-3', visit_date: '2026-07-15', entry_number: 1, title: 'Tercera' }),
     ]);
     renderPage();
     await waitFor(() => {
       const text = document.body.textContent || '';
-      expect(text).toContain('Últimas visitas (3)');
+      const idxTercera = text.indexOf('Tercera');
+      const idxSegunda = text.indexOf('Segunda');
+      const idxPrimera = text.indexOf('Primera');
+      expect(idxTercera).toBeGreaterThan(0);
+      expect(idxTercera).toBeLessThan(idxSegunda);
+      expect(idxSegunda).toBeLessThan(idxPrimera);
     });
   });
   it('filtra visitas de otros edificios', async () => {
@@ -110,19 +119,12 @@ describe('ResponsibleBuildingDetailPage', () => {
       makeVisit({ id: 'v-2', elevator_id: 'elevator-99', visit_date: '2026-07-27', title: 'Y' }),
     ]);
     renderPage();
-    await waitFor(() => {
-      const text = document.body.textContent || '';
-      expect(text).toContain('X');
-      expect(text).not.toContain('Y');
-    });
+    await waitFor(() => { const text = document.body.textContent || ''; expect(text).toContain('X'); expect(text).not.toContain('Y'); });
   });
   it('muestra código del ascensor en cada visita', async () => {
     mockGetVisitEntries.mockResolvedValue([makeVisit({ id: 'v-1', elevator_id: 'elevator-1', visit_date: '2026-07-27', title: 'Test' })]);
     renderPage();
-    await waitFor(() => {
-      const text = document.body.textContent || '';
-      expect(text).toContain('ASC-0001');
-    });
+    await waitFor(() => { expect(document.body.textContent).toContain('ASC-0001'); });
   });
   it('sin ascensores muestra "No hay ascensores"', async () => {
     mockGetElevators.mockResolvedValue([]);
@@ -139,27 +141,43 @@ describe('ResponsibleBuildingDetailPage', () => {
     await waitFor(() => { expect(screen.getByText('ED-001')).toBeInTheDocument(); });
     expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(1);
   });
-  it('acceso no autorizado', async () => {
+  it('acceso no autorizado: no muestra datos privados', async () => {
     renderPage('building-prohibido');
     await waitFor(() => { expect(screen.getByText('No tiene permiso para consultar este recurso')).toBeInTheDocument(); });
-    expect(screen.queryByText('ED-001')).not.toBeInTheDocument();
+    const text = document.body.textContent || '';
+    expect(text).not.toContain('ED-001');
+    expect(text).not.toContain('Hospital Regional');
+    expect(text).not.toContain('Av. Principal 123');
+    expect(text).not.toContain('Hospital Regional S.A.');
+    expect(text).not.toContain('ASC-0001');
+    expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /volver/i })).toBeInTheDocument();
   });
-  it('botón Reintentar visible en error', async () => {
-    renderPage('building-prohibido');
-    await waitFor(() => { expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument(); });
-  });
-  it('error de RPC y reintento', async () => {
+  it('error de RPC y reintento exacto', async () => {
     mockGetBuildings.mockRejectedValueOnce(new Error('RPC failed'));
     renderPage();
     await waitFor(() => { expect(screen.getByText('RPC failed')).toBeInTheDocument(); });
     mockGetBuildings.mockResolvedValue([mockBuilding]); mockGetElevators.mockResolvedValue(mockElevators); mockGetClients.mockResolvedValue([mockClient]); mockGetVisitEntries.mockResolvedValue([]);
     await userEvent.click(screen.getByRole('button', { name: /reintentar/i }));
     await waitFor(() => { expect(screen.queryByText('RPC failed')).not.toBeInTheDocument(); expect(screen.getByText('ED-001')).toBeInTheDocument(); });
+    expect(mockGetBuildings).toHaveBeenCalledTimes(2);
+    expect(mockGetElevators).toHaveBeenCalledTimes(2);
+    expect(mockGetClients).toHaveBeenCalledTimes(2);
+    expect(mockGetVisitEntries).toHaveBeenCalledTimes(2);
+  });
+  it('estado de carga: promesas pendientes muestran spinner', async () => {
+    const bld = deferred<ResponsibleBuilding[]>(); const els = deferred<ResponsibleElevator[]>(); const vis = deferred<ResponsibleVisitEntry[]>(); const cls = deferred<ResponsibleClient[]>();
+    mockGetBuildings.mockReturnValue(bld.promise); mockGetElevators.mockReturnValue(els.promise); mockGetVisitEntries.mockReturnValue(vis.promise); mockGetClients.mockReturnValue(cls.promise);
+    renderPage();
+    expect(screen.queryByText('ED-001')).not.toBeInTheDocument();
+    expect(screen.queryByText('ASC-0001')).not.toBeInTheDocument();
+    bld.resolve([mockBuilding]); els.resolve(mockElevators); vis.resolve([]); cls.resolve([mockClient]);
+    await waitFor(() => { expect(screen.getByText('ED-001')).toBeInTheDocument(); });
   });
   it('Volver navega a /responsable/edificios', async () => {
     renderPage();
     await waitFor(() => { expect(screen.getByText('ED-001')).toBeInTheDocument(); });
-    const backBtn = screen.getByRole('button', { name: /volver/i });
-    expect(backBtn).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /volver/i }));
+    await waitFor(() => { expect(screen.getByTestId('edificios-list')).toBeInTheDocument(); });
   });
 });
