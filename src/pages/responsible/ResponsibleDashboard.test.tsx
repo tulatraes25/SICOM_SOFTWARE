@@ -2,8 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import ResponsibleDashboard from './ResponsibleDashboard';
 import type { ResponsibleBuilding, ResponsibleElevator, ResponsibleVisitEntry, ResponsibleMonthlyReport } from '@/services/responsiblePortalService';
+import type { UserRole } from '@/types/roles';
+
+const RESPONSIBLE_ROLE: UserRole = 'responsible';
 
 // ============================================================
 // Mocks
@@ -19,11 +23,6 @@ const mockElevators: ResponsibleElevator[] = [
   { id: 'elevator-2', code: 'ASC-0002', building_id: 'building-1', manufacturer: 'Schindler', model: '3300', elevator_type: 'passenger', capacity_kg: 1000, floors_served: '1-8', year_installed: 2019, operational_status: 'operational', conservation_status: 'good', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
   { id: 'elevator-3', code: 'ASC-0010', building_id: 'building-2', manufacturer: 'Kone', model: 'MiniSpace', elevator_type: 'passenger', capacity_kg: 630, floors_served: '1-3', year_installed: 2021, operational_status: 'operational', conservation_status: 'good', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
 ];
-
-function makeNowDate(): { year: number; month: number; monthStr: string; dayStr: string } {
-  const now = new Date();
-  return { year: now.getFullYear(), month: now.getMonth() + 1, monthStr: String(now.getMonth() + 1).padStart(2, '0'), dayStr: String(now.getDate()).padStart(2, '0') };
-}
 
 function makeVisit(overrides: Partial<ResponsibleVisitEntry> = {}): ResponsibleVisitEntry {
   return {
@@ -47,6 +46,30 @@ function makeReport(overrides: Partial<ResponsibleMonthlyReport> = {}): Responsi
   };
 }
 
+function dateInRelativeMonth(offset: number, day: number): string {
+  const now = new Date();
+  const date = new Date(now.getFullYear(), now.getMonth() + offset, day);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function currentMonthDay(day: number): string {
+  return dateInRelativeMonth(0, day);
+}
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => { resolve = r; });
+  return { promise, resolve };
+}
+
 vi.mock('@/services/responsiblePortalService', () => ({
   getResponsibleBuildings: vi.fn(),
   getResponsibleElevators: vi.fn(),
@@ -56,21 +79,7 @@ vi.mock('@/services/responsiblePortalService', () => ({
 }));
 
 vi.mock('@/hooks/useAuth', () => ({
-  useAuth: vi.fn(() => ({
-    user: { id: 'user-1', email: 'claudio@test.com', app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: '' },
-    profile: { id: 'user-1', full_name: 'Claudio Tula', role: 'responsible', email: 'claudio@test.com', active: true, created_at: '', updated_at: '', phone: undefined },
-    logout: vi.fn(),
-    login: vi.fn(),
-    getRedirectPath: vi.fn(),
-    hasRole: vi.fn(),
-    isAdmin: false,
-    isTechnician: false,
-    isSupervisor: false,
-    isResponsible: true,
-    isAuthenticated: true,
-    loading: false,
-    error: null,
-  })),
+  useAuth: vi.fn(),
 }));
 
 vi.mock('@/components/layout/Sidebar', () => ({
@@ -87,6 +96,25 @@ const mockGetBuildings = vi.mocked(getResponsibleBuildings);
 const mockGetElevators = vi.mocked(getResponsibleElevators);
 const mockGetVisitEntries = vi.mocked(getResponsibleVisitEntries);
 const mockGetReports = vi.mocked(getResponsibleMonthlyReports);
+const mockUseAuth = vi.mocked(useAuth);
+
+function makeAuthContext(fullName = 'Claudio Tula') {
+  return {
+    user: { id: 'user-1', email: 'claudio@test.com', app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: '' },
+    profile: { id: 'user-1', full_name: fullName, role: RESPONSIBLE_ROLE, email: 'claudio@test.com', active: true, created_at: '', updated_at: '', phone: undefined },
+    logout: () => Promise.resolve(),
+    login: () => Promise.resolve({ error: null, profile: { id: 'user-1', full_name: fullName, role: RESPONSIBLE_ROLE, email: 'claudio@test.com', active: true, created_at: '', updated_at: '', phone: undefined } }),
+    getRedirectPath: () => '/responsable',
+    hasRole: () => true,
+    isAdmin: false,
+    isTechnician: false,
+    isSupervisor: false,
+    isResponsible: true,
+    isAuthenticated: true,
+    loading: false,
+    error: null,
+  };
+}
 
 function renderPage() {
   return render(
@@ -97,6 +125,8 @@ function renderPage() {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  mockUseAuth.mockReturnValue(makeAuthContext());
   mockGetBuildings.mockResolvedValue(mockBuildings);
   mockGetElevators.mockResolvedValue(mockElevators);
   mockGetVisitEntries.mockResolvedValue([]);
@@ -114,21 +144,17 @@ afterEach(() => {
 
 describe('ResponsibleDashboard', () => {
   describe('Saludo', () => {
-    it('muestra full_name del perfil', async () => {
+    it('muestra full_name del perfil y no muestra el correo', async () => {
       renderPage();
       await waitFor(() => {
         expect(screen.getByText('Bienvenido/a, Claudio Tula')).toBeInTheDocument();
       });
+      expect(screen.queryByText('claudio@test.com')).not.toBeInTheDocument();
+      expect(screen.queryByText('claudio')).not.toBeInTheDocument();
     });
 
     it('muestra "Responsable" cuando full_name está vacío', async () => {
-      vi.mocked(await import('@/hooks/useAuth')).useAuth = vi.fn(() => ({
-        user: { id: 'user-1', email: 'claudio@test.com', app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: '' },
-        profile: { id: 'user-1', full_name: '', role: 'responsible', email: 'claudio@test.com', active: true, created_at: '', updated_at: '', phone: undefined },
-        logout: vi.fn(), login: vi.fn(), getRedirectPath: vi.fn(), hasRole: vi.fn(),
-        isAdmin: false, isTechnician: false, isSupervisor: false, isResponsible: true, isAuthenticated: true,
-        loading: false, error: null,
-      }));
+      mockUseAuth.mockReturnValue(makeAuthContext(''));
       renderPage();
       await waitFor(() => {
         expect(screen.getByText('Bienvenido/a, Responsable')).toBeInTheDocument();
@@ -151,9 +177,8 @@ describe('ResponsibleDashboard', () => {
     });
 
     it('cuenta visitas del mes actual correctamente', async () => {
-      const { year, monthStr } = makeNowDate();
       const visits = Array.from({ length: 15 }, (_, i) =>
-        makeVisit({ id: `v-${i + 1}`, visit_date: `${year}-${monthStr}-${String(Math.min(i + 1, 28)).padStart(2, '0')}`, title: `Visita ${String(i + 1).padStart(2, '0')}` })
+        makeVisit({ id: `v-${i + 1}`, visit_date: currentMonthDay(Math.min(i + 1, 28)), title: `Visita ${String(i + 1).padStart(2, '0')}` })
       );
       mockGetVisitEntries.mockResolvedValue(visits);
       renderPage();
@@ -166,15 +191,14 @@ describe('ResponsibleDashboard', () => {
 
   describe('Filtro del mes actual', () => {
     it('no cuenta visitas de otros meses', async () => {
-      const { year, monthStr } = makeNowDate();
       const current = Array.from({ length: 10 }, (_, i) =>
-        makeVisit({ id: `cur-${i}`, visit_date: `${year}-${monthStr}-${String(i + 1).padStart(2, '0')}`, title: `Actual ${i}` })
+        makeVisit({ id: `cur-${i}`, visit_date: currentMonthDay(i + 1), title: `Actual ${i}` })
       );
       const prev = Array.from({ length: 5 }, (_, i) =>
-        makeVisit({ id: `prev-${i}`, visit_date: `${year}-${String(Number(monthStr) - 1 || 12).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`, title: `Anterior ${i}` })
+        makeVisit({ id: `prev-${i}`, visit_date: dateInRelativeMonth(-1, i + 1), title: `Anterior ${i}` })
       );
       const next = Array.from({ length: 3 }, (_, i) =>
-        makeVisit({ id: `next-${i}`, visit_date: `${year}-${String(Number(monthStr) + 1 > 12 ? 1 : Number(monthStr) + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`, title: `Futuro ${i}` })
+        makeVisit({ id: `next-${i}`, visit_date: dateInRelativeMonth(1, i + 1), title: `Futuro ${i}` })
       );
       mockGetVisitEntries.mockResolvedValue([...current, ...prev, ...next]);
       renderPage();
@@ -185,16 +209,18 @@ describe('ResponsibleDashboard', () => {
   });
 
   describe('Última actividad', () => {
-    it('muestra máximo 10 actividades', async () => {
-      const { year, monthStr } = makeNowDate();
-      const visits = Array.from({ length: 15 }, (_, i) =>
-        makeVisit({ id: `v-${i + 1}`, visit_date: `${year}-${monthStr}-${String(Math.min(i + 1, 28)).padStart(2, '0')}`, title: `Visita ${String(i + 1).padStart(2, '0')}` })
-      );
+    it('muestra exactamente 10 actividades en orden descendente', async () => {
+      const visits = Array.from({ length: 15 }, (_, i) => {
+        const day = Math.min(i + 1, 28);
+        return makeVisit({ id: `v-${i + 1}`, visit_date: currentMonthDay(day), title: `Visita ${String(i + 1).padStart(2, '0')}` });
+      });
       mockGetVisitEntries.mockResolvedValue(visits);
       renderPage();
       await waitFor(() => {
-        expect(screen.getByText(/Visita 15/)).toBeInTheDocument();
-        expect(screen.getByText(/Visita 06/)).toBeInTheDocument();
+        const items = screen.getAllByText(/Visita \d{2}/);
+        expect(items).toHaveLength(10);
+        expect(items[0]).toHaveTextContent('Visita 15');
+        expect(items[9]).toHaveTextContent('Visita 06');
         expect(screen.queryByText(/Visita 05/)).not.toBeInTheDocument();
       });
     });
@@ -232,13 +258,12 @@ describe('ResponsibleDashboard', () => {
 
   describe('Orígenes traducidos', () => {
     it('traduce todos los orígenes al español', async () => {
-      const { year, monthStr } = makeNowDate();
       mockGetVisitEntries.mockResolvedValue([
-        makeVisit({ id: 'v-1', visit_date: `${year}-${monthStr}-01`, origin_type: 'maintenance', title: 'Mant' }),
-        makeVisit({ id: 'v-2', visit_date: `${year}-${monthStr}-02`, origin_type: 'service_order', title: 'Orden' }),
-        makeVisit({ id: 'v-3', visit_date: `${year}-${monthStr}-03`, origin_type: 'inspection', title: 'Insp' }),
-        makeVisit({ id: 'v-4', visit_date: `${year}-${monthStr}-04`, origin_type: 'manual', title: 'Manual' }),
-        makeVisit({ id: 'v-5', visit_date: `${year}-${monthStr}-05`, origin_type: 'claim', title: 'Reclamo' }),
+        makeVisit({ id: 'v-1', visit_date: currentMonthDay(1), origin_type: 'maintenance', title: 'Mant' }),
+        makeVisit({ id: 'v-2', visit_date: currentMonthDay(2), origin_type: 'service_order', title: 'Orden' }),
+        makeVisit({ id: 'v-3', visit_date: currentMonthDay(3), origin_type: 'inspection', title: 'Insp' }),
+        makeVisit({ id: 'v-4', visit_date: currentMonthDay(4), origin_type: 'manual', title: 'Manual' }),
+        makeVisit({ id: 'v-5', visit_date: currentMonthDay(5), origin_type: 'claim', title: 'Reclamo' }),
       ]);
       renderPage();
       await waitFor(() => {
@@ -251,10 +276,9 @@ describe('ResponsibleDashboard', () => {
     });
 
     it('no muestra valores técnicos en inglés', async () => {
-      const { year, monthStr } = makeNowDate();
       mockGetVisitEntries.mockResolvedValue([
-        makeVisit({ id: 'v-1', visit_date: `${year}-${monthStr}-01`, origin_type: 'maintenance', title: 'M' }),
-        makeVisit({ id: 'v-2', visit_date: `${year}-${monthStr}-02`, origin_type: 'service_order', title: 'O' }),
+        makeVisit({ id: 'v-1', visit_date: currentMonthDay(1), origin_type: 'maintenance', title: 'M' }),
+        makeVisit({ id: 'v-2', visit_date: currentMonthDay(2), origin_type: 'service_order', title: 'O' }),
       ]);
       renderPage();
       await waitFor(() => {
@@ -330,11 +354,29 @@ describe('ResponsibleDashboard', () => {
   });
 
   describe('Carga', () => {
-    it('el botón Actualizar está deshabilitado durante la carga inicial', async () => {
+    it('botón deshabilitado durante carga, luego habilitado', async () => {
+      const bldDeferred = deferred<ResponsibleBuilding[]>();
+      const elsDeferred = deferred<ResponsibleElevator[]>();
+      const visDeferred = deferred<ResponsibleVisitEntry[]>();
+      const repDeferred = deferred<ResponsibleMonthlyReport[]>();
+      mockGetBuildings.mockReturnValue(bldDeferred.promise);
+      mockGetElevators.mockReturnValue(elsDeferred.promise);
+      mockGetVisitEntries.mockReturnValue(visDeferred.promise);
+      mockGetReports.mockReturnValue(repDeferred.promise);
+
       renderPage();
       const btn = screen.getByRole('button', { name: /actualizar/i });
+      expect(btn).toBeDisabled();
+      expect(screen.queryByText('No hay visitas recientes')).not.toBeInTheDocument();
+
+      bldDeferred.resolve(mockBuildings);
+      elsDeferred.resolve(mockElevators);
+      visDeferred.resolve([]);
+      repDeferred.resolve([]);
+
       await waitFor(() => {
         expect(btn).not.toBeDisabled();
+        expect(screen.getByText('Edificios')).toBeInTheDocument();
       });
     });
   });
@@ -356,26 +398,24 @@ describe('ResponsibleDashboard', () => {
         expect(screen.queryByText('RPC failed')).not.toBeInTheDocument();
         expect(screen.getByText('Edificios')).toBeInTheDocument();
       });
+      expect(mockGetBuildings).toHaveBeenCalledTimes(2);
+      expect(mockGetElevators).toHaveBeenCalledTimes(2);
+      expect(mockGetVisitEntries).toHaveBeenCalledTimes(2);
+      expect(mockGetReports).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('Botón Actualizar', () => {
-    it('vuelve a llamar a todas las funciones', async () => {
+    it('vuelve a llamar a todas las funciones exactamente 2 veces', async () => {
       renderPage();
       await waitFor(() => { expect(screen.getByText('Edificios')).toBeInTheDocument(); });
-      const initialCalls = {
-        buildings: mockGetBuildings.mock.calls.length,
-        elevators: mockGetElevators.mock.calls.length,
-        visits: mockGetVisitEntries.mock.calls.length,
-        reports: mockGetReports.mock.calls.length,
-      };
       const btn = screen.getByRole('button', { name: /actualizar/i });
       await userEvent.click(btn);
       await waitFor(() => {
-        expect(mockGetBuildings.mock.calls.length).toBeGreaterThan(initialCalls.buildings);
-        expect(mockGetElevators.mock.calls.length).toBeGreaterThan(initialCalls.elevators);
-        expect(mockGetVisitEntries.mock.calls.length).toBeGreaterThan(initialCalls.visits);
-        expect(mockGetReports.mock.calls.length).toBeGreaterThan(initialCalls.reports);
+        expect(mockGetBuildings).toHaveBeenCalledTimes(2);
+        expect(mockGetElevators).toHaveBeenCalledTimes(2);
+        expect(mockGetVisitEntries).toHaveBeenCalledTimes(2);
+        expect(mockGetReports).toHaveBeenCalledTimes(2);
       });
     });
   });
