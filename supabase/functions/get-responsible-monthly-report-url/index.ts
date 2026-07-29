@@ -45,16 +45,18 @@ function buildFilename(code: string, year: number | null, month: number | null, 
   const safeCode = code.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "ascensor";
   const safeVersion = Number.isInteger(version) && version >= 1 ? version : 1;
 
-  let ym = "";
   const validYear = Number.isInteger(year) && year !== null && year > 0;
   const validMonth = Number.isInteger(month) && month !== null && month >= 1 && month <= 12;
+  const parsedPeriod = interpretPeriod(period);
 
-  if (validYear && validMonth) {
-    ym = `${year}-${String(month).padStart(2, "0")}`;
+  const finalYear = validYear ? year : parsedPeriod?.year ?? null;
+  const finalMonth = validMonth ? month : parsedPeriod?.month ?? null;
+
+  let ym = "";
+  if (finalYear !== null && finalMonth !== null) {
+    ym = `${finalYear}-${String(finalMonth).padStart(2, "0")}`;
   } else {
-    const parsed = interpretPeriod(period);
-    if (parsed) ym = `${parsed.year}-${String(parsed.month).padStart(2, "0")}`;
-    else ym = "informe";
+    ym = "informe";
   }
 
   return `informe-mensual-${safeCode}-${ym}-v${safeVersion}.pdf`;
