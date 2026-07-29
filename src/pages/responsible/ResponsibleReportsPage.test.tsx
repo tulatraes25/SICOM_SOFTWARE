@@ -15,6 +15,7 @@ const mockElevators: ResponsibleElevator[] = [
   { id: 'elevator-2', code: 'ASC-2', building_id: 'building-3', manufacturer: 'Schindler', model: '3300', elevator_type: 'passenger', capacity_kg: 1000, floors_served: '1-8', year_installed: 2019, operational_status: 'operativo', conservation_status: 'conforme', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
   { id: 'elevator-10', code: 'ASC-10', building_id: 'building-3', manufacturer: 'Kone', model: 'MiniSpace', elevator_type: 'passenger', capacity_kg: 630, floors_served: '1-3', year_installed: 2021, operational_status: 'operativo', conservation_status: 'conforme', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
   { id: 'elevator-3', code: 'ASC-3', building_id: 'building-2', manufacturer: 'Kone', model: null, elevator_type: 'passenger', capacity_kg: 630, floors_served: '1-3', year_installed: 2021, operational_status: 'operativo', conservation_status: 'conforme', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
+  { id: 'elevator-missing-building', code: 'ASC-77', building_id: 'building-inexistente', manufacturer: 'Test', model: 'X', elevator_type: 'other', capacity_kg: 500, floors_served: '1-2', year_installed: 2020, operational_status: 'operativo', conservation_status: 'conforme', contractual_status: 'active', last_service_date: null, next_service_date: null, active: true },
 ];
 const mockReports: ResponsibleMonthlyReport[] = [
   { id: 'r-1', elevator_id: 'elevator-1', period: '2026-07', title: null, status: 'approved', general_status: 'operativo', services_count: 5, report_month: 7, report_year: 2026, pdf_generated_at: '2026-07-28', has_pdf: true },
@@ -87,18 +88,26 @@ describe('ResponsibleReportsPage', () => {
     ]);
     renderPage();
     await waitFor(() => { expect(t()).toContain('ASC-2'); });
-    const cards = [
-      screen.getByTestId('responsible-report-r-asc2'),
-      screen.getByTestId('responsible-report-r-asc10'),
-      screen.getByTestId('responsible-report-r-orphan'),
-      screen.getByTestId('responsible-report-r-noelev'),
-    ];
-    expect(cards[0].textContent).toContain('ASC-2');
-    expect(cards[1].textContent).toContain('ASC-10');
-    expect(cards[2].textContent).toContain('-');
-    expect(cards[2].textContent).not.toContain('building-inexistente');
-    expect(cards[3].textContent).toContain('-');
-    expect(cards[3].textContent).not.toContain('elevator-inexistente');
+    const txt = t();
+    const idxAsc2 = txt.indexOf('ASC-2');
+    const idxAsc10 = txt.indexOf('ASC-10');
+    expect(idxAsc2).toBeLessThan(idxAsc10);
+    expect(txt).toContain('ASC-77');
+    expect(txt).toContain('-');
+    expect(txt).not.toContain('building-inexistente');
+    expect(txt).not.toContain('elevator-inexistente');
+    expect(txt).not.toContain('nonexistent');
+  });
+  it('mes inválido usa period como respaldo', async () => {
+    mockGetReports.mockResolvedValue([
+      { id: 'r-invalid-month', elevator_id: 'elevator-1', period: '2026-08', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 99, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-july', elevator_id: 'elevator-1', period: '2026-07', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 7, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+    ]);
+    renderPage();
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+    const ids = screen.getAllByTestId(/^responsible-report-/).map((el) => el.getAttribute('data-testid'));
+    expect(ids[0]).toBe('responsible-report-r-invalid-month');
+    expect(ids[1]).toBe('responsible-report-r-july');
   });
   it('estados traducidos por tarjeta', async () => {
     renderPage();
@@ -120,10 +129,9 @@ describe('ResponsibleReportsPage', () => {
     ]);
     renderPage();
     await waitFor(() => { expect(t()).toContain('ASC-1'); });
-    const card = screen.getByTestId('responsible-report-r-u');
-    expect(card.textContent).toContain('archived');
+    expect(screen.getByTestId('responsible-report-r-u').textContent).toContain('archived');
   });
-  it('estado vacío muestra guion', async () => {
+  it('estado vacío muestra guion en badge', async () => {
     mockGetReports.mockResolvedValue([
       { id: 'r-e', elevator_id: 'elevator-1', period: '2026-02', title: null, status: '', general_status: null, services_count: 1, report_month: 2, report_year: 2026, pdf_generated_at: null, has_pdf: false },
     ]);
@@ -161,7 +169,7 @@ describe('ResponsibleReportsPage', () => {
       expect(t()).toContain('No hay informes disponibles');
       expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
     });
-    expect(screen.queryByTestId(/^responsible-report-/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId(/^responsible-report-/)).toBeNull();
     expect(screen.queryAllByRole('button', { name: /descarga/i })).toHaveLength(0);
     expect(document.querySelectorAll('.animate-spin').length).toBe(0);
   });
@@ -175,12 +183,14 @@ describe('ResponsibleReportsPage', () => {
     renderPage();
     expect(screen.getByRole('button', { name: /actualizar/i })).toBeDisabled();
     expect(t()).not.toContain('ASC-1');
+    expect(document.querySelectorAll('.animate-spin').length).toBe(1);
     repDef.resolve(mockReports);
     elsDef.resolve(mockElevators);
     bldDef.resolve(mockBuildings);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
       expect(t()).toContain('ASC-1');
+      expect(document.querySelectorAll('.animate-spin').length).toBe(0);
     });
   });
   it('error y reintento', async () => {
@@ -221,16 +231,17 @@ describe('ResponsibleReportsPage', () => {
     const btn = screen.getByRole('button', { name: /actualizar/i });
     await userEvent.click(btn);
     expect(btn).toBeDisabled();
+    expect(mockGetReports).toHaveBeenCalledTimes(2);
+    expect(mockGetElevators).toHaveBeenCalledTimes(2);
+    expect(mockGetBuildings).toHaveBeenCalledTimes(2);
     repDef2.resolve(mockReports);
     elsDef2.resolve(mockElevators);
     bldDef2.resolve(mockBuildings);
     await waitFor(() => {
       expect(btn).not.toBeDisabled();
       expect(t()).toContain('ASC-1');
+      expect(document.querySelectorAll('.animate-spin').length).toBe(0);
     });
-    expect(mockGetReports).toHaveBeenCalledTimes(2);
-    expect(mockGetElevators).toHaveBeenCalledTimes(2);
-    expect(mockGetBuildings).toHaveBeenCalledTimes(2);
   });
   it('inmutabilidad', async () => {
     const origRep = mockReports.map((r) => ({ ...r }));

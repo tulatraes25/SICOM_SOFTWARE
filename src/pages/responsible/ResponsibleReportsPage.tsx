@@ -37,16 +37,23 @@ export default function ResponsibleReportsPage() {
   };
 
   const getYearMonth = (r: ResponsibleMonthlyReport): { year: number; month: number } => {
-    let year = r.report_year;
-    let month = r.report_month;
-    if (!year || !month) {
+    const validYear = Number.isInteger(r.report_year) && (r.report_year ?? 0) > 0;
+    const validMonth = Number.isInteger(r.report_month) && (r.report_month ?? 0) >= 1 && (r.report_month ?? 0) <= 12;
+
+    let year = validYear ? r.report_year! : 0;
+    let month = validMonth ? r.report_month! : 0;
+
+    if (!validYear || !validMonth) {
       const match = (r.period || '').match(/^(\d{4})-(\d{2})$/);
       if (match) {
-        if (!year) year = parseInt(match[1], 10);
-        if (!month) month = parseInt(match[2], 10);
+        const pYear = parseInt(match[1], 10);
+        const pMonth = parseInt(match[2], 10);
+        if (!validYear && pYear > 0) year = pYear;
+        if (!validMonth && pMonth >= 1 && pMonth <= 12) month = pMonth;
       }
     }
-    return { year: year || 0, month: (month && month >= 1 && month <= 12) ? month : 0 };
+
+    return { year, month };
   };
 
   const sortedReports = useMemo(() => {
