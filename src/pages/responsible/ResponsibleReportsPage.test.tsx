@@ -296,8 +296,9 @@ describe('ResponsibleReportsPage', () => {
 
     await waitFor(() => {
       expect(appendSpy).toHaveBeenCalled();
-      const anchor = appendSpy.mock.calls[0][0];
-      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      const raw = appendSpy.mock.calls[0][0];
+      expect(raw).toBeInstanceOf(HTMLAnchorElement);
+      const anchor = raw as HTMLAnchorElement;
       expect(anchor.href).toBe(VALID_DOWNLOAD.signed_url);
       expect(anchor.download).toBe(VALID_DOWNLOAD.filename);
       expect(anchor.rel).toBe('noopener');
