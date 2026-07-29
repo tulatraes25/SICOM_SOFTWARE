@@ -24,6 +24,9 @@ function formatDuration(e: { duration_seconds?: number | null; duration_minutes?
 const CHECKLIST_LABELS: Record<string, string> = { ok: 'Correcto', needs_attention: 'Requiere atención', failed: 'Falló', na: 'No aplica' };
 const SERVICE_TYPE_LABELS: Record<string, string> = { preventivo: 'Preventivo', correctivo: 'Correctivo', emergencia: 'Emergencia', inspeccion: 'Inspección', instalacion: 'Instalación', otro: 'Otro' };
 const ORDER_TYPE_LABELS: Record<string, string> = { preventive: 'Preventivo', corrective: 'Correctivo', emergency: 'Emergencia', inspection: 'Inspección', claim_response: 'Respuesta a reclamo', budgeted_work: 'Trabajo presupuestado', modernization: 'Modernización', other: 'Otro' };
+const ELEVATOR_TYPE_LABELS: Record<string, string> = { passenger: 'Pasajeros', freight: 'Carga', service: 'Servicio', hospital: 'Camillero', dumbwaiter: 'Montacargas liviano', other: 'Otro', pasajeros: 'Pasajeros', carga: 'Carga', servicio: 'Servicio' };
+const CONTRACTUAL_STATUS_LABELS: Record<string, string> = { active: 'Activo', inactive: 'Inactivo', suspended: 'Suspendido', expired: 'Vencido', pending: 'Pendiente' };
+const REPORT_STATUS_LABELS: Record<string, string> = { approved: 'Aprobado', sent: 'Enviado', draft: 'Borrador', pending: 'Pendiente', rejected: 'Rechazado' };
 
 export default function ResponsibleElevatorDetailPage() {
   const { elevatorId } = useParams<{ elevatorId: string }>();
@@ -43,14 +46,46 @@ export default function ResponsibleElevatorDetailPage() {
   const loadData = async () => {
     setLoading(true); setError('');
     try {
-      const [els, rec, ord, vis, rep, tech] = await Promise.all([
+      const [els, rec, ord, vis, rep] = await Promise.all([
         getResponsibleElevators(), getResponsibleServiceRecords(elevatorId),
         getResponsibleServiceOrders(elevatorId), getResponsibleVisitEntries(elevatorId),
-        getResponsibleMonthlyReports(elevatorId), getResponsibleTechnicians(),
+        getResponsibleMonthlyReports(elevatorId),
       ]);
+      const tech = await getResponsibleTechnicians();
       const el = els.find((e) => e.id === elevatorId);
       if (!el) { setError('No tiene permiso para consultar este recurso'); setLoading(false); return; }
-      setElevator(el); setRecords(rec); setOrders(ord); setVisits(vis); setReports(rep); setTechnicians(tech);
+      setElevator(el);
+      setTechnicians(tech);
+      const sortedRec = [...rec].sort((a, b) => {
+        const dc = (b.service_date || '').localeCompare(a.service_date || '');
+        if (dc !== 0) return dc;
+        const tc = (b.service_time || '').localeCompare(a.service_time || '');
+        if (tc !== 0) return tc;
+        return a.id.localeCompare(b.id);
+      });
+      setRecords(sortedRec);
+      const sortedOrd = [...ord].sort((a, b) => {
+        if (a.reviewed_at && !b.reviewed_at) return -1;
+        if (!a.reviewed_at && b.reviewed_at) return 1;
+        if (a.reviewed_at && b.reviewed_at) {
+          const dc = b.reviewed_at.localeCompare(a.reviewed_at);
+          if (dc !== 0) return dc;
+        }
+        return a.subject.localeCompare(b.subject);
+      });
+      setOrders(sortedOrd);
+      const sortedVis = [...vis].sort((a, b) => {
+        const dc = b.visit_date.localeCompare(a.visit_date);
+        if (dc !== 0) return dc;
+        return b.entry_number - a.entry_number;
+      }).slice(0, 10);
+      setVisits(sortedVis);
+      const sortedRep = [...rep].sort((a, b) => {
+        if (a.report_year !== b.report_year) return (b.report_year || 0) - (a.report_year || 0);
+        if (a.report_month !== b.report_month) return (b.report_month || 0) - (a.report_month || 0);
+        return (b.period || '').localeCompare(a.period || '');
+      });
+      setReports(sortedRep);
       const recordIds = rec.map((r) => r.id);
       const cl = await getResponsibleChecklistItems(recordIds);
       setChecklist(cl);
@@ -77,12 +112,12 @@ export default function ResponsibleElevatorDetailPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div><p className="text-gray-500">Fabricante</p><p className="font-medium">{elevator.manufacturer || '-'}</p></div>
           <div><p className="text-gray-500">Modelo</p><p className="font-medium">{elevator.model || '-'}</p></div>
-          <div><p className="text-gray-500">Tipo</p><p className="font-medium">{elevator.elevator_type || '-'}</p></div>
+          <div><p className="text-gray-500">Tipo</p><p className="font-medium">{ELEVATOR_TYPE_LABELS[elevator.elevator_type || ''] || elevator.elevator_type || '-'}</p></div>
           <div><p className="text-gray-500">Capacidad</p><p className="font-medium">{elevator.capacity_kg ? `${elevator.capacity_kg} kg` : '-'}</p></div>
           <div><p className="text-gray-500">Pisos</p><p className="font-medium">{elevator.floors_served || '-'}</p></div>
           <div><p className="text-gray-500">Año instalación</p><p className="font-medium">{elevator.year_installed || '-'}</p></div>
           <div><p className="text-gray-500">Conservación</p><p className="font-medium">{elevator.conservation_status ? CONSERVATION_STATUS_LABELS[elevator.conservation_status as keyof typeof CONSERVATION_STATUS_LABELS] || '-' : '-'}</p></div>
-          <div><p className="text-gray-500">Contrato</p><p className="font-medium">{elevator.contractual_status || '-'}</p></div>
+          <div><p className="text-gray-500">Contrato</p><p className="font-medium">{CONTRACTUAL_STATUS_LABELS[elevator.contractual_status || ''] || elevator.contractual_status || '-'}</p></div>
           <div><p className="text-gray-500">Último servicio</p><p className="font-medium">{formatDateOnly(elevator.last_service_date)}</p></div>
           <div><p className="text-gray-500">Próximo servicio</p><p className="font-medium">{formatDateOnly(elevator.next_service_date)}</p></div>
         </div>
@@ -137,7 +172,7 @@ export default function ResponsibleElevatorDetailPage() {
             {reports.length === 0 ? <p className="text-gray-500">No hay informes</p> : reports.map((r) => (
               <div key={r.id} className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-sm font-semibold">{r.period}</p>
-                <p className="text-xs text-gray-600">{r.status === 'approved' ? 'Aprobado' : r.status === 'sent' ? 'Enviado' : r.status} · {r.has_pdf ? 'PDF disponible' : 'Sin PDF'}</p>
+                <p className="text-xs text-gray-600">{REPORT_STATUS_LABELS[r.status] || r.status} · {r.has_pdf ? 'PDF disponible' : 'Sin PDF'}</p>
                 {r.general_status && <p className="text-xs text-gray-500">{r.general_status}</p>}
               </div>
             ))}
