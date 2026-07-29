@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -17,6 +17,7 @@ export default function ResponsibleReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
+  const downloadInProgressRef = useRef(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -29,21 +30,27 @@ export default function ResponsibleReportsPage() {
   };
 
   const handleDownload = async (reportId: string): Promise<void> => {
+    if (downloadInProgressRef.current) return;
+    downloadInProgressRef.current = true;
     setDownloadingReportId(reportId);
     setError('');
     try {
       const result = await getResponsibleMonthlyReportDownload(reportId);
-      const a = document.createElement('a');
-      a.href = result.signed_url;
-      a.download = result.filename;
-      a.rel = 'noopener';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      const anchor = document.createElement('a');
+      try {
+        anchor.href = result.signed_url;
+        anchor.download = result.filename;
+        anchor.rel = 'noopener';
+        anchor.style.display = 'none';
+        document.body.appendChild(anchor);
+        anchor.click();
+      } finally {
+        anchor.remove();
+      }
     } catch (err: unknown) {
       setError(getErrorMessage(err));
     } finally {
+      downloadInProgressRef.current = false;
       setDownloadingReportId(null);
     }
   };

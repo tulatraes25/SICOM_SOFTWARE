@@ -203,6 +203,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isValidHttpsUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.trim() === '') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export async function getResponsibleMonthlyReportDownload(
   monthlyReportId: string,
 ): Promise<ResponsibleMonthlyReportDownload> {
@@ -223,7 +233,7 @@ export async function getResponsibleMonthlyReportDownload(
   const filename = data.filename;
 
   if (typeof signedUrl !== "string" || signedUrl.trim() === "") throw new Error("Respuesta de descarga inválida");
-  if (!signedUrl.startsWith("https://")) throw new Error("Respuesta de descarga inválida");
+  if (!isValidHttpsUrl(signedUrl)) throw new Error("Respuesta de descarga inválida");
   if (expiresIn !== 60) throw new Error("Respuesta de descarga inválida");
   if (typeof filename !== "string" || !/^[a-z0-9_-]+\.pdf$/.test(filename)) throw new Error("Respuesta de descarga inválida");
 

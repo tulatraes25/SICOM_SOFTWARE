@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getResponsibleMonthlyReportDownload } from './responsiblePortalService';
 
-const mockInvoke = vi.fn();
+const { mockInvoke } = vi.hoisted(() => ({
+  mockInvoke: vi.fn(),
+}));
 
 vi.mock('@/config/supabase', () => ({
   supabase: {
@@ -10,7 +12,7 @@ vi.mock('@/config/supabase', () => ({
 }));
 
 const VALID_RESPONSE = {
-  signed_url: 'https://fwdxwbwrmpctapjhoyuj.supabase.co/storage/v1/object/sign/test',
+  signed_url: 'https://fwdxwbwrmpctapjhoyuj.supabase.co/storage/v1/object/sign/test?token=abc',
   expires_in: 60,
   filename: 'informe-mensual-asc-1-2026-07-v1.pdf',
 };
@@ -37,8 +39,13 @@ describe('getResponsibleMonthlyReportDownload', () => {
     await expect(getResponsibleMonthlyReportDownload('report-uuid-1')).rejects.toThrow('Respuesta de descarga inválida');
   });
 
-  it('URL insegura lanza error', async () => {
+  it('URL insegura javascript: es rechazada', async () => {
     mockInvoke.mockResolvedValue({ data: { signed_url: 'javascript:alert(1)', expires_in: 60, filename: 'test.pdf' }, error: null });
+    await expect(getResponsibleMonthlyReportDownload('report-uuid-1')).rejects.toThrow('Respuesta de descarga inválida');
+  });
+
+  it('URL HTTPS malformada es rechazada', async () => {
+    mockInvoke.mockResolvedValue({ data: { signed_url: 'https://', expires_in: 60, filename: 'test.pdf' }, error: null });
     await expect(getResponsibleMonthlyReportDownload('report-uuid-1')).rejects.toThrow('Respuesta de descarga inválida');
   });
 
