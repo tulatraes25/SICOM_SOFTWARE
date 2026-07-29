@@ -11,6 +11,8 @@ import { ArrowLeft, AlertCircle, FileDown, RefreshCw } from 'lucide-react';
 
 function formatDateOnly(v?: string | null): string { if (!v) return '-'; const [y, m, d] = v.slice(0, 10).split('-'); return `${Number(d)}/${Number(m)}/${y}`; }
 
+const naturalSort = new Intl.Collator('es', { numeric: true, sensitivity: 'base' }).compare;
+
 export default function ResponsibleBuildingDetailPage() {
   const { buildingId } = useParams<{ buildingId: string }>();
   const navigate = useNavigate();
@@ -33,9 +35,18 @@ export default function ResponsibleBuildingDetailPage() {
       if (!b) { setError('No tiene permiso para consultar este recurso'); setLoading(false); return; }
       setBuilding(b);
       setClient(cls.find((c) => c.id === b.client_id) || null);
-      setElevators(els);
+      const sortedElevators = [...els].sort((a, b) => naturalSort(a.code, b.code));
+      setElevators(sortedElevators);
       const elsIds = new Set(els.map((e) => e.id));
-      setVisits(vis.filter((v) => elsIds.has(v.elevator_id)).slice(0, 10));
+      const sortedVisits = [...vis]
+        .filter((v) => elsIds.has(v.elevator_id))
+        .sort((a, b) => {
+          const dateCmp = b.visit_date.localeCompare(a.visit_date);
+          if (dateCmp !== 0) return dateCmp;
+          return b.entry_number - a.entry_number;
+        })
+        .slice(0, 10);
+      setVisits(sortedVisits);
     } catch (err: unknown) { setError(getErrorMessage(err)); } finally { setLoading(false); }
   };
 
