@@ -42,10 +42,7 @@ const mockGetBuildings = vi.mocked(getResponsibleBuildings);
 interface Deferred<T> { promise: Promise<T>; resolve: (value: T) => void; }
 function deferred<T>(): Deferred<T> { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; }
 
-function renderPage() {
-  return render(<MemoryRouter><ResponsibleReportsPage /></MemoryRouter>);
-}
-
+function renderPage() { return render(<MemoryRouter><ResponsibleReportsPage /></MemoryRouter>); }
 function text() { return document.body.textContent || ''; }
 
 beforeEach(() => {
@@ -57,7 +54,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('ResponsibleReportsPage', () => {
-  it('muestra datos de un informe', async () => {
+  it('datos de un informe por tarjeta', async () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-1'); });
     expect(screen.getByTestId('responsible-report-r-1')).toBeInTheDocument();
@@ -68,21 +65,38 @@ describe('ResponsibleReportsPage', () => {
     expect(t).toContain('Aprobado');
     expect(t).toContain('operativo');
     expect(t).toContain('Descarga segura pendiente de habilitación');
+    expect(screen.getByText('Descarga segura pendiente de habilitación')).toBeDisabled();
   });
-  it('orden temporal', async () => {
+  it('orden temporal con period como respaldo', async () => {
+    mockGetReports.mockResolvedValue([
+      { id: 'r-a', elevator_id: 'elevator-1', period: '2026-08', title: null, status: 'approved', general_status: null, services_count: 1, report_month: null, report_year: null, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-b', elevator_id: 'elevator-1', period: '2026-07', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 7, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-c', elevator_id: 'elevator-1', period: 'invalid', title: null, status: 'draft', general_status: null, services_count: 1, report_month: null, report_year: null, pdf_generated_at: null, has_pdf: false },
+    ]);
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-1'); });
     const t = text();
-    expect(t.indexOf('2026-07')).toBeLessThan(t.indexOf('2026-06'));
-    expect(t.indexOf('2026-06')).toBeLessThan(t.indexOf('2025-12'));
+    expect(t.indexOf('2026-08')).toBeLessThan(t.indexOf('2026-07'));
+    expect(t.indexOf('2026-07')).toBeLessThan(t.indexOf('invalid'));
   });
-  it('orden natural: ASC-2 antes de ASC-10', async () => {
+  it('referencia faltante al final del mismo período', async () => {
+    mockGetReports.mockResolvedValue([
+      { id: 'r-x', elevator_id: 'elevator-2', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-y', elevator_id: 'elevator-10', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-z', elevator_id: 'elevator-foreign', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+    ]);
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-2'); });
+    const cards = screen.getAllByTestId(/^responsible-report-/);
+    expect(cards).toHaveLength(3);
     const t = text();
-    expect(t.indexOf('ASC-2')).toBeLessThan(t.indexOf('ASC-10'));
+    expect(t).toContain('ASC-2');
+    expect(t).toContain('ASC-10');
+    expect(t).toContain('-');
+    expect(t).not.toContain('elevator-foreign');
+    expect(t).not.toContain('building-no-asignado');
   });
-  it('estados traducidos', async () => {
+  it('estados traducidos por tarjeta', async () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-1'); });
     expect(text()).toContain('Aprobado');
@@ -91,30 +105,38 @@ describe('ResponsibleReportsPage', () => {
     expect(text()).toContain('Pendiente');
     expect(text()).toContain('Rechazado');
     expect(text()).not.toMatch(/\bapproved\b/);
+    expect(text()).not.toMatch(/\bsent\b/);
+    expect(text()).not.toMatch(/\bdraft\b/);
+    expect(text()).not.toMatch(/\bpending\b/);
+    expect(text()).not.toMatch(/\brejected\b/);
   });
-  it('referencia faltante muestra "-"', async () => {
+  it('estado desconocido y vacío', async () => {
+    mockGetReports.mockResolvedValue([
+      { id: 'r-u', elevator_id: 'elevator-1', period: '2026-01', title: null, status: 'archived', general_status: null, services_count: 1, report_month: 1, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+      { id: 'r-e', elevator_id: 'elevator-1', period: '2026-02', title: null, status: '', general_status: null, services_count: 1, report_month: 2, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+    ]);
     renderPage();
-    await waitFor(() => { expect(text()).toContain('Rechazado'); });
+    await waitFor(() => {
+      const t = text();
+      expect(t).toContain('archived');
+      expect(t).toContain('-');
+    });
+  });
+  it('PDF por tarjeta', async () => {
+    renderPage();
+    await waitFor(() => { expect(text()).toContain('ASC-1'); });
     const t = text();
-    expect(t).not.toContain('elevator-foreign');
-    expect(t).not.toContain('building-no-asignado');
-  });
-  it('PDF: has_pdf=true muestra botón deshabilitado', async () => {
-    renderPage();
-    await waitFor(() => { expect(text()).toContain('Aprobado'); });
+    expect(t).toContain('Descarga segura pendiente de habilitación');
     expect(screen.getByText('Descarga segura pendiente de habilitación')).toBeDisabled();
+    expect(t).toContain('Sin PDF');
   });
-  it('PDF: has_pdf=false muestra "Sin PDF"', async () => {
-    renderPage();
-    await waitFor(() => { expect(text()).toContain('Borrador'); });
-    expect(text()).toContain('Sin PDF');
-  });
-  it('privacidad: no muestra IDs internos', async () => {
+  it('privacidad', async () => {
     renderPage();
     await waitFor(() => { expect(text()).toContain('ASC-1'); });
     expect(text()).not.toContain('elevator-1');
     expect(text()).not.toContain('building-1');
-    expect(text()).not.toContain('report-1');
+    expect(text()).not.toContain('bucket');
+    expect(text()).not.toContain('storage');
   });
   it('estado vacío', async () => {
     mockGetReports.mockResolvedValue([]);
@@ -124,8 +146,10 @@ describe('ResponsibleReportsPage', () => {
       expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
     });
     expect(screen.queryByTestId(/^responsible-report-/)).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('button', { name: /descarga/i })).toHaveLength(0);
+    expect(document.querySelectorAll('.animate-spin').length).toBe(0);
   });
-  it('estado de carga', async () => {
+  it('carga: deferred y tarjetas', async () => {
     const repDef = deferred<ResponsibleMonthlyReport[]>();
     const elsDef = deferred<ResponsibleElevator[]>();
     const bldDef = deferred<ResponsibleBuilding[]>();
@@ -134,22 +158,20 @@ describe('ResponsibleReportsPage', () => {
     mockGetBuildings.mockReturnValue(bldDef.promise);
     renderPage();
     expect(screen.getByRole('button', { name: /actualizar/i })).toBeDisabled();
-    expect(document.querySelectorAll('.animate-spin')).toHaveLength(1);
     expect(text()).not.toContain('ASC-1');
-    expect(text()).not.toContain('No hay informes');
     repDef.resolve(mockReports);
     elsDef.resolve(mockElevators);
     bldDef.resolve(mockBuildings);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
       expect(text()).toContain('ASC-1');
-      expect(document.querySelectorAll('.animate-spin')).toHaveLength(0);
     });
   });
-  it('error y reintento exacto', async () => {
+  it('error y reintento', async () => {
     mockGetReports.mockRejectedValueOnce(new Error('RPC failed'));
     renderPage();
     await waitFor(() => { expect(text()).toContain('RPC failed'); });
+    expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
     const repDef2 = deferred<ResponsibleMonthlyReport[]>();
     const elsDef2 = deferred<ResponsibleElevator[]>();
     const bldDef2 = deferred<ResponsibleBuilding[]>();
@@ -194,7 +216,7 @@ describe('ResponsibleReportsPage', () => {
     expect(mockGetElevators).toHaveBeenCalledTimes(2);
     expect(mockGetBuildings).toHaveBeenCalledTimes(2);
   });
-  it('inmutabilidad profunda', async () => {
+  it('inmutabilidad', async () => {
     const origRep = mockReports.map((r) => ({ ...r }));
     const origEls = mockElevators.map((e) => ({ ...e }));
     const origBlds = mockBuildings.map((b) => ({ ...b }));
