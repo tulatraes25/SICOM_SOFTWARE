@@ -183,6 +183,12 @@ export async function getResponsibleTechnicians(): Promise<ResponsibleTechnician
   return rpc<ResponsibleTechnician[]>('get_responsible_technicians');
 }
 
+export interface ResponsibleMonthlyReportDownload {
+  signed_url: string;
+  expires_in: number;
+  filename: string;
+}
+
 export async function getResponsibleChecklistItems(serviceRecordIds: string[]): Promise<ResponsibleChecklistItem[]> {
   if (serviceRecordIds.length === 0) return [];
   const { data, error } = await supabase
@@ -191,4 +197,35 @@ export async function getResponsibleChecklistItems(serviceRecordIds: string[]): 
     .in('service_record_id', serviceRecordIds);
   if (error) throw new Error(`Error al cargar checklist: ${error.message}`);
   return data || [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export async function getResponsibleMonthlyReportDownload(
+  monthlyReportId: string,
+): Promise<ResponsibleMonthlyReportDownload> {
+  if (!monthlyReportId || typeof monthlyReportId !== "string" || monthlyReportId.trim() === "") {
+    throw new Error("Informe inválido");
+  }
+
+  const { data, error } = await supabase.functions.invoke(
+    'get-responsible-monthly-report-url',
+    { body: { monthly_report_id: monthlyReportId } },
+  );
+
+  if (error) throw new Error("No se pudo preparar la descarga del informe");
+  if (!isRecord(data)) throw new Error("Respuesta de descarga inválida");
+
+  const signedUrl = data.signed_url;
+  const expiresIn = data.expires_in;
+  const filename = data.filename;
+
+  if (typeof signedUrl !== "string" || signedUrl.trim() === "") throw new Error("Respuesta de descarga inválida");
+  if (!signedUrl.startsWith("https://")) throw new Error("Respuesta de descarga inválida");
+  if (expiresIn !== 60) throw new Error("Respuesta de descarga inválida");
+  if (typeof filename !== "string" || !/^[a-z0-9_-]+\.pdf$/.test(filename)) throw new Error("Respuesta de descarga inválida");
+
+  return { signed_url: signedUrl, expires_in: expiresIn, filename };
 }

@@ -65,8 +65,8 @@ describe('ResponsibleReportsPage', () => {
     expect(ct).toContain('2026-07');
     expect(ct).toContain('Aprobado');
     expect(ct).toContain('operativo');
-    expect(ct).toContain('Descarga segura pendiente de habilitación');
-    expect(within(card).getByRole('button', { name: /descarga/i })).toBeDisabled();
+    expect(ct).toContain('Descargar PDF');
+    expect(within(card).getByRole('button', { name: /descargar/i })).not.toBeDisabled();
   });
   it('orden temporal con period fallback', async () => {
     mockGetReports.mockResolvedValue([
@@ -144,8 +144,8 @@ describe('ResponsibleReportsPage', () => {
     renderPage();
     await waitFor(() => { expect(t()).toContain('ASC-1'); });
     const card = screen.getByTestId('responsible-report-r-1');
-    expect(card.textContent).toContain('Descarga segura pendiente de habilitación');
-    expect(within(card).getByRole('button', { name: /descarga/i })).toBeDisabled();
+    expect(card.textContent).toContain('Descargar PDF');
+    expect(within(card).getByRole('button', { name: /descargar/i })).not.toBeDisabled();
   });
   it('Sin PDF por tarjeta', async () => {
     renderPage();

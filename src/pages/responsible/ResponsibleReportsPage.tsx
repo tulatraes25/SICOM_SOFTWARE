@@ -3,9 +3,9 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { getResponsibleMonthlyReports, getResponsibleElevators, getResponsibleBuildings, getErrorMessage } from '@/services/responsiblePortalService';
+import { getResponsibleMonthlyReports, getResponsibleElevators, getResponsibleBuildings, getResponsibleMonthlyReportDownload, getErrorMessage } from '@/services/responsiblePortalService';
 import type { ResponsibleMonthlyReport, ResponsibleElevator, ResponsibleBuilding } from '@/services/responsiblePortalService';
-import { FileText, AlertCircle, RefreshCw } from 'lucide-react';
+import { FileText, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
 
 const REPORT_STATUS_LABELS: Record<string, string> = { approved: 'Aprobado', sent: 'Enviado', draft: 'Borrador', pending: 'Pendiente', rejected: 'Rechazado' };
 const naturalSort = new Intl.Collator('es', { numeric: true, sensitivity: 'base' }).compare;
@@ -16,6 +16,7 @@ export default function ResponsibleReportsPage() {
   const [buildings, setBuildings] = useState<ResponsibleBuilding[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -25,6 +26,26 @@ export default function ResponsibleReportsPage() {
       const [rep, els, blds] = await Promise.all([getResponsibleMonthlyReports(), getResponsibleElevators(), getResponsibleBuildings()]);
       setReports(rep); setElevators(els); setBuildings(blds);
     } catch (err: unknown) { setError(getErrorMessage(err)); } finally { setLoading(false); }
+  };
+
+  const handleDownload = async (reportId: string): Promise<void> => {
+    setDownloadingReportId(reportId);
+    setError('');
+    try {
+      const result = await getResponsibleMonthlyReportDownload(reportId);
+      const a = document.createElement('a');
+      a.href = result.signed_url;
+      a.download = result.filename;
+      a.rel = 'noopener';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err));
+    } finally {
+      setDownloadingReportId(null);
+    }
   };
 
   const elevatorMap = useMemo(() => new Map(elevators.map((e) => [e.id, e])), [elevators]);
@@ -39,10 +60,8 @@ export default function ResponsibleReportsPage() {
   const getYearMonth = (r: ResponsibleMonthlyReport): { year: number; month: number } => {
     const validYear = Number.isInteger(r.report_year) && (r.report_year ?? 0) > 0;
     const validMonth = Number.isInteger(r.report_month) && (r.report_month ?? 0) >= 1 && (r.report_month ?? 0) <= 12;
-
     let year = validYear ? r.report_year! : 0;
     let month = validMonth ? r.report_month! : 0;
-
     if (!validYear || !validMonth) {
       const match = (r.period || '').match(/^(\d{4})-(\d{2})$/);
       if (match) {
@@ -52,7 +71,6 @@ export default function ResponsibleReportsPage() {
         if (!validMonth && pMonth >= 1 && pMonth <= 12) month = pMonth;
       }
     }
-
     return { year, month };
   };
 
@@ -92,6 +110,7 @@ export default function ResponsibleReportsPage() {
           <div className="space-y-3">
             {sortedReports.map((r) => {
               const info = resolveInfo(r.elevator_id);
+              const isDownloading = downloadingReportId === r.id;
               return (
                 <div key={r.id} data-testid={`responsible-report-${r.id}`}>
                 <Card>
@@ -103,7 +122,19 @@ export default function ResponsibleReportsPage() {
                     </div>
                     <div>
                       {r.has_pdf ? (
-                        <Button size="sm" variant="outline" disabled>Descarga segura pendiente de habilitación</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={downloadingReportId !== null}
+                          onClick={() => handleDownload(r.id)}
+                          aria-label={`Descargar informe ${info.code} ${r.period}`}
+                        >
+                          {isDownloading ? (
+                            <><Loader2 size={14} className="mr-1 animate-spin" /> Preparando...</>
+                          ) : (
+                            'Descargar PDF'
+                          )}
+                        </Button>
                       ) : (
                         <span className="text-sm text-gray-400">Sin PDF</span>
                       )}
