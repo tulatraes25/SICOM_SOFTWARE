@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, within, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, within, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import ResponsibleReportsPage from './ResponsibleReportsPage';
@@ -22,12 +22,19 @@ const mockReports: ResponsibleMonthlyReport[] = [
   { id: 'r-2', elevator_id: 'elevator-3', period: '2026-06', title: null, status: 'sent', general_status: null, services_count: 3, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
   { id: 'r-3', elevator_id: 'elevator-2', period: '2025-12', title: null, status: 'draft', general_status: null, services_count: 2, report_month: 12, report_year: 2025, pdf_generated_at: null, has_pdf: false },
   { id: 'r-4', elevator_id: 'elevator-2', period: '2026-06', title: null, status: 'pending', general_status: null, services_count: 4, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
-  { id: 'r-5', elevator_id: 'elevator-10', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: null, has_pdf: false },
+  { id: 'r-5', elevator_id: 'elevator-10', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: '2026-06-30', has_pdf: true },
   { id: 'r-6', elevator_id: 'elevator-foreign', period: '2026-01', title: null, status: 'rejected', general_status: null, services_count: 0, report_month: 1, report_year: 2026, pdf_generated_at: null, has_pdf: false },
 ];
 
+const VALID_DOWNLOAD = {
+  signed_url: 'https://fwdxwbwrmpctapjhoyuj.supabase.co/storage/v1/object/sign/test?token=test',
+  expires_in: 60,
+  filename: 'informe-mensual-asc-1-2026-07-v1.pdf',
+};
+
 vi.mock('@/services/responsiblePortalService', () => ({
   getResponsibleMonthlyReports: vi.fn(), getResponsibleElevators: vi.fn(), getResponsibleBuildings: vi.fn(),
+  getResponsibleMonthlyReportDownload: vi.fn(),
   getErrorMessage: vi.fn((e: unknown) => e instanceof Error ? e.message : 'Error'),
 }));
 vi.mock('@/hooks/useAuth', () => ({
@@ -35,15 +42,19 @@ vi.mock('@/hooks/useAuth', () => ({
 }));
 vi.mock('@/components/layout/Sidebar', () => ({ default: vi.fn(() => <div data-testid="sidebar" />) }));
 
-import { getResponsibleMonthlyReports, getResponsibleElevators, getResponsibleBuildings } from '@/services/responsiblePortalService';
+import { getResponsibleMonthlyReports, getResponsibleElevators, getResponsibleBuildings, getResponsibleMonthlyReportDownload } from '@/services/responsiblePortalService';
 const mockGetReports = vi.mocked(getResponsibleMonthlyReports);
 const mockGetElevators = vi.mocked(getResponsibleElevators);
 const mockGetBuildings = vi.mocked(getResponsibleBuildings);
+const mockGetDownload = vi.mocked(getResponsibleMonthlyReportDownload);
 
 interface Deferred<T> { promise: Promise<T>; resolve: (value: T) => void; }
 function deferred<T>(): Deferred<T> { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; }
 
-function renderPage() { return render(<MemoryRouter><ResponsibleReportsPage /></MemoryRouter>); }
+function renderPage(entries?: ResponsibleMonthlyReport[]) {
+  if (entries) mockGetReports.mockResolvedValue(entries);
+  return render(<MemoryRouter><ResponsibleReportsPage /></MemoryRouter>);
+}
 function t() { return document.body.textContent || ''; }
 
 beforeEach(() => {
@@ -51,6 +62,7 @@ beforeEach(() => {
   mockGetReports.mockResolvedValue(mockReports);
   mockGetElevators.mockResolvedValue(mockElevators);
   mockGetBuildings.mockResolvedValue(mockBuildings);
+  mockGetDownload.mockResolvedValue(VALID_DOWNLOAD);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -152,7 +164,8 @@ describe('ResponsibleReportsPage', () => {
     await waitFor(() => { expect(t()).toContain('ASC-1'); });
     const card = screen.getByTestId('responsible-report-r-3');
     expect(card.textContent).toContain('Sin PDF');
-    expect(within(card).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: /descargar informe/i })).not.toBeInTheDocument();
+    expect(mockGetDownload).not.toHaveBeenCalled();
   });
   it('privacidad', async () => {
     renderPage();
@@ -252,5 +265,126 @@ describe('ResponsibleReportsPage', () => {
     expect(mockReports).toEqual(origRep);
     expect(mockElevators).toEqual(origEls);
     expect(mockBuildings).toEqual(origBlds);
+  });
+
+  // ============================================================
+  // Download tests
+  // ============================================================
+
+  it('descarga segura crea, pulsa y elimina el enlace temporal', async () => {
+    const dlDef = deferred<{ signed_url: string; expires_in: number; filename: string }>();
+    mockGetDownload.mockReturnValue(dlDef.promise);
+
+    renderPage();
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const appendSpy = vi.spyOn(document.body, 'appendChild');
+    const removeSpy = vi.spyOn(HTMLElement.prototype, 'remove');
+
+    const btn = screen.getByRole('button', { name: /descargar informe asc-1 2026-07/i });
+    fireEvent.click(btn);
+
+    await waitFor(() => {
+      expect(mockGetDownload).toHaveBeenCalledTimes(1);
+      expect(mockGetDownload).toHaveBeenCalledWith('r-1');
+      expect(btn).toBeDisabled();
+      expect(t()).toContain('Preparando...');
+    });
+
+    dlDef.resolve(VALID_DOWNLOAD);
+
+    await waitFor(() => {
+      expect(appendSpy).toHaveBeenCalled();
+      const anchor = appendSpy.mock.calls[0][0];
+      expect(anchor).toBeInstanceOf(HTMLAnchorElement);
+      expect(anchor.href).toBe(VALID_DOWNLOAD.signed_url);
+      expect(anchor.download).toBe(VALID_DOWNLOAD.filename);
+      expect(anchor.rel).toBe('noopener');
+      expect(anchor.style.display).toBe('none');
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      expect(removeSpy).toHaveBeenCalled();
+      expect(btn).not.toBeDisabled();
+      expect(t()).toContain('Descargar PDF');
+      expect(t()).not.toContain('Preparando...');
+      expect(t()).not.toContain('signed_url');
+      expect(t()).not.toContain('token=test');
+      expect(t()).not.toContain('Authorization');
+      expect(t()).not.toContain('service-order-reports');
+    });
+  });
+
+  it('error de descarga conserva informes y restaura el botón', async () => {
+    mockGetDownload.mockRejectedValueOnce(new Error('No se pudo preparar la descarga del informe'));
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    renderPage();
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+
+    const appendSpy = vi.spyOn(document.body, 'appendChild');
+
+    const btn = screen.getByRole('button', { name: /descargar informe asc-1 2026-07/i });
+    await userEvent.click(btn);
+
+    await waitFor(() => {
+      expect(t()).toContain('No se pudo preparar la descarga del informe');
+      expect(screen.getByTestId('responsible-report-r-1')).toBeInTheDocument();
+      expect(t()).toContain('ASC-1');
+      expect(t()).toContain('Hospital Regional');
+      expect(btn).not.toBeDisabled();
+      expect(t()).toContain('Descargar PDF');
+      expect(t()).not.toContain('Preparando...');
+      expect(clickSpy).not.toHaveBeenCalled();
+      expect(appendSpy).not.toHaveBeenCalled();
+    });
+    expect(mockGetDownload).toHaveBeenCalledTimes(1);
+    expect(mockGetDownload).toHaveBeenCalledWith('r-1');
+    expect(mockGetReports).toHaveBeenCalledTimes(1);
+    expect(mockGetElevators).toHaveBeenCalledTimes(1);
+    expect(mockGetBuildings).toHaveBeenCalledTimes(1);
+  });
+
+  it('impide una segunda descarga mientras la primera está pendiente', async () => {
+    const reportsForBlock = [
+      { id: 'r-1', elevator_id: 'elevator-1', period: '2026-07', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 7, report_year: 2026, pdf_generated_at: '2026-07-28', has_pdf: true },
+      { id: 'r-5', elevator_id: 'elevator-10', period: '2026-06', title: null, status: 'approved', general_status: null, services_count: 1, report_month: 6, report_year: 2026, pdf_generated_at: '2026-06-30', has_pdf: true },
+    ];
+    mockGetReports.mockResolvedValue(reportsForBlock);
+    const dlDef = deferred<{ signed_url: string; expires_in: number; filename: string }>();
+    mockGetDownload.mockReturnValue(dlDef.promise);
+
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    renderPage();
+    await waitFor(() => { expect(t()).toContain('ASC-1'); });
+
+    const btnR1 = screen.getByRole('button', { name: /descargar informe asc-1 2026-07/i });
+    const btnR5 = screen.getByRole('button', { name: /descargar informe asc-10 2026-06/i });
+
+    fireEvent.click(btnR1);
+    fireEvent.click(btnR5);
+
+    await waitFor(() => {
+      expect(mockGetDownload).toHaveBeenCalledTimes(1);
+      expect(mockGetDownload).toHaveBeenCalledWith('r-1');
+      expect(btnR1).toBeDisabled();
+      expect(t()).toContain('Preparando...');
+      expect(btnR5).toBeDisabled();
+    });
+
+    fireEvent.click(btnR1);
+    fireEvent.click(btnR5);
+
+    await waitFor(() => {
+      expect(mockGetDownload).toHaveBeenCalledTimes(1);
+    });
+
+    dlDef.resolve({ signed_url: 'https://example.com/test', expires_in: 60, filename: 'test.pdf' });
+
+    await waitFor(() => {
+      expect(btnR1).not.toBeDisabled();
+      expect(btnR5).not.toBeDisabled();
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+    });
   });
 });
