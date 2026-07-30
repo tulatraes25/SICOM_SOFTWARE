@@ -314,19 +314,26 @@ describe('UsersPage — Error y reintento', () => {
 
 describe('UsersPage — Actualizar', () => {
   it('carga inicial y segunda carga con Actualizar', async () => {
-    mockListUsers.mockResolvedValue([makeUser({ full_name: 'V1' })]);
+    const initDef = deferred<ReturnType<typeof makeUser>[]>();
+    mockListUsers.mockReturnValue(initDef.promise);
     renderPage();
+    initDef.resolve([makeUser({ full_name: 'V1' })]);
     await waitFor(() => { expect(screen.getByText('V1')).toBeInTheDocument(); });
-    mockListUsers.mockResolvedValue([makeUser({ id: 'u2', full_name: 'V2' })]);
+    const updDef = deferred<ReturnType<typeof makeUser>[]>();
+    mockListUsers.mockReturnValue(updDef.promise);
     fireEvent.click(screen.getByRole('button', { name: /actualizar/i }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /actualizar/i })).toBeDisabled();
+      expect(screen.getByLabelText(/cargando usuarios/i)).toBeInTheDocument();
     });
+    expect(mockListUsers).toHaveBeenCalledTimes(2);
+    updDef.resolve([makeUser({ id: 'u2', full_name: 'V2' })]);
     await waitFor(() => {
+      expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
+      expect(screen.queryByLabelText(/cargando usuarios/i)).not.toBeInTheDocument();
       expect(screen.getByText('V2')).toBeInTheDocument();
       expect(screen.queryByText('V1')).not.toBeInTheDocument();
     });
-    expect(mockListUsers).toHaveBeenCalledTimes(2);
   });
 
   it('conserva filtros al actualizar', async () => {
@@ -346,6 +353,49 @@ describe('UsersPage — Actualizar', () => {
     fireEvent.click(screen.getByRole('button', { name: /actualizar/i }));
     await waitFor(() => { expect(screen.getByText('Admin2')).toBeInTheDocument(); });
     expect(screen.queryByText('Tech User')).not.toBeInTheDocument();
+  });
+
+  it('doble clic no genera tercera llamada', async () => {
+    mockListUsers.mockResolvedValue([makeUser()]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(mockListUsers).toHaveBeenCalledTimes(1);
+    const updDef = deferred<ReturnType<typeof makeUser>[]>();
+    mockListUsers.mockReturnValue(updDef.promise);
+    fireEvent.click(screen.getByRole('button', { name: /actualizar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /actualizar/i }));
+    expect(mockListUsers).toHaveBeenCalledTimes(2);
+    updDef.resolve([makeUser({ id: 'u2' })]);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
+    });
+    expect(mockListUsers).toHaveBeenCalledTimes(2);
+  });
+
+  it('actualización fallida oculta datos y muestra error', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ full_name: 'Usuario anterior' })]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Usuario anterior')).toBeInTheDocument(); });
+    await userEvent.type(screen.getByPlaceholderText(SEARCH), 'Usuario');
+    mockListUsers.mockRejectedValueOnce(new Error('RPC actualización falló'));
+    fireEvent.click(screen.getByRole('button', { name: /actualizar/i }));
+    await waitFor(() => {
+      expect(screen.getByText('RPC actualización falló')).toBeInTheDocument();
+      expect(screen.queryByText('Usuario anterior')).not.toBeInTheDocument();
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
+    });
+    expect(screen.getByPlaceholderText(SEARCH)).toHaveValue('Usuario');
+    const retryDef = deferred<ReturnType<typeof makeUser>[]>();
+    mockListUsers.mockReturnValue(retryDef.promise);
+    fireEvent.click(screen.getByRole('button', { name: /reintentar/i }));
+    retryDef.resolve([makeUser({ full_name: 'Usuario nuevo' })]);
+    await waitFor(() => {
+      expect(screen.queryByText('RPC actualización falló')).not.toBeInTheDocument();
+      expect(screen.getByText('Usuario nuevo')).toBeInTheDocument();
+    });
+    expect(mockListUsers).toHaveBeenCalledTimes(3);
   });
 });
 

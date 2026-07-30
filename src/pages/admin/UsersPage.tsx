@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -41,18 +41,23 @@ export default function UsersPage() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('');
+  const loadingRef = useRef(false);
 
   useEffect(() => { loadUsers(); }, []);
 
   const loadUsers = async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     try {
       const data = await listUsers();
       setUsers(data);
       setError('');
     } catch (err) {
+      setUsers([]);
       setError(getAdminUsersErrorMessage(err));
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   };
