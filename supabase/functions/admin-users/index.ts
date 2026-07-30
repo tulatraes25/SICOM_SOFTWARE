@@ -30,7 +30,7 @@ serve(async (req) => {
 
         const userIds = users.users.map(u => u.id);
         const { data: profiles } = await supabase
-          .from("profiles").select("id, full_name, role, active, created_at")
+          .from("profiles").select("id, full_name, role, active, created_at, must_change_password, temporary_password_issued_at, password_changed_at")
           .in("id", userIds);
 
         const profileMap = new Map((profiles || []).map(p => [p.id, p]));
@@ -42,6 +42,9 @@ serve(async (req) => {
           active: profileMap.get(u.id)?.active ?? true,
           created_at: profileMap.get(u.id)?.created_at || u.created_at,
           last_sign_in_at: u.last_sign_in_at,
+          must_change_password: profileMap.get(u.id)?.must_change_password ?? false,
+          temporary_password_issued_at: profileMap.get(u.id)?.temporary_password_issued_at ?? null,
+          password_changed_at: profileMap.get(u.id)?.password_changed_at ?? null,
         }));
 
         return json({ users: result });
@@ -54,7 +57,11 @@ serve(async (req) => {
         const { data: u, error } = await supabase.auth.admin.getUserById(user_id);
         if (error) throw error;
 
-        const { data: p } = await supabase.from("profiles").select("*").eq("id", user_id).single();
+        const { data: p } = await supabase
+          .from("profiles")
+          .select("id, full_name, role, active, created_at, must_change_password, temporary_password_issued_at, password_changed_at")
+          .eq("id", user_id)
+          .single();
 
         return json({
           id: u.user.id,
@@ -64,6 +71,9 @@ serve(async (req) => {
           active: p?.active ?? true,
           created_at: p?.created_at || u.user.created_at,
           last_sign_in_at: u.user.last_sign_in_at,
+          must_change_password: p?.must_change_password ?? false,
+          temporary_password_issued_at: p?.temporary_password_issued_at ?? null,
+          password_changed_at: p?.password_changed_at ?? null,
         });
       }
 
@@ -73,17 +83,32 @@ serve(async (req) => {
         if (!["admin", "supervisor", "technician", "responsible"].includes(role)) throw new Error("Rol inválido");
         if (password.length < 8) throw new Error("La contraseña debe tener al menos 8 caracteres");
 
+        const requiresPasswordChange = role === "responsible";
+        const issuedAt = requiresPasswordChange ? new Date().toISOString() : null;
+
         // Create in Auth
         const { data: authUser, error: createError } = await supabase.auth.admin.createUser({
           email, password, email_confirm: true,
+          user_metadata: { full_name, role },
         });
         if (createError) throw new Error(createError.message);
 
-        // Create profile
+        // Create or update profile (compatible with trigger)
         const { error: profileError } = await supabase
-          .from("profiles").insert({
-            id: authUser.user.id, full_name, email, role, active,
-          });
+          .from("profiles")
+          .upsert(
+            {
+              id: authUser.user.id,
+              email,
+              full_name,
+              role,
+              active,
+              must_change_password: requiresPasswordChange,
+              temporary_password_issued_at: issuedAt,
+              password_changed_at: null,
+            },
+            { onConflict: "id" },
+          );
 
         if (profileError) {
           // Rollback: delete auth user
@@ -94,10 +119,20 @@ serve(async (req) => {
         // Audit
         await supabase.from("audit_logs").insert({
           user_id: user.id, action: "user_created", entity_type: "profiles",
-          entity_id: authUser.user.id, new_data: { email, full_name, role, active },
+          entity_id: authUser.user.id,
+          new_data: { email, full_name, role, active, must_change_password: requiresPasswordChange },
         });
 
-        return json({ id: authUser.user.id, email, full_name, role, active });
+        return json({
+          id: authUser.user.id,
+          email,
+          full_name,
+          role,
+          active,
+          must_change_password: requiresPasswordChange,
+          temporary_password_issued_at: issuedAt,
+          password_changed_at: null,
+        });
       }
 
       case "update_user": {
@@ -136,13 +171,71 @@ serve(async (req) => {
         if (!user_id || !new_password) throw new Error("user_id y new_password son obligatorios");
         if (new_password.length < 8) throw new Error("La contraseña debe tener al menos 8 caracteres");
 
-        const { error } = await supabase.auth.admin.updateUserById(user_id, { password: new_password });
-        if (error) throw error;
+        // Fetch target profile
+        const { data: targetProfile, error: targetError } = await supabase
+          .from("profiles")
+          .select("id, role, must_change_password, temporary_password_issued_at, password_changed_at")
+          .eq("id", user_id)
+          .single();
 
-        await supabase.from("audit_logs").insert({
-          user_id: user.id, action: "password_reset_by_admin", entity_type: "auth",
-          entity_id: user_id, new_data: { reset_by: user.email },
-        });
+        if (targetError || !targetProfile) {
+          throw new Error("Perfil no encontrado");
+        }
+
+        const isResponsible = targetProfile.role === "responsible";
+
+        if (isResponsible) {
+          // Mark profile before auth update
+          const now = new Date().toISOString();
+          const { data: markedProfile, error: markError } = await supabase
+            .from("profiles")
+            .update({
+              must_change_password: true,
+              temporary_password_issued_at: now,
+              password_changed_at: null,
+              updated_at: now,
+            })
+            .eq("id", user_id)
+            .select("id")
+            .single();
+
+          if (markError || !markedProfile || markedProfile.id !== user_id) {
+            throw new Error("No se pudo preparar el restablecimiento");
+          }
+
+          // Update auth password
+          const { error: authUpdateError } = await supabase.auth.admin.updateUserById(user_id, { password: new_password });
+
+          if (authUpdateError) {
+            // Rollback: restore previous profile values
+            await supabase
+              .from("profiles")
+              .update({
+                must_change_password: targetProfile.must_change_password,
+                temporary_password_issued_at: targetProfile.temporary_password_issued_at,
+                password_changed_at: targetProfile.password_changed_at,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", user_id);
+
+            throw new Error("No se pudo restablecer la contraseña");
+          }
+
+          // Audit
+          await supabase.from("audit_logs").insert({
+            user_id: user.id, action: "password_reset_by_admin", entity_type: "auth",
+            entity_id: user_id, new_data: { reset_by: user.email, must_change_password: true },
+          });
+        } else {
+          // Non-responsible: simple password reset
+          const { error: authUpdateError } = await supabase.auth.admin.updateUserById(user_id, { password: new_password });
+          if (authUpdateError) throw new Error("No se pudo restablecer la contraseña");
+
+          await supabase.from("audit_logs").insert({
+            user_id: user.id, action: "password_reset_by_admin", entity_type: "auth",
+            entity_id: user_id, new_data: { reset_by: user.email, must_change_password: false },
+          });
+        }
 
         return json({ success: true });
       }
