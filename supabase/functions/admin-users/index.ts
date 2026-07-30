@@ -25,6 +25,8 @@ function log(code: string, adminId?: string, targetId?: string): void {
   console.error("[admin-users]", entry);
 }
 
+let authenticatedAdminId: string | undefined;
+
 serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return json({ ok: true });
@@ -61,7 +63,8 @@ serve(async (req): Promise<Response> => {
       return json({ error: "No autenticado" }, 401);
     }
 
-    const adminId = authData.user.id;
+    authenticatedAdminId = authData.user.id;
+    const adminId = authenticatedAdminId;
 
     // --- Admin profile check ---
     const { data: adminProfile, error: adminProfileError } = await supabase
@@ -178,7 +181,12 @@ serve(async (req): Promise<Response> => {
         const password = typeof d?.password === "string" ? d.password : "";
         const full_name = typeof d?.full_name === "string" ? d.full_name.trim() : "";
         const role = typeof d?.role === "string" ? d.role : "";
-        const active = typeof d?.active === "boolean" ? d.active : true;
+
+        const hasActive = Object.prototype.hasOwnProperty.call(d, "active");
+        if (hasActive && typeof d.active !== "boolean") {
+          return json({ error: "El estado activo debe ser booleano" }, 400);
+        }
+        const active = hasActive ? (d.active as boolean) : true;
 
         if (!email || !password || !full_name || !role) {
           return json({ error: "email, password, full_name y role son obligatorios" }, 400);
@@ -354,7 +362,7 @@ serve(async (req): Promise<Response> => {
 
           if (authUpdateError) {
             // Rollback: restore previous profile values
-            const { error: rollbackError } = await supabase
+            const { data: restoredProfile, error: rollbackError } = await supabase
               .from("profiles")
               .update({
                 must_change_password: targetProfile.must_change_password,
@@ -366,7 +374,7 @@ serve(async (req): Promise<Response> => {
               .select("id")
               .single();
 
-            if (rollbackError) {
+            if (rollbackError || !restoredProfile || restoredProfile.id !== user_id) {
               log("RESET_PROFILE_ROLLBACK_FAILED", adminId, user_id);
             }
 
@@ -438,7 +446,7 @@ serve(async (req): Promise<Response> => {
       }
     }
   } catch (_err: unknown) {
-    log("UNEXPECTED_ERROR");
+    log("UNEXPECTED_ERROR", authenticatedAdminId);
     return json({ error: "Error interno del servidor" }, 500);
   }
 });
