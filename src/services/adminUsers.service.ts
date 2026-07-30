@@ -25,10 +25,10 @@ function isAdminUserRole(value: unknown): value is AdminUserRole {
   return typeof value === 'string' && (VALID_ROLES as readonly string[]).includes(value);
 }
 
-function toNullableString(value: unknown): string | null {
+function requireNullableString(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value === 'string') return value;
-  return null;
+  throw new Error('Respuesta de usuario inválida');
 }
 
 function parseAdminUser(value: unknown): AdminUser {
@@ -50,11 +50,11 @@ function parseAdminUser(value: unknown): AdminUser {
     full_name,
     role,
     active,
-    created_at: toNullableString(created_at),
-    last_sign_in_at: toNullableString(last_sign_in_at),
+    created_at: requireNullableString(created_at),
+    last_sign_in_at: requireNullableString(last_sign_in_at),
     must_change_password,
-    temporary_password_issued_at: toNullableString(temporary_password_issued_at),
-    password_changed_at: toNullableString(password_changed_at),
+    temporary_password_issued_at: requireNullableString(temporary_password_issued_at),
+    password_changed_at: requireNullableString(password_changed_at),
   };
 }
 

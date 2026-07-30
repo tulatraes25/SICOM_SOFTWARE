@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { listUsers, getUser, createUser, updateUser, resetPassword, sendRecovery, getAdminUsersErrorMessage } from './adminUsers.service';
 
-const mockInvoke = vi.fn();
+const { mockInvoke } = vi.hoisted(() => ({
+  mockInvoke: vi.fn(),
+}));
 
 vi.mock('@/config/supabase', () => ({
   supabase: { functions: { invoke: (...args: unknown[]) => mockInvoke(...args) } },
@@ -25,6 +27,11 @@ function makeUser(overrides: Record<string, unknown> = {}) {
     password_changed_at: null,
     ...overrides,
   };
+}
+
+function userWithout(...keys: string[]) {
+  const entries = Object.entries(makeUser()).filter(([k]) => !keys.includes(k));
+  return Object.fromEntries(entries);
 }
 
 describe('listUsers', () => {
@@ -53,11 +60,7 @@ describe('listUsers', () => {
   });
 
   it('normaliza fechas ausentes a null', async () => {
-    const user = makeUser();
-    delete (user as Record<string, unknown>).temporary_password_issued_at;
-    delete (user as Record<string, unknown>).password_changed_at;
-    delete (user as Record<string, unknown>).last_sign_in_at;
-    mockInvoke.mockResolvedValue({ data: { users: [user] }, error: null });
+    mockInvoke.mockResolvedValue({ data: { users: [userWithout('temporary_password_issued_at', 'password_changed_at', 'last_sign_in_at')] }, error: null });
     const result = await listUsers();
     expect(result[0].temporary_password_issued_at).toBeNull();
     expect(result[0].password_changed_at).toBeNull();
@@ -98,6 +101,26 @@ describe('listUsers', () => {
     mockInvoke.mockResolvedValue({ data: { users: [makeUser({ must_change_password: null })] }, error: null });
     await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
   });
+
+  it('rechaza created_at number', async () => {
+    mockInvoke.mockResolvedValue({ data: { users: [makeUser({ created_at: 123 })] }, error: null });
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+  });
+
+  it('rechaza last_sign_in_at objeto', async () => {
+    mockInvoke.mockResolvedValue({ data: { users: [makeUser({ last_sign_in_at: {} })] }, error: null });
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+  });
+
+  it('rechaza temporary_password_issued_at array', async () => {
+    mockInvoke.mockResolvedValue({ data: { users: [makeUser({ temporary_password_issued_at: [] })] }, error: null });
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+  });
+
+  it('rechaza password_changed_at boolean', async () => {
+    mockInvoke.mockResolvedValue({ data: { users: [makeUser({ password_changed_at: true })] }, error: null });
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+  });
 });
 
 describe('getUser', () => {
@@ -112,14 +135,21 @@ describe('getUser', () => {
     mockInvoke.mockResolvedValue({ data: 'invalid', error: null });
     await expect(getUser('u1')).rejects.toThrow('Respuesta de usuario inválida');
   });
+
+  it('rechaza created_at number', async () => {
+    mockInvoke.mockResolvedValue({ data: makeUser({ created_at: 42 }), error: null });
+    await expect(getUser('u1')).rejects.toThrow('Respuesta de usuario inválida');
+  });
+
+  it('rechaza last_sign_in_at array', async () => {
+    mockInvoke.mockResolvedValue({ data: makeUser({ last_sign_in_at: [] }), error: null });
+    await expect(getUser('u1')).rejects.toThrow('Respuesta de usuario inválida');
+  });
 });
 
 describe('createUser', () => {
   it('acepta respuesta sin created_at ni last_sign_in_at', async () => {
-    const user = makeUser();
-    delete (user as Record<string, unknown>).created_at;
-    delete (user as Record<string, unknown>).last_sign_in_at;
-    mockInvoke.mockResolvedValue({ data: user, error: null });
+    mockInvoke.mockResolvedValue({ data: userWithout('created_at', 'last_sign_in_at'), error: null });
     const result = await createUser({ email: 'a@b.com', password: '12345678', full_name: 'A', role: 'technician' });
     expect(result.created_at).toBeNull();
     expect(result.last_sign_in_at).toBeNull();
@@ -140,6 +170,16 @@ describe('createUser', () => {
     const result = await createUser({ email: 'a@b.com', password: '12345678', full_name: 'A', role: 'responsible' });
     expect(result.must_change_password).toBe(true);
     expect(result.temporary_password_issued_at).toBe('2026-07-30T00:00:00Z');
+  });
+
+  it('rechaza created_at boolean', async () => {
+    mockInvoke.mockResolvedValue({ data: makeUser({ created_at: true }), error: null });
+    await expect(createUser({ email: 'a@b.com', password: '12345678', full_name: 'A', role: 'technician' })).rejects.toThrow('Respuesta de usuario inválida');
+  });
+
+  it('rechaza password_changed_at number', async () => {
+    mockInvoke.mockResolvedValue({ data: makeUser({ password_changed_at: 999 }), error: null });
+    await expect(createUser({ email: 'a@b.com', password: '12345678', full_name: 'A', role: 'technician' })).rejects.toThrow('Respuesta de usuario inválida');
   });
 });
 
