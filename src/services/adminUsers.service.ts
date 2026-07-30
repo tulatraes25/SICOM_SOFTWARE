@@ -81,7 +81,11 @@ export async function listUsers(): Promise<AdminUser[]> {
   if (!isRecord(data) || !Array.isArray(data.users)) {
     throw new Error('Respuesta de usuarios inválida');
   }
-  return data.users.map((u: unknown) => parseAdminUser(u));
+  try {
+    return data.users.map((u: unknown) => parseAdminUser(u));
+  } catch {
+    throw new Error('Respuesta de usuarios inválida');
+  }
 }
 
 export async function getUser(userId: string): Promise<AdminUser> {

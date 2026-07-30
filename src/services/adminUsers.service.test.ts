@@ -84,42 +84,42 @@ describe('listUsers', () => {
 
   it('rechaza un usuario incompleto', async () => {
     mockInvoke.mockResolvedValue({ data: { users: [{ id: 'u1' }] }, error: null });
-    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuarios inválida');
   });
 
   it('rechaza role desconocido', async () => {
     mockInvoke.mockResolvedValue({ data: { users: [makeUser({ role: 'hacker' })] }, error: null });
-    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuarios inválida');
   });
 
   it('rechaza active string', async () => {
     mockInvoke.mockResolvedValue({ data: { users: [makeUser({ active: 'yes' })] }, error: null });
-    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuarios inválida');
   });
 
   it('rechaza must_change_password null', async () => {
     mockInvoke.mockResolvedValue({ data: { users: [makeUser({ must_change_password: null })] }, error: null });
-    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuarios inválida');
   });
 
   it('rechaza created_at number', async () => {
     mockInvoke.mockResolvedValue({ data: { users: [makeUser({ created_at: 123 })] }, error: null });
-    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuarios inválida');
   });
 
   it('rechaza last_sign_in_at objeto', async () => {
     mockInvoke.mockResolvedValue({ data: { users: [makeUser({ last_sign_in_at: {} })] }, error: null });
-    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuarios inválida');
   });
 
   it('rechaza temporary_password_issued_at array', async () => {
     mockInvoke.mockResolvedValue({ data: { users: [makeUser({ temporary_password_issued_at: [] })] }, error: null });
-    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuarios inválida');
   });
 
   it('rechaza password_changed_at boolean', async () => {
     mockInvoke.mockResolvedValue({ data: { users: [makeUser({ password_changed_at: true })] }, error: null });
-    await expect(listUsers()).rejects.toThrow('Respuesta de usuario inválida');
+    await expect(listUsers()).rejects.toThrow('Respuesta de usuarios inválida');
   });
 });
 
