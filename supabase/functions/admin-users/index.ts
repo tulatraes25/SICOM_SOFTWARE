@@ -196,6 +196,10 @@ serve(async (req): Promise<Response> => {
           return json({ error: "Rol inválido" }, 400);
         }
 
+        if (role === "responsible") {
+          return json({ error: "Los responsables deben crearse desde Responsables de edificios" }, 409);
+        }
+
         if (typeof password !== "string" || password.trim().length === 0 || password.length < 8 || password.length > 128) {
           return json({ error: "La contraseña debe tener entre 8 y 128 caracteres" }, 400);
         }
@@ -285,6 +289,23 @@ serve(async (req): Promise<Response> => {
             .eq("role", "admin").eq("active", true);
           if (adminCount === 1 && user_id === adminId) {
             return json({ error: "No se puede desactivar al único administrador activo" }, 400);
+          }
+        }
+
+        // Block responsible role transitions
+        if (role !== undefined) {
+          const { data: targetProfile, error: targetError } = await supabase
+            .from("profiles")
+            .select("id, role")
+            .eq("id", user_id)
+            .single();
+
+          if (targetError || !targetProfile) {
+            return json({ error: "Perfil no encontrado" }, 400);
+          }
+
+          if (role !== targetProfile.role && (targetProfile.role === "responsible" || role === "responsible")) {
+            return json({ error: "El rol Responsable se administra desde Responsables de edificios" }, 409);
           }
         }
 

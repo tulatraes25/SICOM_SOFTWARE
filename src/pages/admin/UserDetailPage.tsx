@@ -16,6 +16,11 @@ const ROLE_OPTIONS: { value: AdminUserRole; label: string }[] = [
   { value: 'technician', label: 'Técnico' },
   { value: 'responsible', label: 'Responsable' },
 ];
+const STAFF_ROLE_OPTIONS: { value: AdminUserRole; label: string }[] = [
+  { value: 'admin', label: 'Administrador' },
+  { value: 'supervisor', label: 'Supervisor' },
+  { value: 'technician', label: 'Técnico' },
+];
 const VALID_ROLES: readonly string[] = ['admin', 'supervisor', 'technician', 'responsible'];
 const ROLE_BADGE: Record<AdminUserRole, 'default' | 'success' | 'warning' | 'info' | 'danger'> = { admin: 'danger', supervisor: 'warning', technician: 'info', responsible: 'default' };
 const ROLE_LABELS: Record<AdminUserRole, string> = { admin: 'Administrador', supervisor: 'Supervisor', technician: 'Técnico', responsible: 'Responsable' };
@@ -109,7 +114,11 @@ export default function UserDetailPage() {
     if (!beginOperation('saving')) return;
     setError(''); setSuccess('');
     try {
-      await updateUser(id, { full_name: normalizedName, role });
+      const payload: { full_name: string; role?: AdminUserRole } = { full_name: normalizedName };
+      if (user?.role !== 'responsible') {
+        payload.role = role;
+      }
+      await updateUser(id, payload);
       setSuccess('Usuario actualizado correctamente');
       setEditing(false);
       await fetchUserData();
@@ -225,7 +234,15 @@ export default function UserDetailPage() {
             {editing ? (
               <div aria-busy={operation === 'saving'}>
                 <Input label="Nombre completo" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={operation === 'saving'} />
-                <Select label="Rol" options={ROLE_OPTIONS} value={role} onChange={(e) => { if (isValidRole(e.target.value)) setRole(e.target.value); }} disabled={operation === 'saving'} />
+                {user?.role === 'responsible' ? (
+                  <div className="space-y-1">
+                    <span className="block text-sm font-medium text-gray-700">Rol</span>
+                    <div className="px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-sm text-gray-700">Responsable de edificio</div>
+                    <p className="text-xs text-gray-500">El rol y las asignaciones se gestionan desde Responsables de edificios.</p>
+                  </div>
+                ) : (
+                  <Select label="Rol" options={STAFF_ROLE_OPTIONS} value={role} onChange={(e) => { if (isValidRole(e.target.value)) setRole(e.target.value); }} disabled={operation === 'saving'} />
+                )}
                 <div className="flex justify-end gap-2 mt-4">
                   <Button variant="outline" size="sm" onClick={() => { setEditing(false); if (user) { setFullName(user.full_name); setRole(user.role); } setError(''); }} disabled={operation === 'saving'}>Cancelar edición</Button>
                   <Button size="sm" onClick={handleSave} disabled={operation === 'saving'}>{operation === 'saving' ? 'Guardando...' : 'Guardar'}</Button>

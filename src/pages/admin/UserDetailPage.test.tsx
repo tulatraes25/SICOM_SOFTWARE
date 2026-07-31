@@ -841,3 +841,149 @@ describe('UserDetailPage — Sin datos sensibles', () => {
     expect(body).not.toContain('ClaveTemporal987!');
   });
 });
+
+describe('UserDetailPage — Separación de roles: selector staff', () => {
+  it('technician: selector contiene Administrador', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ role: 'technician' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    const options = Array.from(screen.getByLabelText(/^rol/i).querySelectorAll('option')).map((o) => o.value);
+    expect(options).toContain('admin');
+  });
+
+  it('technician: selector contiene Supervisor', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ role: 'technician' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    const options = Array.from(screen.getByLabelText(/^rol/i).querySelectorAll('option')).map((o) => o.value);
+    expect(options).toContain('supervisor');
+  });
+
+  it('technician: selector contiene Técnico', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ role: 'technician' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    const options = Array.from(screen.getByLabelText(/^rol/i).querySelectorAll('option')).map((o) => o.value);
+    expect(options).toContain('technician');
+  });
+
+  it('technician: selector no contiene Responsable', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ role: 'technician' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    const options = Array.from(screen.getByLabelText(/^rol/i).querySelectorAll('option')).map((o) => o.value);
+    expect(options).not.toContain('responsible');
+  });
+});
+
+describe('UserDetailPage — Separación de roles: responsible', () => {
+  it('al editar no aparece selector de rol', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    expect(screen.queryByLabelText(/^rol/i)).not.toBeInTheDocument();
+  });
+
+  it('aparece texto Responsable de edificio', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    expect(screen.getByText('Responsable de edificio')).toBeInTheDocument();
+  });
+
+  it('aparece texto sobre gestión desde Responsables de edificios', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    expect(screen.getByText(/El rol y las asignaciones se gestionan desde Responsables de edificios/i)).toBeInTheDocument();
+  });
+
+  it('guardar llama updateUser con solo full_name', async () => {
+    mockUpdateUser.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', full_name: 'Original' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Original')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Nombre corregido' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /guardar/i })); });
+    await waitFor(() => {
+      expect(mockUpdateUser).toHaveBeenCalledWith('u1', { full_name: 'Nombre corregido' });
+    });
+  });
+
+  it('guardar no incluye role', async () => {
+    mockUpdateUser.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /guardar/i })); });
+    await waitFor(() => { expect(mockUpdateUser).toHaveBeenCalledTimes(1); });
+    const payload = mockUpdateUser.mock.calls[0][1];
+    expect(payload).not.toHaveProperty('role');
+  });
+
+  it('guardar technician sigue enviando full_name y role', async () => {
+    mockUpdateUser.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'technician' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Nuevo' } });
+    fireEvent.change(screen.getByLabelText(/^rol/i), { target: { value: 'admin' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /guardar/i })); });
+    await waitFor(() => {
+      expect(mockUpdateUser).toHaveBeenCalledWith('u1', { full_name: 'Nuevo', role: 'admin' });
+    });
+  });
+
+  it('activar/desactivar responsable sigue funcionando', async () => {
+    mockUpdateUser.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => {
+      expect(mockUpdateUser).toHaveBeenCalledWith('u1', { active: false });
+      expect(screen.getByRole('status').textContent).toContain('desactivado correctamente');
+    });
+  });
+
+  it('reset de contraseña responsable sigue funcionando', async () => {
+    mockResetPassword.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', must_change_password: false }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'password1' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password1' } });
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', must_change_password: true }));
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => {
+      expect(mockResetPassword).toHaveBeenCalledWith('u1', 'password1');
+      expect(screen.getByRole('status').textContent).toContain('temporal');
+    });
+  });
+
+  it('operaciones concurrentes continúan protegidas para responsible', async () => {
+    const def = deferred<void>();
+    mockUpdateUser.mockReturnValue(def.promise);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /desactivar/i }));
+    expect(mockUpdateUser).toHaveBeenCalledTimes(1);
+    def.resolve(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible' }));
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+  });
+});
