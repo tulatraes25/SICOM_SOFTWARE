@@ -110,27 +110,33 @@ describe('UserDetailPage — Carga', () => {
   });
 });
 
-describe('UserDetailPage — Error y reintento', () => {
-  it('error visible y usuario ausente', async () => {
+describe('UserDetailPage — Error de carga', () => {
+  it('error muestra solo error, Reintentar y Volver', async () => {
     mockGetUser.mockRejectedValueOnce(new Error('RPC falló'));
     renderPage();
-    await waitFor(() => {
-      expect(screen.getByText('RPC falló')).toBeInTheDocument();
-      expect(screen.queryByText('Test User')).not.toBeInTheDocument();
-    });
+    await waitFor(() => { expect(screen.getByText('RPC falló')).toBeInTheDocument(); });
+    expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /volver a usuarios/i })).toBeInTheDocument();
+    expect(screen.queryByText('Datos del Usuario')).not.toBeInTheDocument();
+    expect(screen.queryByText('Acciones')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /editar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /restablecer contraseña/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Activo')).not.toBeInTheDocument();
+    expect(screen.queryByText('Inactivo')).not.toBeInTheDocument();
   });
 
-  it('Reintentar visible y deshabilitado durante carga', async () => {
+  it('Reintentar exitoso muestra datos y acciones', async () => {
     mockGetUser.mockRejectedValueOnce(new Error('Error'));
     renderPage();
     await waitFor(() => { expect(screen.getByText('Error')).toBeInTheDocument(); });
     expect(screen.getByRole('button', { name: /reintentar/i })).not.toBeDisabled();
-    const def2 = deferred<ReturnType<typeof makeUser>>();
-    mockGetUser.mockReturnValue(def2.promise);
+    mockGetUser.mockResolvedValue(makeUser({ full_name: 'Recuperado' }));
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
-    expect(mockGetUser).toHaveBeenCalledTimes(2);
-    def2.resolve(makeUser());
-    await waitFor(() => { expect(screen.queryByText('Error')).not.toBeInTheDocument(); });
+    await waitFor(() => {
+      expect(screen.queryByText('Error')).not.toBeInTheDocument();
+      expect(screen.getByText('Recuperado')).toBeInTheDocument();
+      expect(screen.getByText('Acciones')).toBeInTheDocument();
+    });
   });
 
   it('exactamente dos llamadas tras reintento', async () => {
@@ -220,19 +226,31 @@ describe('UserDetailPage — Edición', () => {
     expect(screen.getByLabelText(/nombre completo/i)).toHaveValue('Original');
   });
 
-  it('nombre vacío se rechaza', async () => {
+  it('nombre vacío con espacios se rechaza', async () => {
     mockGetUser.mockResolvedValue(makeUser({ full_name: 'X' }));
     renderPage();
     await waitFor(() => { expect(screen.getByText('X')).toBeInTheDocument(); });
     fireEvent.click(screen.getByRole('button', { name: /editar/i }));
-    expect(screen.getByLabelText(/nombre completo/i)).toHaveValue('X');
-    // Verify validation exists: when name is valid, updateUser is called
-    mockUpdateUser.mockResolvedValue(undefined);
-    mockGetUser.mockResolvedValue(makeUser());
+    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: '   ' } });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /guardar/i })); });
-    await waitFor(() => {
-      expect(mockUpdateUser).toHaveBeenCalledWith('u1', { full_name: 'X', role: 'technician' });
-    });
+    expect(screen.getByText('El nombre es obligatorio')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/nombre completo/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/nombre completo/i)).not.toBeDisabled();
+  });
+
+  it('cancelar limpia error de nombre vacío', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ full_name: 'Original' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Original')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: '   ' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /guardar/i })); });
+    expect(screen.getByText('El nombre es obligatorio')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /cancelar edición/i }));
+    expect(screen.queryByText('El nombre es obligatorio')).not.toBeInTheDocument();
+    expect(screen.getByText('Original')).toBeInTheDocument();
   });
 
   it('guarda nombre con trim y role tipado', async () => {
@@ -249,7 +267,7 @@ describe('UserDetailPage — Edición', () => {
     });
   });
 
-  it('éxito recarga usuario y muestra mensaje', async () => {
+  it('éxito muestra mensaje y recarga', async () => {
     mockUpdateUser.mockResolvedValue(undefined);
     mockGetUser.mockResolvedValue(makeUser({ full_name: 'Actualizado' }));
     renderPage();
@@ -259,6 +277,7 @@ describe('UserDetailPage — Edición', () => {
     await waitFor(() => {
       expect(screen.getByRole('status').textContent).toContain('actualizado correctamente');
     });
+    expect(screen.getByText('Actualizado')).toBeInTheDocument();
   });
 
   it('cancelar restaura valores', async () => {
@@ -285,17 +304,20 @@ describe('UserDetailPage — Edición', () => {
 });
 
 describe('UserDetailPage — Doble guardado', () => {
-  it('dos clics rápidos producen exactamente una llamada', async () => {
+  it('dos clics reales producen exactamente una llamada', async () => {
     const def = deferred<void>();
     mockUpdateUser.mockReturnValue(def.promise);
     mockGetUser.mockResolvedValue(makeUser());
     renderPage();
     await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
     fireEvent.click(screen.getByRole('button', { name: /editar/i }));
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /guardar/i })); });
-    await waitFor(() => { expect(screen.getByText('Guardando...')).toBeInTheDocument(); });
+    const saveBtn = screen.getByRole('button', { name: /guardar/i });
+    fireEvent.click(saveBtn);
+    fireEvent.click(saveBtn);
     expect(mockUpdateUser).toHaveBeenCalledTimes(1);
+    expect(mockUpdateUser).toHaveBeenCalledWith('u1', { full_name: 'Test User', role: 'technician' });
     def.resolve(undefined);
+    mockGetUser.mockResolvedValue(makeUser());
     await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
   });
 
@@ -347,21 +369,81 @@ describe('UserDetailPage — Activación', () => {
     expect(screen.getByText('Activo')).toBeInTheDocument();
   });
 
-  it('doble clic genera una sola llamada', async () => {
+  it('doble clic real genera una sola llamada', async () => {
     const def = deferred<void>();
     mockUpdateUser.mockReturnValue(def.promise);
     mockGetUser.mockResolvedValue(makeUser({ active: true }));
     renderPage();
     await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
-    await waitFor(() => { expect(screen.getByText('Desactivando...')).toBeInTheDocument(); });
+    const toggleBtn = screen.getByRole('button', { name: /desactivar/i });
+    fireEvent.click(toggleBtn);
+    fireEvent.click(toggleBtn);
     expect(mockUpdateUser).toHaveBeenCalledTimes(1);
+    expect(mockUpdateUser).toHaveBeenCalledWith('u1', { active: false });
     def.resolve(undefined);
-    await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
+    mockGetUser.mockResolvedValue(makeUser({ active: false }));
+    await waitFor(() => { expect(screen.getByRole('status').textContent).toContain('desactivado correctamente'); });
   });
 });
 
-describe('UserDetailPage — Navegación y operaciones', () => {
+describe('UserDetailPage — Operaciones simultáneas', () => {
+  it('toggle bloqueado durante guardado', async () => {
+    const saveDef = deferred<void>();
+    mockUpdateUser.mockReturnValue(saveDef.promise);
+    mockGetUser.mockResolvedValue(makeUser({ active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /desactivar/i }));
+    expect(mockUpdateUser).toHaveBeenCalledTimes(1);
+    saveDef.resolve(undefined);
+    mockGetUser.mockResolvedValue(makeUser());
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+  });
+
+  it('guardado bloqueado durante toggle', async () => {
+    const toggleDef = deferred<void>();
+    mockUpdateUser.mockReturnValue(toggleDef.promise);
+    mockGetUser.mockResolvedValue(makeUser({ active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    await waitFor(() => { expect(screen.getByRole('button', { name: /guardar/i })).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /desactivar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    expect(mockUpdateUser).toHaveBeenCalledTimes(1);
+    toggleDef.resolve(undefined);
+  });
+});
+
+describe('UserDetailPage — Mensajes de éxito', () => {
+  it('éxito de guardado persiste tras recarga', async () => {
+    mockUpdateUser.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ full_name: 'Actualizado' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Actualizado')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /guardar/i })); });
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toContain('actualizado correctamente');
+      expect(screen.getByText('Actualizado')).toBeInTheDocument();
+    });
+  });
+
+  it('éxito de activación persiste tras recarga', async () => {
+    mockUpdateUser.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toContain('desactivado correctamente');
+    });
+  });
+});
+
+describe('UserDetailPage — Navegación', () => {
   it('Volver funciona sin operación', async () => {
     mockGetUser.mockResolvedValue(makeUser());
     renderPage();

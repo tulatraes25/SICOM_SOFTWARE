@@ -60,66 +60,77 @@ export default function UserDetailPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [operation, setOperation] = useState<Operation>(null);
-  const loadRef = useRef(false);
-  const saveRef = useRef(false);
-  const toggleRef = useRef(false);
+  const operationRef = useRef<Operation>(null);
+
+  function beginOperation(next: Exclude<Operation, null>): boolean {
+    if (operationRef.current !== null) return false;
+    operationRef.current = next;
+    setOperation(next);
+    return true;
+  }
+
+  function endOperation(): void {
+    operationRef.current = null;
+    setOperation(null);
+  }
+
+  async function fetchUserData(): Promise<void> {
+    if (!id) return;
+    const data = await getUser(id);
+    setUser(data);
+    setFullName(data.full_name);
+    setRole(data.role);
+  }
 
   useEffect(() => { if (id) loadUser(); }, [id]);
 
   const loadUser = async () => {
     if (!id) return;
-    if (loadRef.current) return;
-    loadRef.current = true;
-    setOperation('loading');
+    if (!beginOperation('loading')) return;
     setError('');
     try {
-      const data = await getUser(id);
-      setUser(data);
-      setFullName(data.full_name);
-      setRole(data.role);
+      await fetchUserData();
     } catch (err: unknown) {
       setUser(null);
       setError(getAdminUsersErrorMessage(err));
     } finally {
-      loadRef.current = false;
-      setOperation(null);
+      endOperation();
     }
   };
 
   const handleSave = async () => {
     if (!id) return;
-    if (saveRef.current) return;
-    saveRef.current = true;
+    const normalizedName = fullName.trim();
+    if (!normalizedName) {
+      setError('El nombre es obligatorio');
+      return;
+    }
+    if (!beginOperation('saving')) return;
     setError(''); setSuccess('');
-    setOperation('saving');
     try {
-      await updateUser(id, { full_name: fullName.trim(), role });
+      await updateUser(id, { full_name: normalizedName, role });
       setSuccess('Usuario actualizado correctamente');
       setEditing(false);
-      await loadUser();
+      await fetchUserData();
     } catch (err: unknown) {
       setError(getAdminUsersErrorMessage(err));
     } finally {
-      saveRef.current = false;
-      setOperation(null);
+      endOperation();
     }
   };
 
   const handleToggleActive = async () => {
     if (!id || !user) return;
-    if (toggleRef.current) return;
-    toggleRef.current = true;
+    if (!beginOperation('toggling')) return;
     setError(''); setSuccess('');
-    setOperation('toggling');
     try {
       await updateUser(id, { active: !user.active });
       setSuccess(user.active ? 'Usuario desactivado correctamente' : 'Usuario reactivado correctamente');
-      await loadUser();
+      await fetchUserData();
     } catch (err: unknown) {
       setError(getAdminUsersErrorMessage(err));
     } finally {
-      toggleRef.current = false;
-      setOperation(null);
+      endOperation();
     }
   };
 
@@ -162,6 +173,22 @@ export default function UserDetailPage() {
   }
 
   const isBusy = operation !== null;
+
+  if (error && !user && operation !== 'loading') {
+    return (
+      <DashboardLayout role="admin" title="Detalle de Usuario">
+        <div className="max-w-2xl mx-auto space-y-6">
+          <button onClick={() => { if (!isBusy) navigate('/admin/usuarios'); }} disabled={isBusy} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 disabled:opacity-50" aria-label="Volver a usuarios">
+            <ArrowLeft size={18} /> Volver
+          </button>
+          <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center justify-between">
+            <span className="flex items-center gap-2"><AlertCircle size={16} /> {error}</span>
+            <Button variant="outline" size="sm" onClick={loadUser} disabled={isBusy} aria-label="Reintentar carga de usuario">Reintentar</Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout role="admin" title="Detalle de Usuario">
