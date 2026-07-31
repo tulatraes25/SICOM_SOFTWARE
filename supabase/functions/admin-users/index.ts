@@ -551,7 +551,7 @@ serve(async (req): Promise<Response> => {
           .update({ responsible_user_id: newUserId, updated_at: now })
           .in("id", elevatorIds)
           .eq("active", true)
-          .eq("responsible_user_id", null)
+          .is("responsible_user_id", null)
           .select("id");
 
         if (assignError || !assigned || assigned.length !== elevatorIds.length) {

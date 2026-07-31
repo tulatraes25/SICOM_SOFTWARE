@@ -160,6 +160,9 @@ export interface CreateResponsibleResult {
 }
 
 export async function createResponsible(params: CreateResponsibleParams): Promise<CreateResponsibleResult> {
+  if (new Set(params.elevator_ids).size !== params.elevator_ids.length) {
+    throw new Error('No se permiten ascensores duplicados');
+  }
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'create_responsible', data: params },
   });
@@ -178,10 +181,14 @@ export async function createResponsible(params: CreateResponsibleParams): Promis
   if (!ids.every((id: unknown) => typeof id === 'string')) {
     throw new Error('Respuesta de creación de responsable inválida');
   }
-  const paramIds = [...new Set(params.elevator_ids)].sort();
-  const respIds = [...new Set(ids as string[])].sort();
-  if (paramIds.length !== respIds.length || paramIds.some((id, i) => id !== respIds[i])) {
+  const idsStr = ids as string[];
+  if (new Set(idsStr).size !== idsStr.length) {
     throw new Error('Respuesta de creación de responsable inválida');
   }
-  return { user, assigned_elevator_ids: [...new Set(ids as string[])] };
+  const paramSorted = [...params.elevator_ids].sort();
+  const respSorted = [...idsStr].sort();
+  if (paramSorted.length !== respSorted.length || paramSorted.some((id, i) => id !== respSorted[i])) {
+    throw new Error('Respuesta de creación de responsable inválida');
+  }
+  return { user, assigned_elevator_ids: [...idsStr] };
 }

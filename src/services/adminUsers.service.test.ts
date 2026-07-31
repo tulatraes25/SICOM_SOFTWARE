@@ -279,6 +279,14 @@ describe('createResponsible', () => {
     expect(result.assigned_elevator_ids.sort()).toEqual(ids.sort());
   });
 
+  it('conserva el orden exacto del array enviado', async () => {
+    const ids = ['z', 'a', 'm'];
+    mockInvoke.mockResolvedValue({ data: { user: makeUser({ role: 'responsible', must_change_password: true }), assigned_elevator_ids: ['z', 'a', 'm'] }, error: null });
+    await createResponsible({ email: 'r@test.com', password: 'password1', full_name: 'Test', elevator_ids: ids });
+    const sentBody = mockInvoke.mock.calls[0][1].body;
+    expect(sentBody.data.elevator_ids).toEqual(['z', 'a', 'm']);
+  });
+
   it('rechaza user ausente', async () => {
     mockInvoke.mockResolvedValue({ data: { assigned_elevator_ids: ['a'] }, error: null });
     await expect(createResponsible(params)).rejects.toThrow('Respuesta de creación de responsable inválida');
@@ -304,10 +312,14 @@ describe('createResponsible', () => {
     await expect(createResponsible(params)).rejects.toThrow('Respuesta de creación de responsable inválida');
   });
 
-  it('rechaza IDs duplicados', async () => {
-    mockInvoke.mockResolvedValue({ data: { user: makeUser({ role: 'responsible', must_change_password: true }), assigned_elevator_ids: ['a', 'a'] }, error: null });
-    const result = await createResponsible({ email: 'r@test.com', password: 'password1', full_name: 'Test', elevator_ids: ['a', 'a'] });
-    expect(result.assigned_elevator_ids).toEqual(['a']);
+  it('rechaza entrada duplicada', async () => {
+    await expect(createResponsible({ email: 'r@test.com', password: 'password1', full_name: 'Test', elevator_ids: ['a', 'a'] })).rejects.toThrow('No se permiten ascensores duplicados');
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('rechaza respuesta duplicada', async () => {
+    mockInvoke.mockResolvedValue({ data: { user: makeUser({ role: 'responsible', must_change_password: true }), assigned_elevator_ids: ['a', 'b', 'b'] }, error: null });
+    await expect(createResponsible({ email: 'r@test.com', password: 'password1', full_name: 'Test', elevator_ids: ['a', 'b'] })).rejects.toThrow('Respuesta de creación de responsable inválida');
   });
 
   it('rechaza IDs faltantes', async () => {
