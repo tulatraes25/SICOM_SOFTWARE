@@ -113,7 +113,7 @@ export async function createUser(params: {
 }
 
 export async function updateUser(userId: string, updates: {
-  full_name?: string; role?: string; active?: boolean;
+  full_name?: string; role?: AdminUserRole; active?: boolean;
 }): Promise<void> {
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'update_user', data: { user_id: userId, ...updates } },
