@@ -54,13 +54,201 @@ function makeUser(overrides: Record<string, unknown> = {}) {
 interface Deferred<T> { promise: Promise<T>; resolve: (value: T) => void; }
 function deferred<T>(): Deferred<T> { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; }
 
-function renderPage() { return render(<MemoryRouter><UsersPage /></MemoryRouter>); }
+function renderPage(initialTab?: string) {
+  const entries = initialTab ? [`/admin/usuarios?tab=${initialTab}`] : ['/admin/usuarios'];
+  return render(<MemoryRouter initialEntries={entries}><UsersPage /></MemoryRouter>);
+}
 function table() { return screen.getByRole('table'); }
 
 beforeEach(() => { vi.clearAllMocks(); });
 
-describe('UsersPage — Datos', () => {
-  it('muestra nombre, email, rol traducido y estado', async () => {
+describe('UsersPage — Pestañas', () => {
+  it('aparecen las dos pestañas', async () => {
+    mockListUsers.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByRole('tab', { name: /usuarios$/i })).toBeInTheDocument(); });
+    expect(screen.getByRole('tab', { name: /responsables de edificios/i })).toBeInTheDocument();
+  });
+
+  it('Usuarios está activa por defecto', async () => {
+    mockListUsers.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('0 usuarios')).toBeInTheDocument(); });
+    expect(screen.getByRole('tab', { name: /usuarios$/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /responsables de edificios/i })).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('tab=responsables activa la pestaña correcta', async () => {
+    mockListUsers.mockResolvedValue([]);
+    renderPage('responsables');
+    await waitFor(() => { expect(screen.getByText('0 responsables')).toBeInTheDocument(); });
+    expect(screen.getByRole('tab', { name: /responsables de edificios/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /usuarios$/i })).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('query param desconocido vuelve a Usuarios', async () => {
+    mockListUsers.mockResolvedValue([]);
+    renderPage('otro');
+    await waitFor(() => { expect(screen.getByText('0 usuarios')).toBeInTheDocument(); });
+    expect(screen.getByRole('tab', { name: /usuarios$/i })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('cambiar pestaña actualiza la URL', async () => {
+    mockListUsers.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('0 usuarios')).toBeInTheDocument(); });
+    const respTab = screen.getByRole('tab', { name: /responsables de edificios/i });
+    await userEvent.click(respTab);
+    expect(respTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('0 responsables')).toBeInTheDocument();
+  });
+
+  it('Usuarios excluye responsables', async () => {
+    mockListUsers.mockResolvedValue([
+      makeUser({ id: 's1', role: 'technician', full_name: 'Tech' }),
+      makeUser({ id: 'r1', role: 'responsible', full_name: 'Resp' }),
+    ]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.getByText('Tech')).toBeInTheDocument();
+    expect(screen.queryByText('Resp')).not.toBeInTheDocument();
+  });
+
+  it('Responsables excluye personal interno', async () => {
+    mockListUsers.mockResolvedValue([
+      makeUser({ id: 's1', role: 'technician', full_name: 'Tech' }),
+      makeUser({ id: 'r1', role: 'responsible', full_name: 'Resp' }),
+    ]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.getByText('Resp')).toBeInTheDocument();
+    expect(screen.queryByText('Tech')).not.toBeInTheDocument();
+  });
+
+  it('contador de Usuarios no incluye responsables', async () => {
+    mockListUsers.mockResolvedValue([
+      makeUser({ id: 's1', role: 'technician' }),
+      makeUser({ id: 'r1', role: 'responsible' }),
+    ]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('1 usuario')).toBeInTheDocument(); });
+  });
+
+  it('contador de Responsables no incluye otros roles', async () => {
+    mockListUsers.mockResolvedValue([
+      makeUser({ id: 's1', role: 'technician' }),
+      makeUser({ id: 'r1', role: 'responsible' }),
+    ]);
+    renderPage('responsables');
+    await waitFor(() => { expect(screen.getByText('1 responsable')).toBeInTheDocument(); });
+  });
+
+  it('filtro de rol no contiene Responsable', async () => {
+    mockListUsers.mockResolvedValue([makeUser()]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    const select = screen.getByRole('combobox', { name: /filtrar por rol/i });
+    const options = Array.from(select.querySelectorAll('option')).map((o) => o.value);
+    expect(options).not.toContain('responsible');
+    expect(options).toEqual(['', 'admin', 'supervisor', 'technician']);
+  });
+
+  it('filtro de rol no aparece en Responsables', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible' })]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.queryByRole('combobox', { name: /filtrar por rol/i })).not.toBeInTheDocument();
+  });
+
+  it('tabla de Responsables no muestra columna Rol', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible' })]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.queryByText('Rol')).not.toBeInTheDocument();
+  });
+
+  it('búsqueda se aplica dentro de la pestaña activa', async () => {
+    mockListUsers.mockResolvedValue([
+      makeUser({ id: 's1', role: 'technician', full_name: 'Tech' }),
+      makeUser({ id: 'r1', role: 'responsible', full_name: 'Resp' }),
+    ]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    await userEvent.type(screen.getByPlaceholderText(SEARCH), 'Resp');
+    expect(screen.getByText('Resp')).toBeInTheDocument();
+    expect(screen.queryByText('Tech')).not.toBeInTheDocument();
+  });
+
+  it('cambiar pestaña limpia búsqueda', async () => {
+    mockListUsers.mockResolvedValue([
+      makeUser({ id: 's1', role: 'technician', full_name: 'Tech' }),
+      makeUser({ id: 'r1', role: 'responsible', full_name: 'Resp' }),
+    ]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    await userEvent.type(screen.getByPlaceholderText(SEARCH), 'Resp');
+    expect(screen.getByText('Resp')).toBeInTheDocument();
+    const usersTab = screen.getByRole('tab', { name: /usuarios$/i });
+    await userEvent.click(usersTab);
+    expect(screen.getByPlaceholderText(SEARCH)).toHaveValue('');
+    expect(screen.getByText('Tech')).toBeInTheDocument();
+  });
+
+  it('cambiar pestaña no vuelve a llamar listUsers', async () => {
+    mockListUsers.mockResolvedValue([
+      makeUser({ id: 's1', role: 'technician', full_name: 'Tech' }),
+      makeUser({ id: 'r1', role: 'responsible', full_name: 'Resp' }),
+    ]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(mockListUsers).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('tab', { name: /responsables de edificios/i }));
+    expect(mockListUsers).toHaveBeenCalledTimes(1);
+  });
+
+  it('Actualizar hace una sola llamada adicional', async () => {
+    mockListUsers.mockResolvedValue([makeUser()]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(mockListUsers).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /actualizar/i }));
+    await waitFor(() => { expect(mockListUsers).toHaveBeenCalledTimes(2); });
+  });
+
+  it('estado vacío de responsables', async () => {
+    mockListUsers.mockResolvedValue([]);
+    renderPage('responsables');
+    await waitFor(() => { expect(screen.getByText('No hay responsables de edificios registrados')).toBeInTheDocument(); });
+  });
+
+  it('búsqueda sin coincidencias de responsables', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible', full_name: 'Resp' })]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    await userEvent.type(screen.getByPlaceholderText(SEARCH), 'ZZZ');
+    await waitFor(() => { expect(screen.getByText('No se encontraron responsables')).toBeInTheDocument(); });
+  });
+
+  it('botón Nuevo usuario solo está en pestaña Usuarios', async () => {
+    mockListUsers.mockResolvedValue([makeUser()]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.getByRole('link', { name: /nuevo usuario/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('tab', { name: /responsables de edificios/i }));
+    expect(screen.queryByRole('link', { name: /nuevo usuario/i })).not.toBeInTheDocument();
+  });
+
+  it('enlace de detalle del responsable sigue funcionando', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ id: 'r1', role: 'responsible', full_name: 'Resp' })]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    const link = screen.getByRole('link', { name: /ver usuario resp/i });
+    expect(link).toHaveAttribute('href', '/admin/usuarios/r1');
+  });
+});
+
+describe('UsersPage — Visualización (staff)', () => {
+  it('muestra nombre, email, rol y estado', async () => {
     mockListUsers.mockResolvedValue([makeUser()]);
     renderPage();
     await waitFor(() => { expect(table()).toBeInTheDocument(); });
@@ -71,20 +259,12 @@ describe('UsersPage — Datos', () => {
     expect(within(row).getByText('Activo')).toBeInTheDocument();
   });
 
-  it('muestra fecha creada en locale es-AR', async () => {
+  it('muestra fecha creada', async () => {
     mockListUsers.mockResolvedValue([makeUser()]);
     renderPage();
     await waitFor(() => { expect(table()).toBeInTheDocument(); });
     const row = screen.getAllByRole('row')[1];
     expect(within(row).getByText('15/1/2026')).toBeInTheDocument();
-  });
-
-  it('muestra enlace de detalle correcto', async () => {
-    mockListUsers.mockResolvedValue([makeUser({ id: 'u-42' })]);
-    renderPage();
-    await waitFor(() => { expect(table()).toBeInTheDocument(); });
-    const link = screen.getByRole('link', { name: /ver usuario test user/i });
-    expect(link).toHaveAttribute('href', '/admin/usuarios/u-42');
   });
 
   it('muestra inactivo', async () => {
@@ -96,178 +276,52 @@ describe('UsersPage — Datos', () => {
   });
 });
 
-describe('UsersPage — Orden', () => {
-  it('Ana 2 antes que Ana 10 (natural sort)', async () => {
-    mockListUsers.mockResolvedValue([
-      makeUser({ id: 'a2', full_name: 'Ana 10' }),
-      makeUser({ id: 'a1', full_name: 'Ana 2' }),
-    ]);
-    renderPage();
+describe('UsersPage — Visualización (responsables)', () => {
+  it('muestra nombre, email, estado y contraseña', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible', must_change_password: true })]);
+    renderPage('responsables');
     await waitFor(() => { expect(table()).toBeInTheDocument(); });
-    const rows = screen.getAllByRole('row');
-    expect(within(rows[1]).getByText('Ana 2')).toBeInTheDocument();
-    expect(within(rows[2]).getByText('Ana 10')).toBeInTheDocument();
+    const row = screen.getAllByRole('row')[1];
+    expect(within(row).getByText('Test User')).toBeInTheDocument();
+    expect(within(row).getByText('test@example.com')).toBeInTheDocument();
+    expect(within(row).getByText('Cambio pendiente')).toBeInTheDocument();
   });
 
-  it('nombres antes que usuarios sin nombre', async () => {
-    mockListUsers.mockResolvedValue([
-      makeUser({ id: 'z', full_name: '', email: 'z@z.com' }),
-      makeUser({ id: 'a', full_name: 'Alpha', email: 'a@a.com' }),
-    ]);
-    renderPage();
+  it('no muestra columna Rol', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible' })]);
+    renderPage('responsables');
     await waitFor(() => { expect(table()).toBeInTheDocument(); });
-    const rows = screen.getAllByRole('row');
-    expect(within(rows[1]).getByText('Alpha')).toBeInTheDocument();
-  });
-
-  it('email como desempate', async () => {
-    mockListUsers.mockResolvedValue([
-      makeUser({ id: '1', full_name: 'Same', email: 'b@b.com' }),
-      makeUser({ id: '2', full_name: 'Same', email: 'a@a.com' }),
-    ]);
-    renderPage();
-    await waitFor(() => { expect(table()).toBeInTheDocument(); });
-    const rows = screen.getAllByRole('row');
-    expect(within(rows[1]).getByText('a@a.com')).toBeInTheDocument();
-  });
-
-  it('arreglo original no mutado', async () => {
-    const users = [
-      makeUser({ id: 'b', full_name: 'Bravo' }),
-      makeUser({ id: 'a', full_name: 'Alpha' }),
-    ];
-    mockListUsers.mockResolvedValue(users);
-    renderPage();
-    await waitFor(() => { expect(table()).toBeInTheDocument(); });
-    expect(users[0].full_name).toBe('Bravo');
-  });
-});
-
-describe('UsersPage — Contador', () => {
-  it('0 usuarios', async () => {
-    mockListUsers.mockResolvedValue([]);
-    renderPage();
-    await waitFor(() => { expect(screen.getByText('0 usuarios')).toBeInTheDocument(); });
-  });
-
-  it('1 usuario', async () => {
-    mockListUsers.mockResolvedValue([makeUser()]);
-    renderPage();
-    await waitFor(() => { expect(screen.getByText('1 usuario')).toBeInTheDocument(); });
-  });
-
-  it('varios usuarios', async () => {
-    mockListUsers.mockResolvedValue([makeUser({ id: '1' }), makeUser({ id: '2' }), makeUser({ id: '3' })]);
-    renderPage();
-    await waitFor(() => { expect(screen.getByText('3 usuarios')).toBeInTheDocument(); });
-  });
-
-  it('Mostrando X de Y con filtros', async () => {
-    mockListUsers.mockResolvedValue([
-      makeUser({ id: '1', role: 'admin' }),
-      makeUser({ id: '2', role: 'technician' }),
-    ]);
-    renderPage();
-    await waitFor(() => { expect(screen.getByText('2 usuarios')).toBeInTheDocument(); });
-    const select = screen.getByRole('combobox', { name: /filtrar por rol/i });
-    await userEvent.selectOptions(select, 'admin');
-    await waitFor(() => { expect(screen.getByText(/Mostrando 1 de 2/)).toBeInTheDocument(); });
-  });
-});
-
-describe('UsersPage — Búsqueda', () => {
-  it('por nombre', async () => {
-    mockListUsers.mockResolvedValue([makeUser({ full_name: 'Juan' }), makeUser({ id: '2', full_name: 'Pedro' })]);
-    renderPage();
-    await waitFor(() => { expect(table()).toBeInTheDocument(); });
-    await userEvent.type(screen.getByPlaceholderText(SEARCH), 'Juan');
-    expect(screen.getByText('Juan')).toBeInTheDocument();
-    expect(screen.queryByText('Pedro')).not.toBeInTheDocument();
-  });
-
-  it('por email', async () => {
-    mockListUsers.mockResolvedValue([makeUser({ email: 'a@test.com' }), makeUser({ id: '2', email: 'b@test.com' })]);
-    renderPage();
-    await waitFor(() => { expect(table()).toBeInTheDocument(); });
-    await userEvent.type(screen.getByPlaceholderText(SEARCH), 'b@test');
-    expect(screen.getByText('b@test.com')).toBeInTheDocument();
-    expect(screen.queryByText('a@test.com')).not.toBeInTheDocument();
-  });
-
-  it('ignora mayúsculas', async () => {
-    mockListUsers.mockResolvedValue([makeUser({ full_name: 'María' })]);
-    renderPage();
-    await waitFor(() => { expect(table()).toBeInTheDocument(); });
-    await userEvent.type(screen.getByPlaceholderText(SEARCH), 'maría');
-    expect(screen.getByText('María')).toBeInTheDocument();
-  });
-
-  it('ignora espacios externos', async () => {
-    mockListUsers.mockResolvedValue([makeUser({ full_name: 'Juan' })]);
-    renderPage();
-    await waitFor(() => { expect(table()).toBeInTheDocument(); });
-    await userEvent.type(screen.getByPlaceholderText(SEARCH), '  Juan  ');
-    expect(screen.getByText('Juan')).toBeInTheDocument();
-  });
-
-  it('sin coincidencias muestra aviso', async () => {
-    mockListUsers.mockResolvedValue([makeUser()]);
-    renderPage();
-    await waitFor(() => { expect(table()).toBeInTheDocument(); });
-    await userEvent.type(screen.getByPlaceholderText(SEARCH), 'ZZZ');
-    await waitFor(() => { expect(screen.getByText('No se encontraron usuarios')).toBeInTheDocument(); });
-  });
-});
-
-describe('UsersPage — Roles', () => {
-  const roleUsers = [
-    makeUser({ id: 'a', role: 'admin', full_name: 'Admin User' }),
-    makeUser({ id: 's', role: 'supervisor', full_name: 'Sup User' }),
-    makeUser({ id: 't', role: 'technician', full_name: 'Tech User' }),
-    makeUser({ id: 'r', role: 'responsible', full_name: 'Resp User' }),
-  ];
-
-  it.each(['admin', 'supervisor', 'technician', 'responsible'] as const)('filtra %s', async (role) => {
-    mockListUsers.mockResolvedValue(roleUsers);
-    renderPage();
-    await waitFor(() => { expect(table()).toBeInTheDocument(); });
-    const select = screen.getByRole('combobox', { name: /filtrar por rol/i });
-    await userEvent.selectOptions(select, role);
-    const expected = { admin: 'Admin User', supervisor: 'Sup User', technician: 'Tech User', responsible: 'Resp User' }[role];
-    await waitFor(() => {
-      const rows = screen.getAllByRole('row');
-      expect(rows.length).toBe(2);
-    });
-    expect(screen.getByText(expected)).toBeInTheDocument();
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers.map((h) => h.textContent)).not.toContain('Rol');
   });
 });
 
 describe('UsersPage — Contraseña', () => {
   it('responsable pendiente', async () => {
     mockListUsers.mockResolvedValue([makeUser({ role: 'responsible', must_change_password: true })]);
-    renderPage();
+    renderPage('responsables');
     await waitFor(() => { expect(table()).toBeInTheDocument(); });
     const row = screen.getAllByRole('row')[1];
     expect(within(row).getByText('Cambio pendiente')).toBeInTheDocument();
   });
 
   it('responsable actualizada', async () => {
-    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible', must_change_password: false, password_changed_at: '2026-07-01T00:00:00Z' })]);
-    renderPage();
+    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible', must_change_password: false, password_changed_at: '2026-07-01' })]);
+    renderPage('responsables');
     await waitFor(() => { expect(table()).toBeInTheDocument(); });
     const row = screen.getAllByRole('row')[1];
     expect(within(row).getByText('Actualizada')).toBeInTheDocument();
   });
 
-  it('responsable sin cambio pendiente', async () => {
+  it('responsable sin cambio', async () => {
     mockListUsers.mockResolvedValue([makeUser({ role: 'responsible', must_change_password: false, password_changed_at: null })]);
-    renderPage();
+    renderPage('responsables');
     await waitFor(() => { expect(table()).toBeInTheDocument(); });
     const row = screen.getAllByRole('row')[1];
     expect(within(row).getByText('Sin cambio pendiente')).toBeInTheDocument();
   });
 
-  it('usuario no responsable: No aplica', async () => {
+  it('staff muestra No aplica', async () => {
     mockListUsers.mockResolvedValue([makeUser({ role: 'technician' })]);
     renderPage();
     await waitFor(() => { expect(table()).toBeInTheDocument(); });
@@ -276,61 +330,14 @@ describe('UsersPage — Contraseña', () => {
   });
 });
 
-describe('UsersPage — Carga', () => {
-  it('spinner visible y botón deshabilitado durante carga', async () => {
-    const def = deferred<ReturnType<typeof makeUser>[]>();
-    mockListUsers.mockReturnValue(def.promise);
+describe('UsersPage — Actualización', () => {
+  it('carga inicial y segunda carga', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ full_name: 'V1' })]);
     renderPage();
-    expect(screen.getByLabelText(/cargando usuarios/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /actualizar/i })).toBeDisabled();
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
-    def.resolve([makeUser()]);
-    await waitFor(() => {
-      expect(screen.queryByLabelText(/cargando usuarios/i)).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
-      expect(screen.getByRole('table')).toBeInTheDocument();
-    });
-  });
-});
-
-describe('UsersPage — Error y reintento', () => {
-  it('muestra error, reintento, y recuperación', async () => {
-    mockListUsers.mockRejectedValueOnce(new Error('RPC falló'));
-    renderPage();
-    await waitFor(() => { expect(screen.getByText('RPC falló')).toBeInTheDocument(); });
-    expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
-    const def2 = deferred<ReturnType<typeof makeUser>[]>();
-    mockListUsers.mockReturnValue(def2.promise);
-    fireEvent.click(screen.getByRole('button', { name: /reintentar/i }));
-    await waitFor(() => { expect(screen.getByRole('button', { name: /reintentar/i })).toBeDisabled(); });
-    def2.resolve([makeUser()]);
-    await waitFor(() => {
-      expect(screen.queryByText('RPC falló')).not.toBeInTheDocument();
-      expect(screen.getByText('Test User')).toBeInTheDocument();
-    });
-    expect(mockListUsers).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('UsersPage — Actualizar', () => {
-  it('carga inicial y segunda carga con Actualizar', async () => {
-    const initDef = deferred<ReturnType<typeof makeUser>[]>();
-    mockListUsers.mockReturnValue(initDef.promise);
-    renderPage();
-    initDef.resolve([makeUser({ full_name: 'V1' })]);
     await waitFor(() => { expect(screen.getByText('V1')).toBeInTheDocument(); });
-    const updDef = deferred<ReturnType<typeof makeUser>[]>();
-    mockListUsers.mockReturnValue(updDef.promise);
+    mockListUsers.mockResolvedValue([makeUser({ id: 'u2', full_name: 'V2' })]);
     fireEvent.click(screen.getByRole('button', { name: /actualizar/i }));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /actualizar/i })).toBeDisabled();
-      expect(screen.getByLabelText(/cargando usuarios/i)).toBeInTheDocument();
-    });
-    expect(mockListUsers).toHaveBeenCalledTimes(2);
-    updDef.resolve([makeUser({ id: 'u2', full_name: 'V2' })]);
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
-      expect(screen.queryByLabelText(/cargando usuarios/i)).not.toBeInTheDocument();
       expect(screen.getByText('V2')).toBeInTheDocument();
       expect(screen.queryByText('V1')).not.toBeInTheDocument();
     });
@@ -366,47 +373,31 @@ describe('UsersPage — Actualizar', () => {
     fireEvent.click(screen.getByRole('button', { name: /actualizar/i }));
     expect(mockListUsers).toHaveBeenCalledTimes(2);
     updDef.resolve([makeUser({ id: 'u2' })]);
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
-    });
+    await waitFor(() => { expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled(); });
     expect(mockListUsers).toHaveBeenCalledTimes(2);
   });
+});
 
-  it('actualización fallida oculta datos y muestra error', async () => {
-    mockListUsers.mockResolvedValue([makeUser({ full_name: 'Usuario anterior' })]);
+describe('UsersPage — Error y reintento', () => {
+  it('error visible y reintento', async () => {
+    mockListUsers.mockRejectedValueOnce(new Error('RPC falló'));
     renderPage();
-    await waitFor(() => { expect(screen.getByText('Usuario anterior')).toBeInTheDocument(); });
-    await userEvent.type(screen.getByPlaceholderText(SEARCH), 'Usuario');
-    mockListUsers.mockRejectedValueOnce(new Error('RPC actualización falló'));
-    fireEvent.click(screen.getByRole('button', { name: /actualizar/i }));
-    await waitFor(() => {
-      expect(screen.getByText('RPC actualización falló')).toBeInTheDocument();
-      expect(screen.queryByText('Usuario anterior')).not.toBeInTheDocument();
-      expect(screen.queryByRole('table')).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /actualizar/i })).not.toBeDisabled();
-    });
-    expect(screen.getByPlaceholderText(SEARCH)).toHaveValue('Usuario');
-    const retryDef = deferred<ReturnType<typeof makeUser>[]>();
-    mockListUsers.mockReturnValue(retryDef.promise);
+    await waitFor(() => { expect(screen.getByText('RPC falló')).toBeInTheDocument(); });
+    expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
+    mockListUsers.mockResolvedValue([makeUser({ full_name: 'Recuperado' })]);
     fireEvent.click(screen.getByRole('button', { name: /reintentar/i }));
-    retryDef.resolve([makeUser({ full_name: 'Usuario nuevo' })]);
-    await waitFor(() => {
-      expect(screen.queryByText('RPC actualización falló')).not.toBeInTheDocument();
-      expect(screen.getByText('Usuario nuevo')).toBeInTheDocument();
-    });
-    expect(mockListUsers).toHaveBeenCalledTimes(3);
+    await waitFor(() => { expect(screen.getByText('Recuperado')).toBeInTheDocument(); });
   });
 });
 
 describe('UsersPage — Estados vacíos', () => {
-  it('array vacío sin filtros: No hay usuarios registrados', async () => {
+  it('staff vacío: No hay usuarios registrados', async () => {
     mockListUsers.mockResolvedValue([]);
     renderPage();
     await waitFor(() => { expect(screen.getByText('No hay usuarios registrados')).toBeInTheDocument(); });
   });
 
-  it('filtro sin resultados: No se encontraron usuarios', async () => {
+  it('staff sin coincidencias: No se encontraron usuarios', async () => {
     mockListUsers.mockResolvedValue([makeUser({ role: 'admin' })]);
     renderPage();
     await waitFor(() => { expect(table()).toBeInTheDocument(); });

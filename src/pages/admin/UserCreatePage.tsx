@@ -13,10 +13,9 @@ const ROLE_OPTIONS: { value: AdminUserRole; label: string }[] = [
   { value: 'admin', label: 'Administrador' },
   { value: 'supervisor', label: 'Supervisor' },
   { value: 'technician', label: 'Técnico' },
-  { value: 'responsible', label: 'Responsable' },
 ];
 
-const VALID_ROLES: readonly string[] = ['admin', 'supervisor', 'technician', 'responsible'];
+const VALID_ROLES: readonly string[] = ['admin', 'supervisor', 'technician'];
 
 function isValidRole(v: string): v is AdminUserRole {
   return (VALID_ROLES as readonly string[]).includes(v);
@@ -64,10 +63,7 @@ export default function UserCreatePage() {
         full_name: fullName.trim(),
         role,
       });
-      const msg = role === 'responsible'
-        ? 'Responsable creado correctamente. Deberá cambiar su contraseña temporal al iniciar sesión.'
-        : 'Usuario creado correctamente.';
-      setSuccess(msg);
+      setSuccess('Usuario creado correctamente.');
       setPassword(''); setConfirmPassword('');
       timerRef.current = setTimeout(() => navigate(`/admin/usuarios/${result.id}`), 800);
     } catch (err: unknown) {
@@ -85,10 +81,10 @@ export default function UserCreatePage() {
   const isBusy = loading || success !== '';
 
   return (
-    <DashboardLayout role="admin" title="Nuevo Usuario">
+    <DashboardLayout role="admin" title="Nuevo usuario">
       <div className="max-w-2xl mx-auto space-y-6">
         <button
-          onClick={() => { if (!isBusy) navigate('/admin/usuarios'); }}
+          onClick={() => { if (!isBusy) navigate('/admin/usuarios?tab=usuarios'); }}
           disabled={isBusy}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 disabled:opacity-50"
           aria-label="Volver"
@@ -96,7 +92,7 @@ export default function UserCreatePage() {
           <ArrowLeft size={18} /> Volver
         </button>
 
-        <Card><CardHeader><h2 className="text-lg font-semibold">Crear Usuario</h2></CardHeader><CardContent>
+        <Card><CardHeader><h2 className="text-lg font-semibold">Crear usuario SICOM</h2></CardHeader><CardContent>
           <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isBusy}>
             {error && <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
             {success && <div role="status" className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm flex items-center gap-2"><Check size={16} /> {success}</div>}
@@ -107,15 +103,8 @@ export default function UserCreatePage() {
             <Input label="Contraseña *" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" autoComplete="new-password" disabled={isBusy} />
             <Input label="Confirmar contraseña *" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" disabled={isBusy} />
 
-            {role === 'responsible' && (
-              <div role="note" className="p-3 bg-warning/10 border border-warning/30 rounded text-warning text-sm">
-                <p>Esta contraseña será temporal. El responsable deberá cambiarla la primera vez que inicie sesión.</p>
-                <p className="mt-1">Entregale esta contraseña de forma segura. El sistema no volverá a mostrarla.</p>
-              </div>
-            )}
-
             <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => { if (!isBusy) navigate('/admin/usuarios'); }} disabled={isBusy}>Cancelar</Button>
+              <Button type="button" variant="outline" onClick={() => { if (!isBusy) navigate('/admin/usuarios?tab=usuarios'); }} disabled={isBusy}>Cancelar</Button>
               <Button type="submit" disabled={isBusy}>{loading ? 'Creando...' : 'Crear Usuario'}</Button>
             </div>
           </form>

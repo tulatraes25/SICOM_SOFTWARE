@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, cleanup, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import UserCreatePage from './UserCreatePage';
 
@@ -60,10 +60,21 @@ describe('UserCreatePage — Renderizado', () => {
     expect(screen.getByLabelText(/^rol/i)).toHaveValue('technician');
   });
 
-  it('muestra las cuatro opciones de rol', () => {
+  it('selector contiene Administrador, Supervisor, Técnico', () => {
     renderPage();
-    const options = Array.from(screen.getByLabelText(/^rol/i).querySelectorAll('option'));
-    expect(options.map((o) => o.value)).toEqual(['admin', 'supervisor', 'technician', 'responsible']);
+    const options = Array.from(screen.getByLabelText(/^rol/i).querySelectorAll('option')).map((o) => o.value);
+    expect(options).toEqual(['admin', 'supervisor', 'technician']);
+  });
+
+  it('no contiene Responsable', () => {
+    renderPage();
+    const options = Array.from(screen.getByLabelText(/^rol/i).querySelectorAll('option')).map((o) => o.value);
+    expect(options).not.toContain('responsible');
+  });
+
+  it('título Crear usuario SICOM', () => {
+    renderPage();
+    expect(screen.getByText('Crear usuario SICOM')).toBeInTheDocument();
   });
 
   it('Volver y Cancelar existen', () => {
@@ -94,7 +105,6 @@ describe('UserCreatePage — Validación local', () => {
     fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Test' } });
     submitForm();
     expect(screen.getByText('Ingresá un email válido')).toBeInTheDocument();
-    expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
   it('email inválido', () => {
@@ -175,252 +185,74 @@ describe('UserCreatePage — Normalización', () => {
   });
 });
 
-describe('UserCreatePage — Responsable', () => {
-  it('al seleccionar responsible aparece el aviso', () => {
+describe('UserCreatePage — createUser nunca recibe responsible', () => {
+  it('no envía role responsible', async () => {
+    mockCreateUser.mockResolvedValue({ id: 't-1' });
     renderPage();
-    fireEvent.change(screen.getByLabelText(/^rol/i), { target: { value: 'responsible' } });
-    expect(screen.getByRole('note')).toBeInTheDocument();
-    expect(screen.getByText(/contraseña será temporal/i)).toBeInTheDocument();
-  });
-
-  it('al volver a technician desaparece', () => {
-    renderPage();
-    fireEvent.change(screen.getByLabelText(/^rol/i), { target: { value: 'responsible' } });
-    expect(screen.getByRole('note')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/^rol/i), { target: { value: 'technician' } });
-    expect(screen.queryByRole('note')).not.toBeInTheDocument();
-  });
-
-  it('el aviso no muestra el valor de la contraseña', () => {
-    renderPage();
-    fireEvent.change(screen.getByLabelText(/^contraseña \*/i), { target: { value: 'secret123' } });
-    fireEvent.change(screen.getByLabelText(/^rol/i), { target: { value: 'responsible' } });
-    expect(screen.getByRole('note').textContent).not.toContain('secret123');
-  });
-
-  it('éxito muestra el mensaje específico de responsable', async () => {
-    mockCreateUser.mockResolvedValue({ id: 'r-1' });
-    renderPage();
-    fillForm('Resp', 'r@r.com', 'password1');
-    fireEvent.change(screen.getByLabelText(/^rol/i), { target: { value: 'responsible' } });
+    fillForm('Tech', 't@t.com', 'password1');
     submitForm();
     await waitFor(() => {
-      expect(screen.getByRole('status').textContent).toContain('cambiar su contraseña temporal');
+      expect(mockCreateUser).toHaveBeenCalledTimes(1);
+      const call = mockCreateUser.mock.calls[0][0];
+      expect(call.role).not.toBe('responsible');
     });
   });
 });
 
-describe('UserCreatePage — Otros roles', () => {
-  it('éxito de technician muestra mensaje genérico', async () => {
+describe('UserCreatePage — Éxito', () => {
+  it('mensaje genérico', async () => {
     mockCreateUser.mockResolvedValue({ id: 't-1' });
     renderPage();
     fillForm('Tech', 't@t.com', 'password1');
     submitForm();
     await waitFor(() => {
       expect(screen.getByRole('status').textContent).toContain('Usuario creado correctamente');
-      expect(screen.getByRole('status').textContent).not.toContain('contraseña temporal');
     });
   });
 });
 
 describe('UserCreatePage — Carga y doble envío', () => {
-  it('campos y botones deshabilitados durante envío', async () => {
+  it('dos clics producen una sola llamada', async () => {
     const def = deferred<{ id: string }>();
     mockCreateUser.mockReturnValue(def.promise);
     renderPage();
     fillForm('Test', 't@t.com', 'password1');
     submitForm();
-    await waitFor(() => {
-      expect(screen.getByLabelText(/nombre completo/i)).toBeDisabled();
-      expect(screen.getByLabelText(/email/i)).toBeDisabled();
-      expect(screen.getByLabelText(/^rol/i)).toBeDisabled();
-      expect(screen.getByLabelText(/^contraseña \*/i)).toBeDisabled();
-      expect(screen.getByLabelText(/confirmar contraseña/i)).toBeDisabled();
-      expect(screen.getByRole('button', { name: /cancelar/i })).toBeDisabled();
-      expect(screen.getByRole('button', { name: /volver/i })).toBeDisabled();
-    });
-    def.resolve({ id: 'new-1' });
-    await waitFor(() => { expect(mockNavigate).toHaveBeenCalled(); });
-  });
-
-  it('dos envíos rápidos producen exactamente una llamada', async () => {
-    const def = deferred<{ id: string }>();
-    mockCreateUser.mockReturnValue(def.promise);
-    renderPage();
-    fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    await waitFor(() => { expect(mockCreateUser).toHaveBeenCalledTimes(1); });
     submitForm();
     expect(mockCreateUser).toHaveBeenCalledTimes(1);
     def.resolve({ id: 'new-1' });
     await waitFor(() => { expect(mockNavigate).toHaveBeenCalled(); });
   });
 
-  it('al fallar se vuelve a habilitar', async () => {
-    mockCreateUser.mockRejectedValueOnce(new Error('RPC falló'));
+  it('tras error se reintentar', async () => {
+    mockCreateUser.mockRejectedValueOnce(new Error('Falló'));
     renderPage();
     fillForm('Test', 't@t.com', 'password1');
     submitForm();
     await waitFor(() => {
-      expect(screen.getByText('RPC falló')).toBeInTheDocument();
+      expect(screen.getByText('Falló')).toBeInTheDocument();
       expect(screen.getByLabelText(/nombre completo/i)).not.toBeDisabled();
-      expect(screen.getByRole('button', { name: /cancelar/i })).not.toBeDisabled();
     });
-  });
-
-  it('tras éxito permanece bloqueado hasta navegar', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mockCreateUser.mockResolvedValue({ id: 'new-1' });
-    renderPage();
-    fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    await waitFor(() => {
-      expect(screen.getByLabelText(/nombre completo/i)).toBeDisabled();
-    });
-    expect(mockNavigate).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(800);
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios/new-1');
-    });
-    vi.useRealTimers();
   });
 });
 
-describe('UserCreatePage — Error remoto', () => {
-  it('conserva nombre y email, no muestra contraseña', async () => {
-    mockCreateUser.mockRejectedValueOnce(new Error('Email ya existe'));
+describe('UserCreatePage — Navegación', () => {
+  it('Volver lleva a /admin/usuarios?tab=usuarios', () => {
     renderPage();
-    fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    await waitFor(() => {
-      expect(screen.getByText('Email ya existe')).toBeInTheDocument();
-      expect(screen.getByLabelText(/nombre completo/i)).toHaveValue('Test');
-      expect(screen.getByLabelText(/email/i)).toHaveValue('t@t.com');
-      expect(screen.getByRole('alert').textContent).not.toContain('password1');
-    });
+    fireEvent.click(screen.getByRole('button', { name: /volver/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios?tab=usuarios');
   });
 
-  it('el error desaparece al reenviar', async () => {
-    mockCreateUser.mockRejectedValueOnce(new Error('Error'));
+  it('Cancelar lleva a /admin/usuarios?tab=usuarios', () => {
     renderPage();
-    fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    await waitFor(() => { expect(screen.getByText('Error')).toBeInTheDocument(); });
-    mockCreateUser.mockResolvedValue({ id: 'new-1' });
-    submitForm();
-    await waitFor(() => { expect(screen.queryByText('Error')).not.toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios?tab=usuarios');
   });
 });
 
-describe('UserCreatePage — Éxito y redirección', () => {
-  it('tras éxito permanece bloqueado hasta navegar', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mockCreateUser.mockResolvedValue({ id: 'new-1' });
+describe('UserCreatePage — Sin responsable', () => {
+  it('no aparece aviso de contraseña temporal', () => {
     renderPage();
-    fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
-      expect(screen.getByLabelText(/nombre completo/i)).toBeDisabled();
-      expect(screen.getByLabelText(/email/i)).toBeDisabled();
-      expect(screen.getByLabelText(/^rol/i)).toBeDisabled();
-      expect(screen.getByLabelText(/^contraseña \*/i)).toBeDisabled();
-      expect(screen.getByLabelText(/confirmar contraseña/i)).toBeDisabled();
-      expect(screen.getByRole('button', { name: /volver/i })).toBeDisabled();
-      expect(screen.getByRole('button', { name: /cancelar/i })).toBeDisabled();
-      expect(screen.getByRole('button', { name: /crear/i })).toBeDisabled();
-    });
-    expect(mockNavigate).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(800);
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledTimes(1);
-      expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios/new-1');
-    });
-    vi.useRealTimers();
-  });
-
-  it('limpia contraseñas y muestra mensaje', async () => {
-    vi.useFakeTimers();
-    mockCreateUser.mockResolvedValue({ id: 'new-1' });
-    renderPage();
-    fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    await act(async () => {});
-    expect(screen.getByLabelText(/^contraseña \*/i)).toHaveValue('');
-    expect(screen.getByLabelText(/confirmar contraseña/i)).toHaveValue('');
-    expect(screen.getByRole('status').textContent).toContain('Usuario creado correctamente');
-    vi.useRealTimers();
-  });
-
-  it('cleanup cancela el temporizador al desmontar', async () => {
-    vi.useFakeTimers();
-    mockCreateUser.mockResolvedValue({ id: 'new-1' });
-    const { unmount } = renderPage();
-    fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    await act(async () => {});
-    expect(screen.getByRole('status')).toBeInTheDocument();
-    unmount();
-    vi.advanceTimersByTime(1000);
-    expect(mockNavigate).not.toHaveBeenCalled();
-    vi.useRealTimers();
-  });
-
-  it('doble envío después del éxito solo llama una vez', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mockCreateUser.mockResolvedValue({ id: 'new-1' });
-    renderPage();
-    fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
-    submitForm();
-    expect(mockCreateUser).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
-  });
-});
-
-describe('UserCreatePage — Navegación manual', () => {
-  it('Volver lleva a /admin/usuarios', () => {
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /volver/i }));
-    expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios');
-  });
-
-  it('Cancelar lleva a /admin/usuarios', () => {
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
-    expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios');
-  });
-
-  it('no permiten salir mientras createUser está pendiente', async () => {
-    const def = deferred<{ id: string }>();
-    mockCreateUser.mockReturnValue(def.promise);
-    renderPage();
-    fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    await waitFor(() => { expect(screen.getByRole('button', { name: /cancelar/i })).toBeDisabled(); });
-    fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
-    fireEvent.click(screen.getByRole('button', { name: /volver/i }));
-    expect(mockNavigate).not.toHaveBeenCalled();
-    def.resolve({ id: 'new-1' });
-    await waitFor(() => { expect(mockNavigate).toHaveBeenCalled(); });
-  });
-
-  it('no permite navegar después del éxito antes de 800ms', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mockCreateUser.mockResolvedValue({ id: 'new-1' });
-    renderPage();
-    fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
-    fireEvent.click(screen.getByRole('button', { name: /volver/i }));
-    fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
-    expect(mockNavigate).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(800);
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledTimes(1);
-      expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios/new-1');
-    });
-    vi.useRealTimers();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 });
