@@ -100,7 +100,7 @@ export async function getUser(userId: string): Promise<AdminUser> {
 }
 
 export async function createUser(params: {
-  email: string; password: string; full_name: string; role: string; active?: boolean;
+  email: string; password: string; full_name: string; role: AdminUserRole; active?: boolean;
 }): Promise<AdminUser> {
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'create_user', data: params },
