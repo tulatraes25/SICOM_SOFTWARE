@@ -103,6 +103,81 @@ describe('UsersPage — Pestañas', () => {
     expect(screen.getByText('0 responsables')).toBeInTheDocument();
   });
 
+  it('tab Usuarios tiene id correcto', async () => {
+    mockListUsers.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('0 usuarios')).toBeInTheDocument(); });
+    expect(screen.getByRole('tab', { name: /usuarios$/i })).toHaveAttribute('id', 'tab-usuarios');
+  });
+
+  it('tab Usuarios tiene aria-controls correcto', async () => {
+    mockListUsers.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('0 usuarios')).toBeInTheDocument(); });
+    expect(screen.getByRole('tab', { name: /usuarios$/i })).toHaveAttribute('aria-controls', 'panel-usuarios');
+  });
+
+  it('tab Responsables tiene id correcto', async () => {
+    mockListUsers.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('0 usuarios')).toBeInTheDocument(); });
+    expect(screen.getByRole('tab', { name: /responsables de edificios/i })).toHaveAttribute('id', 'tab-responsables');
+  });
+
+  it('tab Responsables tiene aria-controls correcto', async () => {
+    mockListUsers.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('0 usuarios')).toBeInTheDocument(); });
+    expect(screen.getByRole('tab', { name: /responsables de edificios/i })).toHaveAttribute('aria-controls', 'panel-responsables');
+  });
+
+  it('panel Usuarios tiene id y aria-labelledby', async () => {
+    mockListUsers.mockResolvedValue([makeUser()]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    const panel = screen.getByRole('tabpanel');
+    expect(panel).toHaveAttribute('id', 'panel-usuarios');
+    expect(panel).toHaveAttribute('aria-labelledby', 'tab-usuarios');
+  });
+
+  it('panel Responsables tiene id y aria-labelledby', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible' })]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    const panel = screen.getByRole('tabpanel');
+    expect(panel).toHaveAttribute('id', 'panel-responsables');
+    expect(panel).toHaveAttribute('aria-labelledby', 'tab-responsables');
+  });
+
+  it('solo existe un tabpanel', async () => {
+    mockListUsers.mockResolvedValue([makeUser()]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
+  });
+
+  it('ambos botones tienen type button', async () => {
+    mockListUsers.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('0 usuarios')).toBeInTheDocument(); });
+    const tabs = screen.getAllByRole('tab');
+    tabs.forEach((tab) => { expect(tab).toHaveAttribute('type', 'button'); });
+  });
+
+  it('panel Usuarios muestra su título y descripción', async () => {
+    mockListUsers.mockResolvedValue([makeUser()]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.getByText('Personal interno con acceso administrativo, técnico o de supervisión.')).toBeInTheDocument();
+  });
+
+  it('panel Responsables muestra su título y descripción', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible' })]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.getByText('Usuarios externos vinculados a los ascensores de uno o más edificios.')).toBeInTheDocument();
+  });
+
   it('Usuarios excluye responsables', async () => {
     mockListUsers.mockResolvedValue([
       makeUser({ id: 's1', role: 'technician', full_name: 'Tech' }),

@@ -160,8 +160,8 @@ export default function UsersPage() {
         </div>
 
         <div role="tablist" aria-label="Tipos de usuarios" className="flex border-b border-gray-200">
-          <button role="tab" aria-selected={activeTab === 'usuarios'} onClick={() => switchTab('usuarios')} className={`px-4 py-2 text-sm transition-colors ${activeTab === 'usuarios' ? TAB_ACTIVE : TAB_INACTIVE}`}>Usuarios</button>
-          <button role="tab" aria-selected={activeTab === 'responsables'} onClick={() => switchTab('responsables')} className={`px-4 py-2 text-sm transition-colors ${activeTab === 'responsables' ? TAB_ACTIVE : TAB_INACTIVE}`}>Responsables de edificios</button>
+          <button type="button" id="tab-usuarios" role="tab" aria-selected={activeTab === 'usuarios'} aria-controls="panel-usuarios" onClick={() => switchTab('usuarios')} className={`px-4 py-2 text-sm transition-colors ${activeTab === 'usuarios' ? TAB_ACTIVE : TAB_INACTIVE}`}>Usuarios</button>
+          <button type="button" id="tab-responsables" role="tab" aria-selected={activeTab === 'responsables'} aria-controls="panel-responsables" onClick={() => switchTab('responsables')} className={`px-4 py-2 text-sm transition-colors ${activeTab === 'responsables' ? TAB_ACTIVE : TAB_INACTIVE}`}>Responsables de edificios</button>
         </div>
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -196,8 +196,13 @@ export default function UsersPage() {
           </div>
         </CardContent></Card>
 
-        <div role="tabpanel"><Card><CardContent className="p-0">
-          {loading ? (
+        <div role="tabpanel" id={isStaff ? 'panel-usuarios' : 'panel-responsables'} aria-labelledby={isStaff ? 'tab-usuarios' : 'tab-responsables'}>
+          <div className="mb-3">
+            <h3 className="text-lg font-semibold text-gray-900">{isStaff ? 'Usuarios' : 'Responsables de edificios'}</h3>
+            <p className="text-sm text-gray-500">{isStaff ? 'Personal interno con acceso administrativo, técnico o de supervisión.' : 'Usuarios externos vinculados a los ascensores de uno o más edificios.'}</p>
+          </div>
+          <Card><CardContent className="p-0">
+            {loading ? (
             <div className="flex justify-center py-12" aria-label="Cargando usuarios">
               <div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
             </div>

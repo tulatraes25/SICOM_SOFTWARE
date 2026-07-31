@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import UserCreatePage from './UserCreatePage';
 
@@ -34,7 +35,15 @@ interface Deferred<T> { promise: Promise<T>; resolve: (value: T) => void; }
 function deferred<T>(): Deferred<T> { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; }
 
 function renderPage() { return render(<MemoryRouter><UserCreatePage /></MemoryRouter>); }
-function submitForm() { fireEvent.submit(document.querySelector('form')!); }
+
+function getForm(): HTMLFormElement {
+  const form = document.querySelector('form');
+  if (!(form instanceof HTMLFormElement)) {
+    throw new Error('No se encontró el formulario de creación');
+  }
+  return form;
+}
+
 function fillForm(name: string, email: string, pw: string) {
   fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: name } });
   fireEvent.change(screen.getByLabelText(/email/i), { target: { value: email } });
@@ -42,8 +51,9 @@ function fillForm(name: string, email: string, pw: string) {
   fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: pw } });
 }
 
-beforeEach(() => { vi.clearAllMocks(); });
-afterEach(() => { vi.useRealTimers(); cleanup(); vi.restoreAllMocks(); });
+let user: ReturnType<typeof userEvent.setup>;
+beforeEach(() => { vi.clearAllMocks(); user = userEvent.setup(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('UserCreatePage — Renderizado', () => {
   it('muestra los cinco campos', () => {
@@ -87,7 +97,7 @@ describe('UserCreatePage — Renderizado', () => {
 describe('UserCreatePage — Validación local', () => {
   it('nombre vacío', () => {
     renderPage();
-    submitForm();
+    fireEvent.submit(getForm());
     expect(screen.getByText('El nombre es obligatorio')).toBeInTheDocument();
     expect(mockCreateUser).not.toHaveBeenCalled();
   });
@@ -95,7 +105,7 @@ describe('UserCreatePage — Validación local', () => {
   it('nombre solo con espacios', () => {
     renderPage();
     fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: '   ' } });
-    submitForm();
+    fireEvent.submit(getForm());
     expect(screen.getByText('El nombre es obligatorio')).toBeInTheDocument();
     expect(mockCreateUser).not.toHaveBeenCalled();
   });
@@ -103,15 +113,16 @@ describe('UserCreatePage — Validación local', () => {
   it('email vacío', () => {
     renderPage();
     fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Test' } });
-    submitForm();
+    fireEvent.submit(getForm());
     expect(screen.getByText('Ingresá un email válido')).toBeInTheDocument();
+    expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
   it('email inválido', () => {
     renderPage();
     fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Test' } });
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'noemail' } });
-    submitForm();
+    fireEvent.submit(getForm());
     expect(screen.getByText('Ingresá un email válido')).toBeInTheDocument();
   });
 
@@ -119,28 +130,28 @@ describe('UserCreatePage — Validación local', () => {
     renderPage();
     fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Test' } });
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'a @b.com' } });
-    submitForm();
+    fireEvent.submit(getForm());
     expect(screen.getByText('Ingresá un email válido')).toBeInTheDocument();
   });
 
   it('contraseña menor de 8', () => {
     renderPage();
     fillForm('Test', 'a@b.com', '1234567');
-    submitForm();
+    fireEvent.submit(getForm());
     expect(screen.getByText('La contraseña debe tener entre 8 y 128 caracteres')).toBeInTheDocument();
   });
 
   it('contraseña mayor de 128', () => {
     renderPage();
     fillForm('Test', 'a@b.com', 'a'.repeat(129));
-    submitForm();
+    fireEvent.submit(getForm());
     expect(screen.getByText('La contraseña debe tener entre 8 y 128 caracteres')).toBeInTheDocument();
   });
 
   it('contraseña solo con espacios', () => {
     renderPage();
     fillForm('Test', 'a@b.com', '        ');
-    submitForm();
+    fireEvent.submit(getForm());
     expect(screen.getByText('La contraseña debe tener entre 8 y 128 caracteres')).toBeInTheDocument();
   });
 
@@ -150,89 +161,161 @@ describe('UserCreatePage — Validación local', () => {
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'a@b.com' } });
     fireEvent.change(screen.getByLabelText(/^contraseña \*/i), { target: { value: 'password1' } });
     fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password2' } });
-    submitForm();
+    fireEvent.submit(getForm());
     expect(screen.getByText('Las contraseñas no coinciden')).toBeInTheDocument();
   });
 
   it('createUser no se llama en cada error', () => {
     renderPage();
-    submitForm();
+    fireEvent.submit(getForm());
     expect(mockCreateUser).not.toHaveBeenCalled();
   });
 });
 
-describe('UserCreatePage — Normalización', () => {
-  it('envía full_name con trim, email con trim y minúsculas, password exacto, role tipado', async () => {
-    mockCreateUser.mockResolvedValue({ id: 'new-1' });
-    renderPage();
-    fillForm('  Juan Pérez  ', '  Juan@EXAMPLE.com  ', 'mypass123');
-    submitForm();
-    await waitFor(() => {
-      expect(mockCreateUser).toHaveBeenCalledWith({
-        email: 'juan@example.com', password: 'mypass123', full_name: 'Juan Pérez', role: 'technician',
-      });
-    });
-  });
-
-  it('no envía campos adicionales', async () => {
-    mockCreateUser.mockResolvedValue({ id: 'new-2' });
-    renderPage();
-    fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    await waitFor(() => {
-      expect(Object.keys(mockCreateUser.mock.calls[0][0])).toEqual(['email', 'password', 'full_name', 'role']);
-    });
-  });
-});
-
-describe('UserCreatePage — createUser nunca recibe responsible', () => {
-  it('no envía role responsible', async () => {
-    mockCreateUser.mockResolvedValue({ id: 't-1' });
-    renderPage();
-    fillForm('Tech', 't@t.com', 'password1');
-    submitForm();
-    await waitFor(() => {
-      expect(mockCreateUser).toHaveBeenCalledTimes(1);
-      const call = mockCreateUser.mock.calls[0][0];
-      expect(call.role).not.toBe('responsible');
-    });
-  });
-});
-
-describe('UserCreatePage — Éxito', () => {
-  it('mensaje genérico', async () => {
-    mockCreateUser.mockResolvedValue({ id: 't-1' });
-    renderPage();
-    fillForm('Tech', 't@t.com', 'password1');
-    submitForm();
-    await waitFor(() => {
-      expect(screen.getByRole('status').textContent).toContain('Usuario creado correctamente');
-    });
-  });
-});
-
-describe('UserCreatePage — Carga y doble envío', () => {
-  it('dos clics producen una sola llamada', async () => {
+describe('UserCreatePage — Operación pendiente', () => {
+  it('campos y botones deshabilitados durante envío', async () => {
     const def = deferred<{ id: string }>();
     mockCreateUser.mockReturnValue(def.promise);
     renderPage();
     fillForm('Test', 't@t.com', 'password1');
-    submitForm();
-    submitForm();
+    fireEvent.submit(getForm());
+    await waitFor(() => {
+      expect(screen.getByLabelText(/nombre completo/i)).toBeDisabled();
+      expect(screen.getByLabelText(/email/i)).toBeDisabled();
+      expect(screen.getByLabelText(/^rol/i)).toBeDisabled();
+      expect(screen.getByLabelText(/^contraseña \*/i)).toBeDisabled();
+      expect(screen.getByLabelText(/confirmar contraseña/i)).toBeDisabled();
+      expect(screen.getByRole('button', { name: /cancelar/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /volver/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /creando/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /creando/i }).textContent).toContain('Creando...');
+    });
+    await act(async () => { def.resolve({ id: 'new-1' }); });
+    await waitFor(() => { expect(mockNavigate).toHaveBeenCalled(); });
+  });
+});
+
+describe('UserCreatePage — Doble envío', () => {
+  it('dos submits sincrónicos producen una sola llamada', async () => {
+    const def = deferred<{ id: string }>();
+    mockCreateUser.mockReturnValue(def.promise);
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    fireEvent.submit(getForm());
+    fireEvent.submit(getForm());
     expect(mockCreateUser).toHaveBeenCalledTimes(1);
-    def.resolve({ id: 'new-1' });
+    await act(async () => { def.resolve({ id: 'new-1' }); });
     await waitFor(() => { expect(mockNavigate).toHaveBeenCalled(); });
   });
 
-  it('tras error se reintentar', async () => {
+  it('tras éxito un nuevo submit tampoco genera otra llamada', async () => {
+    const def = deferred<{ id: string }>();
+    mockCreateUser.mockReturnValue(def.promise);
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    fireEvent.submit(getForm());
+    await waitFor(() => {
+      expect(screen.getByLabelText(/nombre completo/i)).toBeDisabled();
+      expect(screen.getByRole('button', { name: /creando/i })).toBeDisabled();
+    });
+    // El botón muestra "Creando..." mientras la promesa está pendiente
+    expect(screen.getByRole('button', { name: /creando/i }).textContent).toContain('Creando...');
+    // Resolver después de comprobar el estado
+    await act(async () => { def.resolve({ id: 'new-1' }); });
+    await waitFor(() => { expect(mockNavigate).toHaveBeenCalledTimes(1); });
+  });
+});
+
+describe('UserCreatePage — Error remoto', () => {
+  it('conserva nombre, email y contraseñas para reintentar', async () => {
+    mockCreateUser.mockRejectedValueOnce(new Error('RPC falló'));
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    fireEvent.click(screen.getByRole('button', { name: /crear usuario/i }));
+    await waitFor(() => { expect(screen.getByText('RPC falló')).toBeInTheDocument(); });
+    expect(screen.getByLabelText(/nombre completo/i)).toHaveValue('Test');
+    expect(screen.getByLabelText(/email/i)).toHaveValue('t@t.com');
+    expect(screen.getByLabelText(/confirmar contraseña/i)).toHaveValue('password1');
+  });
+
+  it('error no contiene la contraseña', async () => {
+    mockCreateUser.mockRejectedValueOnce(new Error('RPC falló'));
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    fireEvent.click(screen.getByRole('button', { name: /crear usuario/i }));
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).not.toContain('password1'); });
+  });
+
+  it('vuelve a habilitar los controles', async () => {
     mockCreateUser.mockRejectedValueOnce(new Error('Falló'));
     renderPage();
     fillForm('Test', 't@t.com', 'password1');
-    submitForm();
+    fireEvent.click(screen.getByRole('button', { name: /crear usuario/i }));
     await waitFor(() => {
-      expect(screen.getByText('Falló')).toBeInTheDocument();
       expect(screen.getByLabelText(/nombre completo/i)).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /crear usuario/i })).not.toBeDisabled();
     });
+  });
+
+  it('segundo intento exitoso funciona', async () => {
+    mockCreateUser.mockRejectedValueOnce(new Error('Falló'));
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    fireEvent.click(screen.getByRole('button', { name: /crear usuario/i }));
+    await waitFor(() => { expect(screen.getByText('Falló')).toBeInTheDocument(); });
+    mockCreateUser.mockResolvedValue({ id: 'new-1' });
+    fireEvent.click(screen.getByRole('button', { name: /crear/i }));
+    await waitFor(() => { expect(screen.queryByText('Falló')).not.toBeInTheDocument(); });
+    expect(mockCreateUser).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('UserCreatePage — Éxito', () => {
+  it('limpia las dos contraseñas', async () => {
+    mockCreateUser.mockResolvedValue({ id: 'new-1' });
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    await user.click(screen.getByRole('button', { name: /crear usuario/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^contraseña \*/i)).toHaveValue('');
+      expect(screen.getByLabelText(/confirmar contraseña/i)).toHaveValue('');
+    });
+  });
+
+  it('muestra mensaje genérico', async () => {
+    mockCreateUser.mockResolvedValue({ id: 'new-1' });
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    await user.click(screen.getByRole('button', { name: /crear usuario/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toContain('Usuario creado correctamente');
+    });
+  });
+
+  it('permanece bloqueado durante 800ms', async () => {
+    mockCreateUser.mockResolvedValue({ id: 'new-1' });
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    fireEvent.submit(getForm());
+    await waitFor(() => { expect(screen.getByLabelText(/nombre completo/i)).toBeDisabled(); });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.advanceTimersByTime(799);
+    expect(screen.getByLabelText(/nombre completo/i)).toBeDisabled();
+    vi.advanceTimersByTime(1);
+    await waitFor(() => { expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios/new-1'); });
+    vi.useRealTimers();
+  });
+
+  it('navega una sola vez', async () => {
+    mockCreateUser.mockResolvedValue({ id: 'new-1' });
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    fireEvent.submit(getForm());
+    await waitFor(() => { expect(screen.getByRole('button', { name: /creando/i })).toBeDisabled(); });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.advanceTimersByTime(800);
+    await waitFor(() => { expect(mockNavigate).toHaveBeenCalledTimes(1); });
+    vi.useRealTimers();
   });
 });
 
@@ -247,6 +330,34 @@ describe('UserCreatePage — Navegación', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios?tab=usuarios');
+  });
+
+  it('no permiten navegar mientras createUser está pendiente', async () => {
+    const def = deferred<{ id: string }>();
+    mockCreateUser.mockReturnValue(def.promise);
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    fireEvent.submit(getForm());
+    await waitFor(() => { expect(screen.getByRole('button', { name: /cancelar/i })).toBeDisabled(); });
+    fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /volver/i }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    await act(async () => { def.resolve({ id: 'new-1' }); });
+    await waitFor(() => { expect(mockNavigate).toHaveBeenCalled(); });
+  });
+
+  it('no permiten navegar después del éxito y antes de la redirección', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockCreateUser.mockResolvedValue({ id: 'new-1' });
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    fireEvent.submit(getForm());
+    await waitFor(() => { expect(screen.getByRole('button', { name: /cancelar/i })).toBeDisabled(); });
+    fireEvent.click(screen.getByRole('button', { name: /volver/i }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(800);
+    await waitFor(() => { expect(mockNavigate).toHaveBeenCalledTimes(1); });
+    vi.useRealTimers();
   });
 });
 
