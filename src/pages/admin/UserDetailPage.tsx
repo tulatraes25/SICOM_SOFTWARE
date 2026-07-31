@@ -45,7 +45,7 @@ function passwordStatus(u: AdminUser): { label: string; variant: 'default' | 'su
   return { label: 'Sin cambio pendiente', variant: 'default' };
 }
 
-type Operation = 'loading' | 'saving' | 'toggling' | null;
+type Operation = 'loading' | 'saving' | 'toggling' | 'resetting' | null;
 
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -59,6 +59,7 @@ export default function UserDetailPage() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetError, setResetError] = useState('');
   const [operation, setOperation] = useState<Operation>(null);
   const operationRef = useRef<Operation>(null);
 
@@ -134,18 +135,33 @@ export default function UserDetailPage() {
     }
   };
 
-  const handleResetPassword = async () => {
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!id) return;
-    if (newPassword.length < 8) { setError('La contraseña debe tener al menos 8 caracteres'); return; }
-    if (newPassword !== confirmPassword) { setError('Las contraseñas no coinciden'); return; }
-    setError(''); setSuccess('');
+    const pw = newPassword;
+    if (pw.trim().length === 0 || pw.length < 8 || pw.length > 128) {
+      setResetError('La contraseña debe tener entre 8 y 128 caracteres');
+      return;
+    }
+    if (pw !== confirmPassword) {
+      setResetError('Las contraseñas no coinciden');
+      return;
+    }
+    if (!beginOperation('resetting')) return;
+    setResetError('');
     try {
-      await resetPassword(id, newPassword);
-      setSuccess('Contraseña restablecida correctamente');
+      await resetPassword(id, pw);
+      await fetchUserData();
       setShowResetModal(false);
-      setNewPassword(''); setConfirmPassword('');
+      setNewPassword(''); setConfirmPassword(''); setResetError('');
+      const isResp = user?.role === 'responsible';
+      setSuccess(isResp
+        ? 'Contraseña temporal restablecida correctamente. El responsable deberá cambiarla al iniciar sesión.'
+        : 'Contraseña restablecida correctamente.');
     } catch (err: unknown) {
-      setError(getAdminUsersErrorMessage(err));
+      setResetError(getAdminUsersErrorMessage(err));
+    } finally {
+      endOperation();
     }
   };
 
@@ -232,7 +248,7 @@ export default function UserDetailPage() {
         <Card>
           <CardHeader><h3 className="font-semibold">Acciones</h3></CardHeader>
           <CardContent className="space-y-3">
-            <Button variant="outline" className="w-full justify-start" onClick={() => setShowResetModal(true)} disabled={isBusy}>
+            <Button variant="outline" className="w-full justify-start" onClick={() => { setResetError(''); setNewPassword(''); setConfirmPassword(''); setError(''); setSuccess(''); setShowResetModal(true); }} disabled={isBusy}>
               <Key size={16} className="mr-2" /> Restablecer contraseña
             </Button>
             <Button variant={user?.active ? 'danger' : 'outline'} className="w-full justify-start" onClick={handleToggleActive} disabled={isBusy}>
@@ -246,16 +262,27 @@ export default function UserDetailPage() {
 
       {showResetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold mb-4">Restablecer Contraseña</h3>
-            <div className="space-y-3">
-              <Input label="Nueva contraseña" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Mínimo 8 caracteres" />
-              <Input label="Confirmar contraseña" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => { setShowResetModal(false); setNewPassword(''); setConfirmPassword(''); }}>Cancelar</Button>
-                <Button onClick={handleResetPassword} disabled={newPassword.length < 8 || newPassword !== confirmPassword}>Restablecer</Button>
+          <div role="dialog" aria-modal="true" aria-labelledby="reset-password-title" className="bg-white rounded-xl max-w-md w-full p-6">
+            <h3 id="reset-password-title" className="text-lg font-semibold mb-4">Restablecer contraseña</h3>
+            {user?.role === 'responsible' ? (
+              <div role="note" className="p-3 bg-warning/10 border border-warning/30 rounded text-warning text-sm mb-4">
+                <p>Esta contraseña será temporal. El responsable deberá cambiarla la próxima vez que inicie sesión.</p>
+                <p className="mt-1">Entregale la contraseña de forma segura. El sistema no volverá a mostrarla.</p>
               </div>
-            </div>
+            ) : (
+              <div role="note" className="p-3 bg-info/10 border border-info/30 rounded text-info text-sm mb-4">
+                <p>La nueva contraseña quedará activa inmediatamente.</p>
+              </div>
+            )}
+            {resetError && <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm mb-4">{resetError}</div>}
+            <form onSubmit={handleResetPassword} aria-busy={operation === 'resetting'} className="space-y-3">
+              <Input label="Nueva contraseña" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Mínimo 8 caracteres" autoComplete="new-password" autoFocus disabled={operation === 'resetting'} />
+              <Input label="Confirmar contraseña" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" disabled={operation === 'resetting'} />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" type="button" onClick={() => { setShowResetModal(false); setNewPassword(''); setConfirmPassword(''); setResetError(''); }} disabled={operation === 'resetting'}>Cancelar</Button>
+                <Button type="submit" disabled={operation === 'resetting'}>{operation === 'resetting' ? 'Restableciendo...' : 'Restablecer'}</Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

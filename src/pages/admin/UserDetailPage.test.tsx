@@ -491,3 +491,353 @@ describe('UserDetailPage — Navegación', () => {
     def.resolve(undefined);
   });
 });
+
+describe('UserDetailPage — Modal de contraseña: Apertura y accesibilidad', () => {
+  it('botón abre modal', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('role dialog y aria-modal', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('título accesible', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    expect(screen.getByText('Restablecer contraseña', { selector: 'h3' })).toHaveAttribute('id', 'reset-password-title');
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', 'reset-password-title');
+  });
+
+  it('aparecen los dos campos', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    expect(screen.getByLabelText(/nueva contraseña/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/confirmar contraseña/i)).toBeInTheDocument();
+  });
+
+  it('formulario inicia con aria-busy false', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    const form = screen.getByRole('dialog').querySelector('form');
+    expect(form).not.toHaveAttribute('aria-busy', 'true');
+  });
+});
+
+describe('UserDetailPage — Modal: Avisos según rol', () => {
+  it('responsable muestra aviso temporal', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    expect(screen.getByRole('note').textContent).toContain('contraseña será temporal');
+  });
+
+  it('aviso responsable no contiene la contraseña', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'ClaveTemporal987!' } });
+    expect(screen.getByRole('note').textContent).not.toContain('ClaveTemporal987!');
+  });
+
+  it('technician muestra activación inmediata', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ role: 'technician' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    expect(screen.getByRole('note').textContent).toContain('activa inmediatamente');
+  });
+
+  it('technician no muestra obligación de cambio', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ role: 'technician' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    expect(screen.getByRole('note').textContent).not.toContain('cambiar');
+  });
+});
+
+describe('UserDetailPage — Modal: Validación', () => {
+  it('contraseña vacía', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('8 y 128'); });
+    expect(mockResetPassword).not.toHaveBeenCalled();
+  });
+
+  it('solamente espacios', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: '        ' } });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('8 y 128'); });
+    expect(mockResetPassword).not.toHaveBeenCalled();
+  });
+
+  it('menor de 8', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: '1234567' } });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('8 y 128'); });
+  });
+
+  it('mayor de 128', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'a'.repeat(129) } });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('8 y 128'); });
+  });
+
+  it('confirmación diferente', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'password1' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password2' } });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('no coinciden'); });
+    expect(mockResetPassword).not.toHaveBeenCalled();
+  });
+
+  it('controles permanecen habilitados tras error local', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => { expect(screen.getByRole('alert')).toBeInTheDocument(); });
+    expect(screen.getByLabelText(/nueva contraseña/i)).not.toBeDisabled();
+    expect(screen.getByLabelText(/confirmar contraseña/i)).not.toBeDisabled();
+  });
+});
+
+describe('UserDetailPage — Modal: Envío', () => {
+  it('llama resetPassword con id correcto', async () => {
+    mockResetPassword.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'password1' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password1' } });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => { expect(mockResetPassword).toHaveBeenCalledWith('u1', 'password1'); });
+  });
+
+  it('conserva exactamente la contraseña', async () => {
+    mockResetPassword.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: '  ClaveConEspacios  ' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: '  ClaveConEspacios  ' } });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => { expect(mockResetPassword).toHaveBeenCalledWith('u1', '  ClaveConEspacios  '); });
+  });
+
+  it('doble clic genera una llamada', async () => {
+    const def = deferred<void>();
+    mockResetPassword.mockReturnValue(def.promise);
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'password1' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password1' } });
+    const submitBtn = screen.getByRole('button', { name: /restablecer$/i });
+    fireEvent.click(submitBtn);
+    fireEvent.click(submitBtn);
+    expect(mockResetPassword).toHaveBeenCalledTimes(1);
+    def.resolve(undefined);
+  });
+
+  it('bloqueo durante deferred', async () => {
+    const def = deferred<void>();
+    mockResetPassword.mockReturnValue(def.promise);
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'password1' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password1' } });
+    fireEvent.submit(screen.getByRole('dialog').querySelector('form')!);
+    await waitFor(() => {
+      expect(screen.getByLabelText(/nueva contraseña/i)).toBeDisabled();
+      expect(screen.getByLabelText(/confirmar contraseña/i)).toBeDisabled();
+      expect(screen.getByRole('button', { name: /cancelar/i })).toBeDisabled();
+      const dialog = screen.getByRole('dialog');
+      const submitBtn = dialog.querySelector('button[type="submit"]');
+      expect(submitBtn).toBeDisabled();
+      expect(submitBtn?.textContent).toContain('Restableciendo');
+    });
+    def.resolve(undefined);
+  });
+});
+
+describe('UserDetailPage — Modal: Éxito responsable', () => {
+  it('mensaje específico y cambio pendiente', async () => {
+    mockResetPassword.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', must_change_password: false }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'password1' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password1' } });
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', must_change_password: true }));
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toContain('temporal');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByText('Cambio pendiente')).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText(/nueva contraseña/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('UserDetailPage — Modal: Éxito otro rol', () => {
+  it('mensaje genérico y No aplica', async () => {
+    mockResetPassword.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'technician' }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'password1' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password1' } });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toContain('restablecida correctamente');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByText('No aplica')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('UserDetailPage — Modal: Error remoto', () => {
+  it('error conserva modal y valores', async () => {
+    mockResetPassword.mockRejectedValueOnce(new Error('RPC falló'));
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'password1' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password1' } });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => {
+      expect(screen.getByText('RPC falló')).toBeInTheDocument();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByLabelText(/nueva contraseña/i)).toHaveValue('password1');
+      expect(screen.getByLabelText(/confirmar contraseña/i)).toHaveValue('password1');
+      expect(screen.getByLabelText(/nueva contraseña/i)).not.toBeDisabled();
+    });
+    expect(mockGetUser).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('UserDetailPage — Modal: Cancelación', () => {
+  it('cancelar limpia campos y error', async () => {
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    // Submit without entering password to trigger validation error
+    fireEvent.submit(screen.getByRole('dialog').querySelector('form')!);
+    await waitFor(() => { expect(screen.getByRole('alert')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /cancelar$/i }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    expect(screen.getByLabelText(/nueva contraseña/i)).toHaveValue('');
+    expect(screen.getByLabelText(/confirmar contraseña/i)).toHaveValue('');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('UserDetailPage — Modal: Concurrencia', () => {
+  it('reset bloquea toggle', async () => {
+    const def = deferred<void>();
+    mockResetPassword.mockReturnValue(def.promise);
+    mockGetUser.mockResolvedValue(makeUser({ active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'password1' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password1' } });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /desactivar/i }));
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+    expect(mockResetPassword).toHaveBeenCalledTimes(1);
+    def.resolve(undefined);
+  });
+
+  it('reset bloquea guardado', async () => {
+    const def = deferred<void>();
+    mockResetPassword.mockReturnValue(def.promise);
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'password1' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password1' } });
+    fireEvent.submit(screen.getByRole('dialog').querySelector('form')!);
+    // Editar should be disabled during resetting
+    expect(screen.getByRole('button', { name: /editar/i })).toBeDisabled();
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+    def.resolve(undefined);
+  });
+
+  it('toggle bloquea apertura del modal', async () => {
+    const def = deferred<void>();
+    mockUpdateUser.mockReturnValue(def.promise);
+    mockGetUser.mockResolvedValue(makeUser({ active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /desactivar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    def.resolve(undefined);
+  });
+});
+
+describe('UserDetailPage — Sin datos sensibles', () => {
+  it('contraseña no aparece en mensajes visibles', async () => {
+    mockResetPassword.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser());
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }));
+    fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'ClaveTemporal987!' } });
+    fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'ClaveTemporal987!' } });
+    fireEvent.click(screen.getByRole('button', { name: /restablecer$/i }));
+    await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
+    const body = document.body.textContent || '';
+    expect(body).not.toContain('ClaveTemporal987!');
+  });
+});
