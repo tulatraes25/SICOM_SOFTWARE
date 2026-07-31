@@ -313,7 +313,33 @@ describe('UserCreatePage — Error remoto', () => {
 });
 
 describe('UserCreatePage — Éxito y redirección', () => {
-  it('limpia contraseñas, navega a los 800ms', async () => {
+  it('tras éxito permanece bloqueado hasta navegar', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockCreateUser.mockResolvedValue({ id: 'new-1' });
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    submitForm();
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByLabelText(/nombre completo/i)).toBeDisabled();
+      expect(screen.getByLabelText(/email/i)).toBeDisabled();
+      expect(screen.getByLabelText(/^rol/i)).toBeDisabled();
+      expect(screen.getByLabelText(/^contraseña \*/i)).toBeDisabled();
+      expect(screen.getByLabelText(/confirmar contraseña/i)).toBeDisabled();
+      expect(screen.getByRole('button', { name: /volver/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /cancelar/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /crear/i })).toBeDisabled();
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(800);
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios/new-1');
+    });
+    vi.useRealTimers();
+  });
+
+  it('limpia contraseñas y muestra mensaje', async () => {
     vi.useFakeTimers();
     mockCreateUser.mockResolvedValue({ id: 'new-1' });
     renderPage();
@@ -322,12 +348,33 @@ describe('UserCreatePage — Éxito y redirección', () => {
     await act(async () => {});
     expect(screen.getByLabelText(/^contraseña \*/i)).toHaveValue('');
     expect(screen.getByLabelText(/confirmar contraseña/i)).toHaveValue('');
+    expect(screen.getByRole('status').textContent).toContain('Usuario creado correctamente');
+    vi.useRealTimers();
+  });
+
+  it('cleanup cancela el temporizador al desmontar', async () => {
+    vi.useFakeTimers();
+    mockCreateUser.mockResolvedValue({ id: 'new-1' });
+    const { unmount } = renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    submitForm();
+    await act(async () => {});
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    unmount();
+    vi.advanceTimersByTime(1000);
     expect(mockNavigate).not.toHaveBeenCalled();
-    await act(async () => { vi.advanceTimersByTime(799); });
-    expect(mockNavigate).not.toHaveBeenCalled();
-    await act(async () => { vi.advanceTimersByTime(1); });
-    expect(mockNavigate).toHaveBeenCalledTimes(1);
-    expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios/new-1');
+    vi.useRealTimers();
+  });
+
+  it('doble envío después del éxito solo llama una vez', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockCreateUser.mockResolvedValue({ id: 'new-1' });
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    submitForm();
+    await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
+    submitForm();
+    expect(mockCreateUser).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
 });
@@ -357,5 +404,23 @@ describe('UserCreatePage — Navegación manual', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
     def.resolve({ id: 'new-1' });
     await waitFor(() => { expect(mockNavigate).toHaveBeenCalled(); });
+  });
+
+  it('no permite navegar después del éxito antes de 800ms', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockCreateUser.mockResolvedValue({ id: 'new-1' });
+    renderPage();
+    fillForm('Test', 't@t.com', 'password1');
+    submitForm();
+    await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /volver/i }));
+    fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(800);
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith('/admin/usuarios/new-1');
+    });
+    vi.useRealTimers();
   });
 });

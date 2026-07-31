@@ -82,7 +82,7 @@ export default function UserCreatePage() {
     if (isValidRole(v)) setRole(v);
   };
 
-  const isBusy = loading;
+  const isBusy = loading || success !== '';
 
   return (
     <DashboardLayout role="admin" title="Nuevo Usuario">
