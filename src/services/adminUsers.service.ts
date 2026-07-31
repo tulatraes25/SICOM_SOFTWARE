@@ -146,3 +146,42 @@ export async function sendRecovery(email: string): Promise<void> {
   }
   parseSuccessResponse(data);
 }
+
+export interface CreateResponsibleParams {
+  email: string;
+  password: string;
+  full_name: string;
+  elevator_ids: string[];
+}
+
+export interface CreateResponsibleResult {
+  user: AdminUser;
+  assigned_elevator_ids: string[];
+}
+
+export async function createResponsible(params: CreateResponsibleParams): Promise<CreateResponsibleResult> {
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body: { action: 'create_responsible', data: params },
+  });
+  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (isRecord(data) && typeof data.error === 'string' && data.error) {
+    throw new Error(data.error);
+  }
+  if (!isRecord(data) || !isRecord(data.user) || !Array.isArray(data.assigned_elevator_ids)) {
+    throw new Error('Respuesta de creación de responsable inválida');
+  }
+  const user = parseAdminUser(data.user);
+  if (user.role !== 'responsible') throw new Error('Respuesta de creación de responsable inválida');
+  if (user.active !== true) throw new Error('Respuesta de creación de responsable inválida');
+  if (user.must_change_password !== true) throw new Error('Respuesta de creación de responsable inválida');
+  const ids = data.assigned_elevator_ids;
+  if (!ids.every((id: unknown) => typeof id === 'string')) {
+    throw new Error('Respuesta de creación de responsable inválida');
+  }
+  const paramIds = [...new Set(params.elevator_ids)].sort();
+  const respIds = [...new Set(ids as string[])].sort();
+  if (paramIds.length !== respIds.length || paramIds.some((id, i) => id !== respIds[i])) {
+    throw new Error('Respuesta de creación de responsable inválida');
+  }
+  return { user, assigned_elevator_ids: [...new Set(ids as string[])] };
+}

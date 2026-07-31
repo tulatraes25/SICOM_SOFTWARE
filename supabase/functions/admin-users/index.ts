@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const VALID_ACTIONS = new Set([
-  "list_users", "get_user", "create_user", "update_user", "reset_password", "send_recovery",
+  "list_users", "get_user", "create_user", "update_user", "reset_password", "send_recovery", "create_responsible",
 ]);
 
 const VALID_ROLES = ["admin", "supervisor", "technician", "responsible"] as const;
@@ -443,6 +443,158 @@ serve(async (req): Promise<Response> => {
         }
 
         return json({ success: true, message: "Correo de recuperación enviado" });
+      }
+
+      case "create_responsible": {
+        const d = data as Record<string, unknown>;
+
+        // --- Input normalization ---
+        const email = typeof d?.email === "string" ? d.email.trim().toLowerCase() : "";
+        const full_name = typeof d?.full_name === "string" ? d.full_name.trim() : "";
+        const password = typeof d?.password === "string" ? d.password : "";
+        const rawIds = Array.isArray(d?.elevator_ids) ? (d.elevator_ids as unknown[]) : [];
+
+        // --- Validation ---
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          return json({ error: "Ingresá un email válido" }, 400);
+        }
+        if (!full_name) {
+          return json({ error: "El nombre es obligatorio" }, 400);
+        }
+        if (password.trim().length === 0 || password.length < 8 || password.length > 128) {
+          return json({ error: "La contraseña debe tener entre 8 y 128 caracteres" }, 400);
+        }
+        if (!Array.isArray(d?.elevator_ids) || rawIds.length < 1) {
+          return json({ error: "Debe seleccionar al menos un ascensor" }, 400);
+        }
+        if (rawIds.length > 100) {
+          return json({ error: "La selección de ascensores es inválida" }, 400);
+        }
+        const elevatorIds: string[] = [];
+        for (const id of rawIds) {
+          if (typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+            return json({ error: "La selección de ascensores es inválida" }, 400);
+          }
+          if (elevatorIds.includes(id)) {
+            return json({ error: "No se permiten ascensores duplicados" }, 400);
+          }
+          elevatorIds.push(id);
+        }
+
+        // --- Verify elevators ---
+        const { data: elevators, error: elevError } = await supabase
+          .from("elevators")
+          .select("id, building_id, active, responsible_user_id")
+          .in("id", elevatorIds);
+
+        if (elevError) {
+          log("CREATE_RESPONSIBLE_ELEVATORS_FAILED", adminId);
+          return json({ error: "Error al verificar ascensores" }, 400);
+        }
+
+        if (!elevators || elevators.length !== elevatorIds.length) {
+          return json({ error: "Uno o más ascensores no están disponibles" }, 409);
+        }
+
+        for (const e of elevators) {
+          if (e.active !== true) {
+            return json({ error: "Uno o más ascensores no están disponibles" }, 409);
+          }
+          if (e.responsible_user_id !== null) {
+            return json({ error: "Uno o más ascensores ya tienen un responsable asignado" }, 409);
+          }
+        }
+
+        const buildingIds = [...new Set(elevators.map((e) => e.building_id))];
+
+        // --- Create Auth user ---
+        const { data: authUser, error: createError } = await supabase.auth.admin.createUser({
+          email, password, email_confirm: true,
+          user_metadata: { full_name, role: "responsible" },
+        });
+
+        if (createError) {
+          log("CREATE_RESPONSIBLE_AUTH_FAILED", adminId);
+          return json({ error: "No se pudo crear el responsable" }, 400);
+        }
+
+        const newUserId = authUser.user.id;
+
+        // --- Create profile ---
+        const now = new Date().toISOString();
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .upsert(
+            {
+              id: newUserId,
+              email,
+              full_name,
+              role: "responsible",
+              active: true,
+              must_change_password: true,
+              temporary_password_issued_at: now,
+              password_changed_at: null,
+            },
+            { onConflict: "id" },
+          );
+
+        if (profileError) {
+          const { error: rollbackError } = await supabase.auth.admin.deleteUser(newUserId);
+          if (rollbackError) log("CREATE_RESPONSIBLE_ROLLBACK_FAILED", adminId, newUserId);
+          log("CREATE_RESPONSIBLE_PROFILE_FAILED", adminId, newUserId);
+          return json({ error: "No se pudo completar la creación del responsable" }, 500);
+        }
+
+        // --- Assign elevators ---
+        const { data: assigned, error: assignError } = await supabase
+          .from("elevators")
+          .update({ responsible_user_id: newUserId, updated_at: now })
+          .in("id", elevatorIds)
+          .eq("active", true)
+          .eq("responsible_user_id", null)
+          .select("id");
+
+        if (assignError || !assigned || assigned.length !== elevatorIds.length) {
+          // Rollback: release elevators that may have been assigned
+          await supabase
+            .from("elevators")
+            .update({ responsible_user_id: null, updated_at: new Date().toISOString() })
+            .in("id", elevatorIds)
+            .eq("responsible_user_id", newUserId);
+          // Rollback: delete auth user
+          const { error: delError } = await supabase.auth.admin.deleteUser(newUserId);
+          if (delError) log("CREATE_RESPONSIBLE_ROLLBACK_FAILED", adminId, newUserId);
+          log("CREATE_RESPONSIBLE_ASSIGN_FAILED", adminId, newUserId);
+          return json({ error: "No se pudo completar la creación y asignación del responsable" }, 500);
+        }
+
+        const assignedIds = assigned.map((e) => e.id);
+
+        // --- Audit ---
+        const { error: auditError } = await supabase.from("audit_logs").insert({
+          user_id: adminId, action: "responsible_created_and_assigned", entity_type: "profiles",
+          entity_id: newUserId,
+          new_data: { role: "responsible", active: true, must_change_password: true, elevator_ids: assignedIds, building_ids: buildingIds },
+        });
+        if (auditError) {
+          log("AUDIT_INSERT_FAILED", adminId, newUserId);
+        }
+
+        return json({
+          user: {
+            id: newUserId,
+            email,
+            full_name,
+            role: "responsible",
+            active: true,
+            created_at: now,
+            last_sign_in_at: null,
+            must_change_password: true,
+            temporary_password_issued_at: now,
+            password_changed_at: null,
+          },
+          assigned_elevator_ids: assignedIds,
+        });
       }
     }
   } catch (_err: unknown) {

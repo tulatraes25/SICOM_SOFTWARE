@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { listUsers, getUser, createUser, updateUser, resetPassword, sendRecovery, getAdminUsersErrorMessage } from './adminUsers.service';
+import { listUsers, getUser, createUser, updateUser, resetPassword, sendRecovery, createResponsible, getAdminUsersErrorMessage } from './adminUsers.service';
 
 const { mockInvoke } = vi.hoisted(() => ({
   mockInvoke: vi.fn(),
@@ -232,5 +232,108 @@ describe('errores', () => {
 
   it('getAdminUsersErrorMessage maneja objeto con message', () => {
     expect(getAdminUsersErrorMessage({ message: 'obj err' })).toBe('obj err');
+  });
+});
+
+describe('createResponsible', () => {
+  const params = { email: 'r@test.com', password: 'password1', full_name: 'Nuevo Responsable', elevator_ids: ['a1b2c3d4-e5f6-7890-abcd-ef1234567890'] };
+  const successResponse = {
+    user: makeUser({ id: 'r1', role: 'responsible', must_change_password: true, active: true }),
+    assigned_elevator_ids: ['a1b2c3d4-e5f6-7890-abcd-ef1234567890'],
+  };
+
+  it('invoca admin-users con action create_responsible', async () => {
+    mockInvoke.mockResolvedValue({ data: successResponse, error: null });
+    await createResponsible(params);
+    expect(mockInvoke).toHaveBeenCalledWith('admin-users', { body: { action: 'create_responsible', data: params } });
+  });
+
+  it('envía email, password, full_name y elevator_ids', async () => {
+    mockInvoke.mockResolvedValue({ data: successResponse, error: null });
+    await createResponsible(params);
+    const body = mockInvoke.mock.calls[0][1].body;
+    expect(body.data.email).toBe('r@test.com');
+    expect(body.data.password).toBe('password1');
+    expect(body.data.full_name).toBe('Nuevo Responsable');
+    expect(body.data.elevator_ids).toEqual(params.elevator_ids);
+  });
+
+  it('devuelve usuario responsible', async () => {
+    mockInvoke.mockResolvedValue({ data: successResponse, error: null });
+    const result = await createResponsible(params);
+    expect(result.user.role).toBe('responsible');
+    expect(result.user.active).toBe(true);
+    expect(result.user.must_change_password).toBe(true);
+  });
+
+  it('devuelve IDs asignados', async () => {
+    mockInvoke.mockResolvedValue({ data: successResponse, error: null });
+    const result = await createResponsible(params);
+    expect(result.assigned_elevator_ids).toEqual(params.elevator_ids);
+  });
+
+  it('acepta IDs en distinto orden si el conjunto coincide', async () => {
+    const ids = ['a', 'b', 'c'];
+    mockInvoke.mockResolvedValue({ data: { user: makeUser({ role: 'responsible', must_change_password: true }), assigned_elevator_ids: ['c', 'a', 'b'] }, error: null });
+    const result = await createResponsible({ email: 'r@test.com', password: 'password1', full_name: 'Test', elevator_ids: ids });
+    expect(result.assigned_elevator_ids.sort()).toEqual(ids.sort());
+  });
+
+  it('rechaza user ausente', async () => {
+    mockInvoke.mockResolvedValue({ data: { assigned_elevator_ids: ['a'] }, error: null });
+    await expect(createResponsible(params)).rejects.toThrow('Respuesta de creación de responsable inválida');
+  });
+
+  it('rechaza role distinto', async () => {
+    mockInvoke.mockResolvedValue({ data: { user: makeUser({ role: 'technician' }), assigned_elevator_ids: ['a'] }, error: null });
+    await expect(createResponsible(params)).rejects.toThrow('Respuesta de creación de responsable inválida');
+  });
+
+  it('rechaza must_change_password false', async () => {
+    mockInvoke.mockResolvedValue({ data: { user: makeUser({ role: 'responsible', must_change_password: false }), assigned_elevator_ids: ['a'] }, error: null });
+    await expect(createResponsible(params)).rejects.toThrow('Respuesta de creación de responsable inválida');
+  });
+
+  it('rechaza assigned_elevator_ids no array', async () => {
+    mockInvoke.mockResolvedValue({ data: { user: makeUser({ role: 'responsible' }), assigned_elevator_ids: 'not-array' }, error: null });
+    await expect(createResponsible(params)).rejects.toThrow('Respuesta de creación de responsable inválida');
+  });
+
+  it('rechaza ID no string', async () => {
+    mockInvoke.mockResolvedValue({ data: { user: makeUser({ role: 'responsible' }), assigned_elevator_ids: [123] }, error: null });
+    await expect(createResponsible(params)).rejects.toThrow('Respuesta de creación de responsable inválida');
+  });
+
+  it('rechaza IDs duplicados', async () => {
+    mockInvoke.mockResolvedValue({ data: { user: makeUser({ role: 'responsible', must_change_password: true }), assigned_elevator_ids: ['a', 'a'] }, error: null });
+    const result = await createResponsible({ email: 'r@test.com', password: 'password1', full_name: 'Test', elevator_ids: ['a', 'a'] });
+    expect(result.assigned_elevator_ids).toEqual(['a']);
+  });
+
+  it('rechaza IDs faltantes', async () => {
+    mockInvoke.mockResolvedValue({ data: { user: makeUser({ role: 'responsible', must_change_password: true }), assigned_elevator_ids: ['a'] }, error: null });
+    await expect(createResponsible({ email: 'r@test.com', password: 'password1', full_name: 'Test', elevator_ids: ['a', 'b'] })).rejects.toThrow('Respuesta de creación de responsable inválida');
+  });
+
+  it('rechaza IDs adicionales', async () => {
+    mockInvoke.mockResolvedValue({ data: { user: makeUser({ role: 'responsible', must_change_password: true }), assigned_elevator_ids: ['a', 'b', 'c'] }, error: null });
+    await expect(createResponsible({ email: 'r@test.com', password: 'password1', full_name: 'Test', elevator_ids: ['a'] })).rejects.toThrow('Respuesta de creación de responsable inválida');
+  });
+
+  it('propaga data.error', async () => {
+    mockInvoke.mockResolvedValue({ data: { error: 'Email ya existe' }, error: null });
+    await expect(createResponsible(params)).rejects.toThrow('Email ya existe');
+  });
+
+  it('propaga error de invoke', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: new Error('Network fail') });
+    await expect(createResponsible(params)).rejects.toThrow('Network fail');
+  });
+
+  it('ninguna respuesta expone la contraseña', async () => {
+    mockInvoke.mockResolvedValue({ data: successResponse, error: null });
+    const result = await createResponsible(params);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain('password1');
   });
 });
