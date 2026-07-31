@@ -10,12 +10,6 @@ import { getUser, updateUser, resetPassword, getAdminUsersErrorMessage } from '@
 import type { AdminUser, AdminUserRole } from '@/services/adminUsers.service';
 import { ArrowLeft, AlertCircle, Check, Key, UserX, UserCheck } from 'lucide-react';
 
-const ROLE_OPTIONS: { value: AdminUserRole; label: string }[] = [
-  { value: 'admin', label: 'Administrador' },
-  { value: 'supervisor', label: 'Supervisor' },
-  { value: 'technician', label: 'Técnico' },
-  { value: 'responsible', label: 'Responsable' },
-];
 const STAFF_ROLE_OPTIONS: { value: AdminUserRole; label: string }[] = [
   { value: 'admin', label: 'Administrador' },
   { value: 'supervisor', label: 'Supervisor' },
