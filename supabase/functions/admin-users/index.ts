@@ -3,9 +3,35 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const VALID_ACTIONS = new Set([
   "list_users", "get_user", "create_user", "update_user", "reset_password", "send_recovery", "create_responsible",
+  "get_responsible_assignments", "replace_responsible_assignments",
 ]);
 
 const VALID_ROLES = ["admin", "supervisor", "technician", "responsible"] as const;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_RE.test(value);
+}
+
+function validateUuidArray(
+  value: unknown,
+  min: number,
+  max: number,
+): { valid: true; ids: string[] } | { valid: false; error: string } {
+  if (!Array.isArray(value)) return { valid: false, error: "Se esperaba un array" };
+  if (value.length < min) return { valid: false, error: `Debe contener al menos ${min} elemento(s)` };
+  if (value.length > max) return { valid: false, error: `No puede contener más de ${max} elementos` };
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!isUuid(item)) return { valid: false, error: "La selección de ascensores es inválida" };
+    if (seen.has(item)) return { valid: false, error: "No se permiten ascensores duplicados" };
+    seen.add(item);
+    ids.push(item);
+  }
+  return { valid: true, ids };
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -615,6 +641,171 @@ serve(async (req): Promise<Response> => {
             password_changed_at: null,
           },
           assigned_elevator_ids: assignedIds,
+        });
+      }
+      case "get_responsible_assignments": {
+        const d = data as Record<string, unknown>;
+        const responsible_user_id = typeof d?.responsible_user_id === "string" ? d.responsible_user_id : "";
+
+        if (!responsible_user_id || !isUuid(responsible_user_id)) {
+          return json({ error: "responsible_user_id es obligatorio" }, 400);
+        }
+
+        const { data: targetProfile, error: targetError } = await supabase
+          .from("profiles")
+          .select("id, role")
+          .eq("id", responsible_user_id)
+          .single();
+
+        if (targetError || !targetProfile) {
+          log("GET_ASSIGNMENTS_PROFILE_FAILED", adminId, responsible_user_id);
+          return json({ error: "Responsable no encontrado" }, 404);
+        }
+
+        if (targetProfile.role !== "responsible") {
+          return json({ error: "El usuario indicado no es responsable" }, 409);
+        }
+
+        const { data: elevators, error: elevError } = await supabase
+          .from("elevators")
+          .select("id")
+          .eq("responsible_user_id", responsible_user_id)
+          .order("id", { ascending: true });
+
+        if (elevError) {
+          log("GET_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
+          return json({ error: "No se pudieron obtener las asignaciones" }, 500);
+        }
+
+        return json({
+          responsible_user_id,
+          assigned_elevator_ids: (elevators || []).map((e) => e.id),
+        });
+      }
+
+      case "replace_responsible_assignments": {
+        const d = data as Record<string, unknown>;
+        const responsible_user_id = typeof d?.responsible_user_id === "string" ? d.responsible_user_id : "";
+
+        if (!responsible_user_id || !isUuid(responsible_user_id)) {
+          return json({ error: "responsible_user_id es obligatorio" }, 400);
+        }
+
+        const elevatorResult = validateUuidArray(d?.elevator_ids, 1, 100);
+        if (!elevatorResult.valid) {
+          return json({ error: elevatorResult.error }, 400);
+        }
+
+        if (!Array.isArray(d?.expected_current_elevator_ids)) {
+          return json({ error: "expected_current_elevator_ids es obligatorio" }, 400);
+        }
+
+        const expectedResult = validateUuidArray(d?.expected_current_elevator_ids, 0, 100);
+        if (!expectedResult.valid) {
+          return json({ error: expectedResult.error }, 400);
+        }
+
+        const { data: rpcResult, error: rpcError } = await supabase.rpc(
+          "replace_responsible_elevator_assignments",
+          {
+            p_responsible_id: responsible_user_id,
+            p_elevator_ids: elevatorResult.ids,
+            p_expected_current_elevator_ids: expectedResult.ids,
+            p_actor_id: adminId,
+          },
+        );
+
+        if (rpcError) {
+          const msg = rpcError.message || "";
+
+          if (msg.includes("Acceso no autorizado")) {
+            return json({ error: "Acceso no autorizado" }, 403);
+          }
+          if (msg.includes("Responsable no encontrado")) {
+            return json({ error: "Responsable no encontrado" }, 404);
+          }
+          if (msg.includes("El usuario indicado no es responsable")) {
+            return json({ error: "El usuario indicado no es responsable" }, 409);
+          }
+          if (msg.includes("Las asignaciones cambiaron")) {
+            return json({ error: "Las asignaciones cambiaron. Actualizá la página e intentá nuevamente" }, 409);
+          }
+          if (msg.includes("Uno o más ascensores no están disponibles")) {
+            return json({ error: "Uno o más ascensores no están disponibles" }, 409);
+          }
+          if (msg.includes("Debe seleccionar al menos un ascensor")) {
+            return json({ error: "Debe seleccionar al menos un ascensor" }, 400);
+          }
+          if (msg.includes("No se pueden asignar más de 100 ascensores")) {
+            return json({ error: "No se pueden asignar más de 100 ascensores" }, 400);
+          }
+          if (msg.includes("No se permiten ascensores duplicados")) {
+            return json({ error: "No se permiten ascensores duplicados" }, 400);
+          }
+          if (msg.includes("La selección de ascensores es inválida")) {
+            return json({ error: "La selección de ascensores es inválida" }, 400);
+          }
+
+          log("REPLACE_RESPONSIBLE_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
+          return json({ error: "No se pudieron actualizar las asignaciones" }, 500);
+        }
+
+        if (!isRecord(rpcResult)) {
+          log("REPLACE_RESPONSIBLE_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
+          return json({ error: "Respuesta de asignaciones inválida" }, 500);
+        }
+
+        const result = rpcResult as Record<string, unknown>;
+        if (typeof result.responsible_user_id !== "string" || result.responsible_user_id !== responsible_user_id) {
+          log("REPLACE_RESPONSIBLE_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
+          return json({ error: "Respuesta de asignaciones inválida" }, 500);
+        }
+
+        const arrays = ["previous_elevator_ids", "assigned_elevator_ids", "added_elevator_ids", "removed_elevator_ids"] as const;
+        for (const key of arrays) {
+          if (!Array.isArray(result[key])) {
+            log("REPLACE_RESPONSIBLE_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
+            return json({ error: "Respuesta de asignaciones inválida" }, 500);
+          }
+          if (!(result[key] as unknown[]).every((id) => typeof id === "string")) {
+            log("REPLACE_RESPONSIBLE_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
+            return json({ error: "Respuesta de asignaciones inválida" }, 500);
+          }
+        }
+
+        const setEqual = (a: string[], b: string[]) => {
+          if (a.length !== b.length) return false;
+          const sa = new Set(a);
+          return b.every((id) => sa.has(id));
+        };
+
+        const previous = result.previous_elevator_ids as string[];
+        const assigned = result.assigned_elevator_ids as string[];
+        const added = result.added_elevator_ids as string[];
+        const removed = result.removed_elevator_ids as string[];
+
+        if (!setEqual(assigned, elevatorResult.ids)) {
+          log("REPLACE_RESPONSIBLE_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
+          return json({ error: "Respuesta de asignaciones inválida" }, 500);
+        }
+        if (!setEqual(previous, expectedResult.ids)) {
+          log("REPLACE_RESPONSIBLE_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
+          return json({ error: "Respuesta de asignaciones inválida" }, 500);
+        }
+
+        const expectedAdded = assigned.filter((id) => !previous.includes(id));
+        const expectedRemoved = previous.filter((id) => !assigned.includes(id));
+        if (!setEqual(added, expectedAdded) || !setEqual(removed, expectedRemoved)) {
+          log("REPLACE_RESPONSIBLE_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
+          return json({ error: "Respuesta de asignaciones inválida" }, 500);
+        }
+
+        return json({
+          responsible_user_id: result.responsible_user_id,
+          previous_elevator_ids: previous,
+          assigned_elevator_ids: assigned,
+          added_elevator_ids: added,
+          removed_elevator_ids: removed,
         });
       }
     }

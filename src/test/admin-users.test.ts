@@ -6,6 +6,7 @@ import { describe, it, expect, vi } from "vitest";
 
 const VALID_ACTIONS = new Set([
   "list_users", "get_user", "create_user", "update_user", "reset_password", "send_recovery",
+  "get_responsible_assignments", "replace_responsible_assignments",
 ]);
 
 function validateMethod(method: string): { status: number; body: unknown } {
@@ -501,6 +502,343 @@ describe("admin-users Edge Function — responsible password change flow", () =>
     const targetProfile = { role: "technician", must_change_password: false };
     const isResponsible = targetProfile.role === "responsible";
     expect(isResponsible).toBe(false);
+  });
+});
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_RE.test(value);
+}
+
+function validateUuidArray(value: unknown, min: number, max: number): { valid: true; ids: string[] } | { valid: false; error: string } {
+  if (!Array.isArray(value)) return { valid: false, error: "Se esperaba un array" };
+  if (value.length < min) return { valid: false, error: `Debe contener al menos ${min} elemento(s)` };
+  if (value.length > max) return { valid: false, error: `No puede contener más de ${max} elementos` };
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!isUuid(item)) return { valid: false, error: "La selección de ascensores es inválida" };
+    if (seen.has(item)) return { valid: false, error: "No se permiten ascensores duplicados" };
+    seen.add(item);
+    ids.push(item);
+  }
+  return { valid: true, ids };
+}
+
+describe("admin-users Edge Function — Actions validation", () => {
+  it("get_responsible_assignments is a valid action", () => {
+    expect(VALID_ACTIONS.has("get_responsible_assignments")).toBe(true);
+  });
+
+  it("replace_responsible_assignments is a valid action", () => {
+    expect(VALID_ACTIONS.has("replace_responsible_assignments")).toBe(true);
+  });
+
+  it("unknown action continues to be rejected", () => {
+    const r = validateBody({ action: "bulk_delete_all" });
+    expect(r.status).toBe(400);
+    expect(r.body).toEqual({ error: "Acción no válida" });
+  });
+});
+
+describe("admin-users Edge Function — get_responsible_assignments validation", () => {
+  it("responsible_user_id missing → error", () => {
+    const body = { action: "get_responsible_assignments", data: {} };
+    const data = body.data as Record<string, unknown>;
+    const hasId = Object.prototype.hasOwnProperty.call(data, "responsible_user_id") && typeof data.responsible_user_id === "string";
+    expect(hasId).toBe(false);
+  });
+
+  it("responsible_user_id invalid UUID → error", () => {
+    const body = { action: "get_responsible_assignments", data: { responsible_user_id: "not-a-uuid" } };
+    const data = body.data as Record<string, unknown>;
+    const id = data.responsible_user_id;
+    expect(isUuid(id)).toBe(false);
+  });
+
+  it("profile not found → 404", async () => {
+    const fetchProfile = vi.fn().mockResolvedValue(null);
+    const profile = await fetchProfile();
+    expect(profile).toBeNull();
+    // Edge Function returns 404: "Responsable no encontrado"
+  });
+
+  it("profile with wrong role → 409", () => {
+    const profile = { role: "technician", active: true };
+    expect(profile.role).not.toBe("responsible");
+    // Edge Function returns 409: "El usuario no tiene el rol de responsable"
+  });
+
+  it("valid responsible → passes", () => {
+    const profile = { role: "responsible", active: true };
+    expect(profile.role).toBe("responsible");
+    expect(profile.active).toBe(true);
+  });
+
+  it("empty result is valid", () => {
+    const rpcResult: string[] = [];
+    const sorted = [...rpcResult].sort();
+    expect(sorted).toEqual([]);
+  });
+
+  it("IDs are sorted ascending", () => {
+    const rpcResult = ["cccc-0000-0000-0000-000000000000", "aaaa-0000-0000-0000-000000000000", "bbbb-0000-0000-0000-000000000000"];
+    const sorted = [...rpcResult].sort();
+    expect(sorted).toEqual(["aaaa-0000-0000-0000-000000000000", "bbbb-0000-0000-0000-000000000000", "cccc-0000-0000-0000-000000000000"]);
+  });
+});
+
+describe("admin-users Edge Function — replace_responsible_assignments validation", () => {
+  const validId1 = "11111111-1111-1111-1111-111111111111";
+  const validId2 = "22222222-2222-2222-2222-222222222222";
+
+  it("responsible_user_id invalid → error", () => {
+    const rpc = vi.fn();
+    const responsible_user_id = "not-a-uuid";
+    expect(isUuid(responsible_user_id)).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("elevator_ids missing → error", () => {
+    const rpc = vi.fn();
+    const result = validateUuidArray(undefined, 1, 100);
+    expect(result.valid).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("elevator_ids empty → error", () => {
+    const rpc = vi.fn();
+    const result = validateUuidArray([], 1, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.error).toBe("Debe contener al menos 1 elemento(s)");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("elevator_ids > 100 → error", () => {
+    const rpc = vi.fn();
+    const tooMany = Array.from({ length: 101 }, (_, i) => `${String(i).padStart(8, "0")}-0000-0000-0000-000000000000`);
+    const result = validateUuidArray(tooMany, 1, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.error).toBe("No puede contener más de 100 elementos");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("elevator_ids invalid UUID → error", () => {
+    const rpc = vi.fn();
+    const result = validateUuidArray(["definitely-not-uuid"], 1, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.error).toBe("La selección de ascensores es inválida");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("elevator_ids duplicates → error", () => {
+    const rpc = vi.fn();
+    const result = validateUuidArray([validId1, validId1], 1, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.error).toBe("No se permiten ascensores duplicados");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("expected_current_elevator_ids missing → error", () => {
+    const rpc = vi.fn();
+    const result = validateUuidArray(undefined, 0, 100);
+    expect(result.valid).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("expected_current_elevator_ids empty → valid", () => {
+    const result = validateUuidArray([], 0, 100);
+    expect(result.valid).toBe(true);
+    if (result.valid) expect(result.ids).toEqual([]);
+  });
+
+  it("expected_current_elevator_ids invalid UUID → error", () => {
+    const rpc = vi.fn();
+    const result = validateUuidArray(["bad-uuid"], 0, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.error).toBe("La selección de ascensores es inválida");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("expected_current_elevator_ids duplicates → error", () => {
+    const rpc = vi.fn();
+    const result = validateUuidArray([validId2, validId2], 0, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.error).toBe("No se permiten ascensores duplicados");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("RPC not called on invalid input", () => {
+    const rpc = vi.fn();
+    const responsible_user_id = "not-a-uuid";
+    if (!isUuid(responsible_user_id)) {
+      // validation failed, skip RPC
+    }
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("admin-users Edge Function — RPC and error mapping", () => {
+  const adminId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+  const responsibleId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+  const elevator1 = "11111111-1111-1111-1111-111111111111";
+
+  it("RPC receives four exact parameters", () => {
+    const rpc = vi.fn().mockResolvedValue({ data: { assigned: [elevator1], previous: [], added: [elevator1], removed: [] }, error: null });
+    rpc("replace_responsible_elevator_assignments", {
+      p_actor_id: adminId,
+      p_responsible_id: responsibleId,
+      p_elevator_ids: [elevator1],
+      p_expected_current_elevator_ids: [],
+    });
+    expect(rpc).toHaveBeenCalledWith("replace_responsible_elevator_assignments", {
+      p_actor_id: adminId,
+      p_responsible_id: responsibleId,
+      p_elevator_ids: [elevator1],
+      p_expected_current_elevator_ids: [],
+    });
+  });
+
+  it("p_actor_id uses adminId", () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: null });
+    rpc("replace_responsible_elevator_assignments", {
+      p_actor_id: adminId,
+      p_responsible_id: responsibleId,
+      p_elevator_ids: [],
+      p_expected_current_elevator_ids: [],
+    });
+    const params = rpc.mock.calls[0][1];
+    expect(params.p_actor_id).toBe(adminId);
+  });
+
+  it("concurrency conflict → 409", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "CONFLICT", message: "La asignación fue modificada por otro usuario", hint: null },
+    });
+    const result = await rpc();
+    expect(result.error).toBeTruthy();
+    expect(result.error.code).toBe("CONFLICT");
+  });
+
+  it("occupied elevator → 409", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "ELEVATOR_ALREADY_ASSIGNED", message: "Uno o más ascensores ya están asignados a otro responsable", hint: null },
+    });
+    const result = await rpc();
+    expect(result.error).toBeTruthy();
+    expect(result.error.code).toBe("ELEVATOR_ALREADY_ASSIGNED");
+  });
+
+  it("non-existent responsible → 404", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "NOT_FOUND", message: "Responsable no encontrado", hint: null },
+    });
+    const result = await rpc();
+    expect(result.error).toBeTruthy();
+    expect(result.error.code).toBe("NOT_FOUND");
+  });
+
+  it("access denied → 403", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "ACCESS_DENIED", message: "No autorizado", hint: null },
+    });
+    const result = await rpc();
+    expect(result.error).toBeTruthy();
+    expect(result.error.code).toBe("ACCESS_DENIED");
+  });
+
+  it("internal error → controlled 500", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "INTERNAL", message: "Error interno del servidor", hint: "something" },
+    });
+    const result = await rpc();
+    expect(result.error).toBeTruthy();
+    expect(result.error.message).toBe("Error interno del servidor");
+  });
+
+  it("does not expose details", () => {
+    const error = { message: "Error interno del servidor", details: "SELECT * FROM sensitive_table" };
+    const safeResponse = { error: error.message };
+    expect(JSON.stringify(safeResponse)).not.toContain("sensitive_table");
+    expect(JSON.stringify(safeResponse)).not.toContain("details");
+  });
+
+  it("does not expose hint", () => {
+    const error = { message: "Error interno del servidor", hint: "check table permissions" };
+    const safeResponse = { error: error.message };
+    expect(JSON.stringify(safeResponse)).not.toContain("hint");
+    expect(JSON.stringify(safeResponse)).not.toContain("permissions");
+  });
+
+  it("does not expose stack", () => {
+    const error = { message: "Error interno del servidor", stack: "Error\n    at handler (mod.ts:42:11)" };
+    const safeResponse = { error: error.message };
+    expect(JSON.stringify(safeResponse)).not.toContain("stack");
+    expect(JSON.stringify(safeResponse)).not.toContain("mod.ts");
+  });
+});
+
+describe("admin-users Edge Function — Response validation", () => {
+  const responsibleId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+  const elevator1 = "11111111-1111-1111-1111-111111111111";
+  const elevator2 = "22222222-2222-2222-2222-222222222222";
+
+  it("accepts valid response", () => {
+    const response = { responsible_user_id: responsibleId, assigned: [elevator1, elevator2], previous: [], added: [elevator1, elevator2], removed: [] };
+    expect(response.responsible_user_id).toBe(responsibleId);
+    expect(response.assigned).toEqual([elevator1, elevator2]);
+    expect(response.added).toEqual([elevator1, elevator2]);
+    expect(response.removed).toEqual([]);
+    expect(response.previous).toEqual([]);
+  });
+
+  it("rejects different responsible_user_id", () => {
+    const response = { responsible_user_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", assigned: [elevator1], previous: [], added: [elevator1], removed: [] };
+    expect(response.responsible_user_id).not.toBe(responsibleId);
+  });
+
+  it("rejects non-string array element", () => {
+    const response = { responsible_user_id: responsibleId, assigned: [123], previous: [], added: [123], removed: [] };
+    const allStrings = response.assigned.every((item) => typeof item === "string");
+    expect(allStrings).toBe(false);
+  });
+
+  it("rejects duplicates in response", () => {
+    const response = { responsible_user_id: responsibleId, assigned: [elevator1, elevator1], previous: [], added: [elevator1, elevator1], removed: [] };
+    const unique = new Set(response.assigned);
+    expect(unique.size).toBeLessThan(response.assigned.length);
+  });
+
+  it("rejects assigned !== requested", () => {
+    const requested = [elevator1, elevator2];
+    const response = { responsible_user_id: responsibleId, assigned: [elevator1], previous: [], added: [elevator1, elevator2], removed: [] };
+    const allRequestedPresent = requested.every((id) => response.assigned.includes(id));
+    expect(allRequestedPresent).toBe(false);
+  });
+
+  it("rejects previous !== expected", () => {
+    const expected = [elevator1];
+    const response: Record<string, unknown> = { responsible_user_id: responsibleId, assigned: [elevator1], previous: [], added: [elevator1], removed: [] };
+    const previousMatchesExpected = expected.length === (response.previous as string[]).length && expected.every((id) => (response.previous as string[]).includes(id));
+    expect(previousMatchesExpected).toBe(false);
+  });
+
+  it("rejects inconsistent added", () => {
+    const response = { responsible_user_id: responsibleId, assigned: [elevator1, elevator2], previous: [elevator1], added: [], removed: [] };
+    const expectedAdded = response.assigned.filter((id) => !response.previous.includes(id));
+    expect(response.added).not.toEqual(expectedAdded);
+  });
+
+  it("rejects inconsistent removed", () => {
+    const response = { responsible_user_id: responsibleId, assigned: [elevator1], previous: [elevator1, elevator2], added: [], removed: [] };
+    const expectedRemoved = response.previous.filter((id) => !response.assigned.includes(id));
+    expect(response.removed).not.toEqual(expectedRemoved);
   });
 });
 

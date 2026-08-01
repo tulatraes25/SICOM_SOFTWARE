@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { listUsers, getUser, createUser, updateUser, resetPassword, sendRecovery, createResponsible, getAdminUsersErrorMessage } from './adminUsers.service';
+import { listUsers, getUser, createUser, updateUser, resetPassword, sendRecovery, createResponsible, getResponsibleAssignments, replaceResponsibleAssignments, getAdminUsersErrorMessage } from './adminUsers.service';
 
 const { mockInvoke } = vi.hoisted(() => ({
   mockInvoke: vi.fn(),
@@ -347,5 +347,376 @@ describe('createResponsible', () => {
     const result = await createResponsible(params);
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain('password1');
+  });
+});
+
+describe('getResponsibleAssignments', () => {
+  const userId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  const elev1 = 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
+  const elev2 = 'c3d4e5f6-a7b8-9012-cdef-123456789012';
+
+  it('invokes admin-users with correct action and payload', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { responsible_user_id: userId, assigned_elevator_ids: [elev1] },
+      error: null,
+    });
+    await getResponsibleAssignments(userId);
+    expect(mockInvoke).toHaveBeenCalledWith('admin-users', {
+      body: { action: 'get_responsible_assignments', data: { responsible_user_id: userId } },
+    });
+  });
+
+  it('accepts empty array result', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { responsible_user_id: userId, assigned_elevator_ids: [] },
+      error: null,
+    });
+    const result = await getResponsibleAssignments(userId);
+    expect(result.assigned_elevator_ids).toEqual([]);
+    expect(result.responsible_user_id).toBe(userId);
+  });
+
+  it('preserves order from response', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { responsible_user_id: userId, assigned_elevator_ids: [elev2, elev1] },
+      error: null,
+    });
+    const result = await getResponsibleAssignments(userId);
+    expect(result.assigned_elevator_ids).toEqual([elev2, elev1]);
+  });
+
+  it('rejects data null', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: null });
+    await expect(getResponsibleAssignments(userId)).rejects.toThrow('Respuesta de asignaciones inválida');
+  });
+
+  it('rejects responsible_user_id missing', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { assigned_elevator_ids: [] },
+      error: null,
+    });
+    await expect(getResponsibleAssignments(userId)).rejects.toThrow('Respuesta de asignaciones inválida');
+  });
+
+  it('rejects responsible_user_id different from requested', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { responsible_user_id: 'd4e5f6a7-b8c9-0123-defa-234567890123', assigned_elevator_ids: [] },
+      error: null,
+    });
+    await expect(getResponsibleAssignments(userId)).rejects.toThrow('Respuesta de asignaciones inválida');
+  });
+
+  it('rejects assigned_elevator_ids not array', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { responsible_user_id: userId, assigned_elevator_ids: 'not-array' },
+      error: null,
+    });
+    await expect(getResponsibleAssignments(userId)).rejects.toThrow('Respuesta de asignaciones inválida');
+  });
+
+  it('rejects element not string', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { responsible_user_id: userId, assigned_elevator_ids: [123] },
+      error: null,
+    });
+    await expect(getResponsibleAssignments(userId)).rejects.toThrow('Respuesta de asignaciones inválida');
+  });
+
+  it('rejects duplicates in response', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { responsible_user_id: userId, assigned_elevator_ids: [elev1, elev1] },
+      error: null,
+    });
+    await expect(getResponsibleAssignments(userId)).rejects.toThrow('Respuesta de asignaciones inválida');
+  });
+
+  it('propagates data.error', async () => {
+    mockInvoke.mockResolvedValue({ data: { error: 'No autorizado' }, error: null });
+    await expect(getResponsibleAssignments(userId)).rejects.toThrow('No autorizado');
+  });
+
+  it('propagates invoke error', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: new Error('Network fail') });
+    await expect(getResponsibleAssignments(userId)).rejects.toThrow('Network fail');
+  });
+});
+
+describe('replaceResponsibleAssignments', () => {
+  const userId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  const elev1 = 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
+  const elev2 = 'c3d4e5f6-a7b8-9012-cdef-123456789012';
+  const elev3 = 'd4e5f6a7-b8c9-0123-defa-234567890123';
+
+  function makeReplaceResponse(overrides: Record<string, unknown> = {}) {
+    return {
+      responsible_user_id: userId,
+      previous_elevator_ids: [elev1],
+      assigned_elevator_ids: [elev1, elev2],
+      added_elevator_ids: [elev2],
+      removed_elevator_ids: [],
+      ...overrides,
+    };
+  }
+
+  it('invokes admin-users with correct action and payload', async () => {
+    const params = { responsible_user_id: userId, elevator_ids: [elev1, elev2], expected_current_elevator_ids: [elev1] };
+    mockInvoke.mockResolvedValue({ data: makeReplaceResponse(), error: null });
+    await replaceResponsibleAssignments(params);
+    expect(mockInvoke).toHaveBeenCalledWith('admin-users', {
+      body: { action: 'replace_responsible_assignments', data: params },
+    });
+  });
+
+  it('does not modify params', async () => {
+    const params = { responsible_user_id: userId, elevator_ids: [elev1, elev2], expected_current_elevator_ids: [elev1] };
+    const elevatorIdsCopy = [...params.elevator_ids];
+    const expectedCopy = [...params.expected_current_elevator_ids];
+    mockInvoke.mockResolvedValue({ data: makeReplaceResponse(), error: null });
+    await replaceResponsibleAssignments(params);
+    expect(params.elevator_ids).toEqual(elevatorIdsCopy);
+    expect(params.expected_current_elevator_ids).toEqual(expectedCopy);
+  });
+
+  it('accepts valid response', async () => {
+    mockInvoke.mockResolvedValue({ data: makeReplaceResponse(), error: null });
+    const result = await replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1, elev2],
+      expected_current_elevator_ids: [elev1],
+    });
+    expect(result.responsible_user_id).toBe(userId);
+    expect(result.previous_elevator_ids).toEqual([elev1]);
+    expect(result.assigned_elevator_ids).toEqual([elev1, elev2]);
+    expect(result.added_elevator_ids).toEqual([elev2]);
+    expect(result.removed_elevator_ids).toEqual([]);
+  });
+
+  it('returns copies of arrays', async () => {
+    const response = makeReplaceResponse();
+    mockInvoke.mockResolvedValue({ data: response, error: null });
+    const result = await replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1, elev2],
+      expected_current_elevator_ids: [elev1],
+    });
+    expect(result.previous_elevator_ids).not.toBe(response.previous_elevator_ids);
+    expect(result.assigned_elevator_ids).not.toBe(response.assigned_elevator_ids);
+    expect(result.added_elevator_ids).not.toBe(response.added_elevator_ids);
+    expect(result.removed_elevator_ids).not.toBe(response.removed_elevator_ids);
+  });
+
+  it('rejects elevator_ids empty before invoke', async () => {
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [],
+      expected_current_elevator_ids: [],
+    })).rejects.toThrow('Debe contener al menos 1 elemento(s)');
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('rejects more than 100 elevator_ids before invoke', async () => {
+    const manyIds = Array.from({ length: 101 }, (_, i) => {
+      const hex = i.toString(16).padStart(12, '0');
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-0000-0000-000000000000`;
+    });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: manyIds,
+      expected_current_elevator_ids: [],
+    })).rejects.toThrow('No puede contener más de 100 elementos');
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('rejects elevator_ids duplicates before invoke', async () => {
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1, elev1],
+      expected_current_elevator_ids: [],
+    })).rejects.toThrow('No se permiten ascensores duplicados');
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('accepts empty expected_current_elevator_ids', async () => {
+    mockInvoke.mockResolvedValue({
+      data: makeReplaceResponse({
+        previous_elevator_ids: [],
+        assigned_elevator_ids: [elev1],
+        added_elevator_ids: [elev1],
+        removed_elevator_ids: [],
+      }),
+      error: null,
+    });
+    const result = await replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1],
+      expected_current_elevator_ids: [],
+    });
+    expect(result.previous_elevator_ids).toEqual([]);
+    expect(result.added_elevator_ids).toEqual([elev1]);
+  });
+
+  it('rejects expected_current_elevator_ids duplicates', async () => {
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1],
+      expected_current_elevator_ids: [elev2, elev2],
+    })).rejects.toThrow('No se permiten ascensores duplicados');
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('rejects data null', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: null });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1],
+      expected_current_elevator_ids: [],
+    })).rejects.toThrow('Respuesta de actualización de asignaciones inválida');
+  });
+
+  it('rejects different responsible_user_id', async () => {
+    mockInvoke.mockResolvedValue({
+      data: makeReplaceResponse({ responsible_user_id: 'e5f6a7b8-c9d0-1234-efab-345678901234' }),
+      error: null,
+    });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1, elev2],
+      expected_current_elevator_ids: [elev1],
+    })).rejects.toThrow('Respuesta de actualización de asignaciones inválida');
+  });
+
+  it('rejects missing arrays', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { responsible_user_id: userId },
+      error: null,
+    });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1],
+      expected_current_elevator_ids: [],
+    })).rejects.toThrow('Respuesta de actualización de asignaciones inválida');
+  });
+
+  it('rejects non-string elements', async () => {
+    mockInvoke.mockResolvedValue({
+      data: makeReplaceResponse({ assigned_elevator_ids: [123] }),
+      error: null,
+    });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1, elev2],
+      expected_current_elevator_ids: [elev1],
+    })).rejects.toThrow('Respuesta de actualización de asignaciones inválida');
+  });
+
+  it('rejects duplicates in response arrays', async () => {
+    mockInvoke.mockResolvedValue({
+      data: makeReplaceResponse({ assigned_elevator_ids: [elev1, elev1] }),
+      error: null,
+    });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1, elev2],
+      expected_current_elevator_ids: [elev1],
+    })).rejects.toThrow('Respuesta de actualización de asignaciones inválida');
+  });
+
+  it('rejects previous !== expected set', async () => {
+    mockInvoke.mockResolvedValue({
+      data: makeReplaceResponse({
+        previous_elevator_ids: [elev1, elev2],
+      }),
+      error: null,
+    });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1, elev2],
+      expected_current_elevator_ids: [elev1],
+    })).rejects.toThrow('Respuesta de actualización de asignaciones inválida');
+  });
+
+  it('rejects assigned !== requested set', async () => {
+    mockInvoke.mockResolvedValue({
+      data: makeReplaceResponse({
+        assigned_elevator_ids: [elev1],
+        added_elevator_ids: [],
+        removed_elevator_ids: [],
+      }),
+      error: null,
+    });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1, elev2],
+      expected_current_elevator_ids: [elev1],
+    })).rejects.toThrow('Respuesta de actualización de asignaciones inválida');
+  });
+
+  it('rejects incorrect added', async () => {
+    mockInvoke.mockResolvedValue({
+      data: makeReplaceResponse({
+        added_elevator_ids: [],
+        removed_elevator_ids: [],
+      }),
+      error: null,
+    });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1, elev2],
+      expected_current_elevator_ids: [elev1],
+    })).rejects.toThrow('Respuesta de actualización de asignaciones inválida');
+  });
+
+  it('rejects incorrect removed', async () => {
+    mockInvoke.mockResolvedValue({
+      data: makeReplaceResponse({
+        previous_elevator_ids: [elev1, elev3],
+        assigned_elevator_ids: [elev1, elev2],
+        added_elevator_ids: [elev2],
+        removed_elevator_ids: [],
+      }),
+      error: null,
+    });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1, elev2],
+      expected_current_elevator_ids: [elev1, elev3],
+    })).rejects.toThrow('Respuesta de actualización de asignaciones inválida');
+  });
+
+  it('accepts different order if sets match', async () => {
+    mockInvoke.mockResolvedValue({
+      data: makeReplaceResponse({
+        previous_elevator_ids: [elev2, elev1],
+        assigned_elevator_ids: [elev2, elev1, elev3],
+        added_elevator_ids: [elev3],
+        removed_elevator_ids: [],
+      }),
+      error: null,
+    });
+    const result = await replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1, elev2, elev3],
+      expected_current_elevator_ids: [elev1, elev2],
+    });
+    expect(result.assigned_elevator_ids.sort()).toEqual([elev1, elev2, elev3].sort());
+    expect(result.previous_elevator_ids.sort()).toEqual([elev1, elev2].sort());
+  });
+
+  it('propagates data.error', async () => {
+    mockInvoke.mockResolvedValue({ data: { error: 'Conflicto de versión' }, error: null });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1],
+      expected_current_elevator_ids: [],
+    })).rejects.toThrow('Conflicto de versión');
+  });
+
+  it('propagates invoke error', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: new Error('Timeout') });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1],
+      expected_current_elevator_ids: [],
+    })).rejects.toThrow('Timeout');
   });
 });

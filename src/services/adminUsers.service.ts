@@ -159,6 +159,55 @@ export interface CreateResponsibleResult {
   assigned_elevator_ids: string[];
 }
 
+export interface ResponsibleAssignmentsSnapshot {
+  responsible_user_id: string;
+  assigned_elevator_ids: string[];
+}
+
+export interface ReplaceResponsibleAssignmentsParams {
+  responsible_user_id: string;
+  elevator_ids: string[];
+  expected_current_elevator_ids: string[];
+}
+
+export interface ReplaceResponsibleAssignmentsResult {
+  responsible_user_id: string;
+  previous_elevator_ids: string[];
+  assigned_elevator_ids: string[];
+  added_elevator_ids: string[];
+  removed_elevator_ids: string[];
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_RE.test(value);
+}
+
+function validateStringArray(value: unknown, min: number, max: number): string[] | never {
+  if (!Array.isArray(value)) throw new Error('Se esperaba un array');
+  if (value.length < min) throw new Error(`Debe contener al menos ${min} elemento(s)`);
+  if (value.length > max) throw new Error(`No puede contener más de ${max} elementos`);
+  const ids: string[] = [];
+  for (const item of value) {
+    if (!isValidUuid(item)) throw new Error('La selección de ascensores es inválida');
+    ids.push(item);
+  }
+  if (new Set(ids).size !== ids.length) throw new Error('No se permiten ascensores duplicados');
+  return ids;
+}
+
+function setEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = new Set(a);
+  return b.every((id) => sa.has(id));
+}
+
+function setDiff(from: string[], against: string[]): string[] {
+  const s = new Set(against);
+  return [...from].filter((id) => !s.has(id)).sort();
+}
+
 export async function createResponsible(params: CreateResponsibleParams): Promise<CreateResponsibleResult> {
   if (new Set(params.elevator_ids).size !== params.elevator_ids.length) {
     throw new Error('No se permiten ascensores duplicados');
@@ -191,4 +240,98 @@ export async function createResponsible(params: CreateResponsibleParams): Promis
     throw new Error('Respuesta de creación de responsable inválida');
   }
   return { user, assigned_elevator_ids: [...idsStr] };
+}
+
+export async function getResponsibleAssignments(
+  responsibleUserId: string,
+): Promise<ResponsibleAssignmentsSnapshot> {
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body: { action: 'get_responsible_assignments', data: { responsible_user_id: responsibleUserId } },
+  });
+  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (isRecord(data) && typeof data.error === 'string' && data.error) {
+    throw new Error(data.error);
+  }
+  if (!isRecord(data) || typeof data.responsible_user_id !== 'string') {
+    throw new Error('Respuesta de asignaciones inválida');
+  }
+  if (data.responsible_user_id !== responsibleUserId) {
+    throw new Error('Respuesta de asignaciones inválida');
+  }
+  if (!Array.isArray(data.assigned_elevator_ids)) {
+    throw new Error('Respuesta de asignaciones inválida');
+  }
+  const ids = data.assigned_elevator_ids;
+  if (!ids.every((id: unknown) => typeof id === 'string')) {
+    throw new Error('Respuesta de asignaciones inválida');
+  }
+  const idsStr = ids as string[];
+  if (new Set(idsStr).size !== idsStr.length) {
+    throw new Error('Respuesta de asignaciones inválida');
+  }
+  return { responsible_user_id: data.responsible_user_id, assigned_elevator_ids: [...idsStr] };
+}
+
+export async function replaceResponsibleAssignments(
+  params: ReplaceResponsibleAssignmentsParams,
+): Promise<ReplaceResponsibleAssignmentsResult> {
+  if (!isValidUuid(params.responsible_user_id)) {
+    throw new Error('responsible_user_id es obligatorio');
+  }
+  validateStringArray(params.elevator_ids, 1, 100);
+  validateStringArray(params.expected_current_elevator_ids, 0, 100);
+
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body: { action: 'replace_responsible_assignments', data: params },
+  });
+  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (isRecord(data) && typeof data.error === 'string' && data.error) {
+    throw new Error(data.error);
+  }
+  if (!isRecord(data) || typeof data.responsible_user_id !== 'string') {
+    throw new Error('Respuesta de actualización de asignaciones inválida');
+  }
+  if (data.responsible_user_id !== params.responsible_user_id) {
+    throw new Error('Respuesta de actualización de asignaciones inválida');
+  }
+
+  const arrays = ['previous_elevator_ids', 'assigned_elevator_ids', 'added_elevator_ids', 'removed_elevator_ids'] as const;
+  for (const key of arrays) {
+    if (!Array.isArray(data[key])) {
+      throw new Error('Respuesta de actualización de asignaciones inválida');
+    }
+    if (!(data[key] as unknown[]).every((id: unknown) => typeof id === 'string')) {
+      throw new Error('Respuesta de actualización de asignaciones inválida');
+    }
+    const arr = data[key] as string[];
+    if (new Set(arr).size !== arr.length) {
+      throw new Error('Respuesta de actualización de asignaciones inválida');
+    }
+  }
+
+  const previous = data.previous_elevator_ids as string[];
+  const assigned = data.assigned_elevator_ids as string[];
+  const added = data.added_elevator_ids as string[];
+  const removed = data.removed_elevator_ids as string[];
+
+  if (!setEqual(assigned, params.elevator_ids)) {
+    throw new Error('Respuesta de actualización de asignaciones inválida');
+  }
+  if (!setEqual(previous, params.expected_current_elevator_ids)) {
+    throw new Error('Respuesta de actualización de asignaciones inválida');
+  }
+
+  const expectedAdded = setDiff(assigned, previous);
+  const expectedRemoved = setDiff(previous, assigned);
+  if (!setEqual(added, expectedAdded) || !setEqual(removed, expectedRemoved)) {
+    throw new Error('Respuesta de actualización de asignaciones inválida');
+  }
+
+  return {
+    responsible_user_id: data.responsible_user_id,
+    previous_elevator_ids: [...previous],
+    assigned_elevator_ids: [...assigned],
+    added_elevator_ids: [...added],
+    removed_elevator_ids: [...removed],
+  };
 }
