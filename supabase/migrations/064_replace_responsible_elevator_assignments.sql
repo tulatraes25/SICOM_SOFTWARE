@@ -15,15 +15,14 @@ AS $$
 DECLARE
   v_actor_admin boolean;
   v_target_role text;
-  v_target_found boolean;
-  v_current_ids uuid[];
-  v_added uuid[];
-  v_removed uuid[];
-  v_sorted_new uuid[];
-  v_sorted_old uuid[];
-  v_sorted_added uuid[];
-  v_sorted_removed uuid[];
-  v_final_count integer;
+  v_current_ids uuid[] := '{}'::uuid[];
+  v_expected_ids uuid[] := '{}'::uuid[];
+  v_sorted_new uuid[] := '{}'::uuid[];
+  v_added uuid[] := '{}'::uuid[];
+  v_removed uuid[] := '{}'::uuid[];
+  v_final_ids uuid[] := '{}'::uuid[];
+  v_requested_count bigint;
+  v_row_count bigint;
 BEGIN
   -- 1. Validate actor
   SELECT EXISTS (
@@ -45,9 +44,7 @@ BEGIN
   WHERE id = p_responsible_id
   FOR UPDATE;
 
-  GET DIAGNOSTICS v_target_found = ROW_COUNT;
-
-  IF v_target_found = 0 THEN
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'Responsable no encontrado';
   END IF;
 
@@ -56,108 +53,159 @@ BEGIN
   END IF;
 
   -- 3. Validate elevator_ids
-  IF p_elevator_ids IS NULL OR array_length(p_elevator_ids, 1) = 0 THEN
+  IF p_elevator_ids IS NULL OR cardinality(p_elevator_ids) = 0 THEN
     RAISE EXCEPTION 'Debe seleccionar al menos un ascensor';
   END IF;
 
-  IF array_length(p_elevator_ids, 1) > 100 THEN
+  IF cardinality(p_elevator_ids) > 100 THEN
     RAISE EXCEPTION 'No se pueden asignar más de 100 ascensores';
   END IF;
 
-  -- Check duplicates by comparing array length with distinct array length
-  IF array_length(p_elevator_ids, 1) <> array_length(SELECT ARRAY(SELECT DISTINCT unnest(p_elevator_ids))) THEN
+  -- Check for null elements
+  IF EXISTS (
+    SELECT 1 FROM unnest(p_elevator_ids) AS eid WHERE eid IS NULL
+  ) THEN
+    RAISE EXCEPTION 'La selección de ascensores es inválida';
+  END IF;
+
+  -- Check duplicates
+  IF cardinality(p_elevator_ids) <>
+     (SELECT count(DISTINCT elevator_id) FROM unnest(p_elevator_ids) AS requested(elevator_id)) THEN
     RAISE EXCEPTION 'No se permiten ascensores duplicados';
   END IF;
 
-  -- 4. Validate expected_current_elevator_ids (no duplicates)
-  IF p_expected_current_elevator_ids IS NOT NULL
-     AND array_length(p_expected_current_elevator_ids, 1) > 0
-     AND array_length(p_expected_current_elevator_ids, 1) <> array_length(SELECT ARRAY(SELECT DISTINCT unnest(p_expected_current_elevator_ids))) THEN
+  -- Normalize sorted new elevators
+  v_sorted_new := ARRAY(
+    SELECT elevator_id
+    FROM unnest(p_elevator_ids) AS requested(elevator_id)
+    ORDER BY elevator_id
+  );
+
+  -- 4. Validate expected_current_elevator_ids
+  v_expected_ids := ARRAY(
+    SELECT elevator_id
+    FROM unnest(
+      COALESCE(p_expected_current_elevator_ids, '{}'::uuid[])
+    ) AS expected(elevator_id)
+    ORDER BY elevator_id
+  );
+
+  -- Check for null elements in expected
+  IF EXISTS (
+    SELECT 1 FROM unnest(COALESCE(p_expected_current_elevator_ids, '{}'::uuid[])) AS eid WHERE eid IS NULL
+  ) THEN
+    RAISE EXCEPTION 'La selección de ascensores es inválida';
+  END IF;
+
+  -- Check duplicates in expected
+  IF cardinality(v_expected_ids) > 0 AND
+     cardinality(v_expected_ids) <>
+     (SELECT count(DISTINCT elevator_id) FROM unnest(v_expected_ids) AS expected(elevator_id)) THEN
     RAISE EXCEPTION 'No se permiten ascensores duplicados';
   END IF;
 
-  -- 5. Lock current assignments for this responsible (order by id to reduce deadlock risk)
-  SELECT ARRAY(
-    SELECT id FROM elevators
-    WHERE responsible_user_id = p_responsible_id
-    ORDER BY id
-  ) INTO v_current_ids;
+  -- Reject absurdly large expected arrays
+  IF cardinality(v_expected_ids) > 100 THEN
+    RAISE EXCEPTION 'La selección de ascensores es inválida';
+  END IF;
 
-  -- Lock current rows
-  PERFORM 1 FROM elevators
-  WHERE responsible_user_id = p_responsible_id
-  FOR UPDATE OF elevators;
+  -- 5. Lock elevators in stable order (single query for both sets)
+  PERFORM e.id
+  FROM elevators e
+  WHERE
+    e.responsible_user_id = p_responsible_id
+    OR e.id = ANY(v_sorted_new)
+  ORDER BY e.id
+  FOR UPDATE;
 
-  -- Lock requested rows (order by id)
-  v_sorted_new := ARRAY(SELECT unnest(p_elevator_ids) ORDER BY 1);
-
-  PERFORM 1 FROM elevators
-  WHERE id = ANY(v_sorted_new)
-  FOR UPDATE OF elevators;
+  -- Load current assignments after lock
+  SELECT COALESCE(
+    array_agg(e.id ORDER BY e.id),
+    '{}'::uuid[]
+  )
+  INTO v_current_ids
+  FROM elevators e
+  WHERE e.responsible_user_id = p_responsible_id;
 
   -- 6. Optimistic concurrency check
-  v_sorted_old := ARRAY(SELECT unnest(v_current_ids) ORDER BY 1);
-
-  IF COALESCE(array_length(v_sorted_old, 1), 0) <> COALESCE(array_length(p_expected_current_elevator_ids, 1), 0)
-     OR v_sorted_old IS DISTINCT FROM (
-       SELECT ARRAY(SELECT unnest(p_expected_current_elevator_ids) ORDER BY 1)
-     ) THEN
+  IF v_current_ids IS DISTINCT FROM v_expected_ids THEN
     RAISE EXCEPTION 'Las asignaciones cambiaron. Actualizá la página e intentá nuevamente';
   END IF;
 
-  -- 7. Validate all requested elevators exist, are active, and are available
+  -- 7. Check all requested elevators exist
+  SELECT count(*)
+  INTO v_requested_count
+  FROM elevators e
+  WHERE e.id = ANY(v_sorted_new);
+
+  IF v_requested_count <> cardinality(v_sorted_new) THEN
+    RAISE EXCEPTION 'Uno o más ascensores no están disponibles';
+  END IF;
+
+  -- 8. Validate availability (active and not assigned to another responsible)
   IF EXISTS (
-    SELECT 1 FROM elevators
-    WHERE id = ANY(v_sorted_new)
-      AND (active IS DISTINCT FROM true OR responsible_user_id IS DISTINCT FROM NULL AND responsible_user_id <> p_responsible_id)
+    SELECT 1
+    FROM elevators e
+    WHERE e.id = ANY(v_sorted_new)
+      AND (
+        e.active IS DISTINCT FROM true
+        OR (
+          e.responsible_user_id IS NOT NULL
+          AND e.responsible_user_id <> p_responsible_id
+        )
+      )
   ) THEN
     RAISE EXCEPTION 'Uno o más ascensores no están disponibles';
   END IF;
 
-  -- 8. Compute added and removed
+  -- 9. Compute added and removed (stable order)
   v_added := ARRAY(
-    SELECT unnest(v_sorted_new) EXCEPT SELECT unnest(v_sorted_old)
+    SELECT unnest(v_sorted_new) EXCEPT SELECT unnest(v_current_ids)
+    ORDER BY 1
   );
+
   v_removed := ARRAY(
-    SELECT unnest(v_sorted_old) EXCEPT SELECT unnest(v_sorted_new)
+    SELECT unnest(v_current_ids) EXCEPT SELECT unnest(v_sorted_new)
+    ORDER BY 1
   );
 
-  v_sorted_added := ARRAY(SELECT unnest(v_added) ORDER BY 1);
-  v_sorted_removed := ARRAY(SELECT unnest(v_removed) ORDER BY 1);
-
-  -- 9. Release removed elevators
+  -- 10. Release removed elevators
   UPDATE elevators
   SET responsible_user_id = NULL, updated_at = now()
-  WHERE id = ANY(v_sorted_removed)
+  WHERE id = ANY(v_removed)
     AND responsible_user_id = p_responsible_id;
 
-  GET DIAGNOSTICS v_final_count = ROW_COUNT;
-  IF v_final_count <> array_length(v_sorted_removed, 1) THEN
+  GET DIAGNOSTICS v_row_count = ROW_COUNT;
+  IF v_row_count <> cardinality(v_removed) THEN
     RAISE EXCEPTION 'Error al liberar ascensores';
   END IF;
 
-  -- 10. Assign all requested elevators
+  -- 11. Assign only added elevators
   UPDATE elevators
   SET responsible_user_id = p_responsible_id, updated_at = now()
-  WHERE id = ANY(v_sorted_new)
-    AND (responsible_user_id IS DISTINCT FROM p_responsible_id);
+  WHERE id = ANY(v_added)
+    AND active = true
+    AND responsible_user_id IS NULL;
 
-  GET DIAGNOSTICS v_final_count = ROW_COUNT;
-  -- v_final_count may be less than array length if some were already assigned; that's OK
+  GET DIAGNOSTICS v_row_count = ROW_COUNT;
+  IF v_row_count <> cardinality(v_added) THEN
+    RAISE EXCEPTION 'Error al asignar ascensores';
+  END IF;
 
-  -- 11. Verify final state matches exactly
-  IF EXISTS (
-    SELECT 1 FROM elevators
-    WHERE responsible_user_id = p_responsible_id
-      AND id <> ALL(v_sorted_new)
-  ) OR (
-    SELECT count(*) FROM elevators
-    WHERE responsible_user_id = p_responsible_id
-  ) <> array_length(v_sorted_new, 1) THEN
+  -- 12. Verify final state matches exactly
+  SELECT COALESCE(
+    array_agg(e.id ORDER BY e.id),
+    '{}'::uuid[]
+  )
+  INTO v_final_ids
+  FROM elevators e
+  WHERE e.responsible_user_id = p_responsible_id;
+
+  IF v_final_ids IS DISTINCT FROM v_sorted_new THEN
     RAISE EXCEPTION 'Error en la verificación final de asignaciones';
   END IF;
 
-  -- 12. Audit log
+  -- 13. Audit log
   INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_data)
   VALUES (
     p_actor_id,
@@ -165,20 +213,20 @@ BEGIN
     'profiles',
     p_responsible_id,
     jsonb_build_object(
-      'previous_elevator_ids', to_jsonb(v_sorted_old),
-      'assigned_elevator_ids', to_jsonb(v_sorted_new),
-      'added_elevator_ids', to_jsonb(v_sorted_added),
-      'removed_elevator_ids', to_jsonb(v_sorted_removed)
+      'previous_elevator_ids', to_jsonb(v_current_ids),
+      'assigned_elevator_ids', to_jsonb(v_final_ids),
+      'added_elevator_ids', to_jsonb(v_added),
+      'removed_elevator_ids', to_jsonb(v_removed)
     )
   );
 
-  -- 13. Return result
+  -- 14. Return result
   RETURN jsonb_build_object(
     'responsible_user_id', p_responsible_id,
-    'previous_elevator_ids', to_jsonb(v_sorted_old),
-    'assigned_elevator_ids', to_jsonb(v_sorted_new),
-    'added_elevator_ids', to_jsonb(v_sorted_added),
-    'removed_elevator_ids', to_jsonb(v_sorted_removed)
+    'previous_elevator_ids', to_jsonb(v_current_ids),
+    'assigned_elevator_ids', to_jsonb(v_final_ids),
+    'added_elevator_ids', to_jsonb(v_added),
+    'removed_elevator_ids', to_jsonb(v_removed)
   );
 END;
 $$;
