@@ -50,7 +50,12 @@ export default function ResponsibleCreatePage() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestRef = useRef(0);
 
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  useEffect(() => {
+    return () => {
+      requestRef.current++;
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const loadClients = useCallback(async () => {
     setClientsLoading(true);
@@ -99,6 +104,9 @@ export default function ResponsibleCreatePage() {
     if (clientId) {
       loadAssignments(clientId);
     } else {
+      requestRef.current++;
+      setLoadingAssignments(false);
+      setAssignmentsError('');
       setBuildings([]);
       setElevators([]);
       setSelectedBuildingIds(new Set());
@@ -109,10 +117,6 @@ export default function ResponsibleCreatePage() {
   const elevatorsByBuilding = useCallback((buildingId: string) => {
     return elevators.filter((e) => e.building_id === buildingId).sort((a, b) => naturalSort.compare(a.code, b.code));
   }, [elevators]);
-
-  const hasAvailableElevators = useCallback((buildingId: string) => {
-    return elevatorsByBuilding(buildingId).length > 0;
-  }, [elevatorsByBuilding]);
 
   const handleClientChange = (value: string) => {
     setClientId(value);
@@ -181,7 +185,16 @@ export default function ResponsibleCreatePage() {
     submitRef.current = true;
     setOperation('saving');
     try {
-      const elevatorIds = [...selectedElevatorIds];
+      const elevatorIds = [...buildings]
+        .sort((a, b) => naturalSort.compare(a.name, b.name))
+        .flatMap((building) =>
+          elevatorsByBuilding(building.id)
+            .filter((elevator) => selectedElevatorIds.has(elevator.id))
+            .map((elevator) => elevator.id),
+        );
+      if (elevatorIds.length !== selectedElevatorIds.size) {
+        throw new Error('Inconsistencia en la selección de ascensores');
+      }
       const result = await createResponsible({
         email: email.trim().toLowerCase(),
         password,
@@ -201,11 +214,13 @@ export default function ResponsibleCreatePage() {
   };
 
   const isBusy = operation !== null || success !== '';
+  const isFormBusy = clientsLoading || loadingAssignments || isBusy;
 
   return (
     <DashboardLayout role="admin" title="Nuevo responsable">
       <div className="max-w-2xl mx-auto space-y-6">
         <button
+          type="button"
           onClick={() => { if (!isBusy) navigate('/admin/usuarios?tab=responsables'); }}
           disabled={isBusy}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 disabled:opacity-50"
@@ -219,7 +234,7 @@ export default function ResponsibleCreatePage() {
           <p className="text-gray-500 text-sm">Creá el acceso y asigná los ascensores que podrá consultar.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6" aria-busy={isBusy}>
+        <form onSubmit={handleSubmit} className="space-y-6" aria-busy={isFormBusy}>
           {error && <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
           {success && <div role="status" className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm flex items-center gap-2"><Check size={16} /> {success}</div>}
 
@@ -243,8 +258,8 @@ export default function ResponsibleCreatePage() {
                 <p className="text-sm text-gray-500">Cargando clientes...</p>
               ) : clientsError ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-danger">{clientsError}</p>
-                  <Button variant="outline" size="sm" onClick={loadClients} disabled={isBusy}>Reintentar carga de clientes</Button>
+                  <p className="text-sm text-danger" role="alert">{clientsError}</p>
+                  <Button type="button" variant="outline" size="sm" onClick={loadClients} disabled={isBusy}>Reintentar carga de clientes</Button>
                 </div>
               ) : clients.length === 0 ? (
                 <p className="text-sm text-gray-500">No hay clientes activos disponibles.</p>
@@ -264,8 +279,8 @@ export default function ResponsibleCreatePage() {
                     <p className="text-sm text-gray-500">Cargando edificios y ascensores...</p>
                   ) : assignmentsError ? (
                     <div className="space-y-2">
-                      <p className="text-sm text-danger">{assignmentsError}</p>
-                      <Button variant="outline" size="sm" onClick={() => loadAssignments(clientId)} disabled={isBusy}>Reintentar edificios y ascensores</Button>
+                      <p className="text-sm text-danger" role="alert">{assignmentsError}</p>
+                      <Button type="button" variant="outline" size="sm" onClick={() => loadAssignments(clientId)} disabled={isBusy}>Reintentar edificios y ascensores</Button>
                     </div>
                   ) : buildings.length === 0 ? (
                     <p className="text-sm text-gray-500">El cliente no tiene edificios activos.</p>

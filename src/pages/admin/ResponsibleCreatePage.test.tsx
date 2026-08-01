@@ -764,3 +764,253 @@ describe('ResponsibleCreatePage — Resultado', () => {
     expect(screen.queryByText('SecretPass123!')).not.toBeInTheDocument();
   });
 });
+
+describe('ResponsibleCreatePage — Botones type button', () => {
+  it('Reintentar clientes tiene type="button"', async () => {
+    mockListClients.mockRejectedValueOnce(new Error('Falló'));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Falló')).toBeInTheDocument(); });
+    const btn = screen.getByRole('button', { name: /reintentar carga de clientes/i });
+    expect(btn).toHaveAttribute('type', 'button');
+  });
+
+  it('Reintentar asignaciones tiene type="button"', async () => {
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockGetBuildingsByClient.mockRejectedValueOnce(new Error('Falló'));
+    mockFilterElevators.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Cliente Alpha')).toBeInTheDocument(); });
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    await waitFor(() => { expect(screen.getByText('Falló')).toBeInTheDocument(); });
+    const btn = screen.getByRole('button', { name: /reintentar edificios/i });
+    expect(btn).toHaveAttribute('type', 'button');
+  });
+
+  it('click en reintentar clientes no llama createResponsible', async () => {
+    mockListClients.mockRejectedValueOnce(new Error('Falló'));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Falló')).toBeInTheDocument(); });
+    mockListClients.mockResolvedValue([makeClient()]);
+    fireEvent.click(screen.getByRole('button', { name: /reintentar carga de clientes/i }));
+    await waitFor(() => { expect(screen.getByText('Cliente Alpha')).toBeInTheDocument(); });
+    expect(mockCreateResponsible).not.toHaveBeenCalled();
+  });
+
+  it('click en reintentar asignaciones no llama createResponsible', async () => {
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockGetBuildingsByClient.mockRejectedValueOnce(new Error('Falló'));
+    mockFilterElevators.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Cliente Alpha')).toBeInTheDocument(); });
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    await waitFor(() => { expect(screen.getByText('Falló')).toBeInTheDocument(); });
+    mockGetBuildingsByClient.mockResolvedValue([makeBuilding()]);
+    mockFilterElevators.mockResolvedValue([makeElevator()]);
+    fireEvent.click(screen.getByRole('button', { name: /reintentar edificios/i }));
+    await waitFor(() => { expect(screen.getByText('Edificio Centro')).toBeInTheDocument(); });
+    expect(mockCreateResponsible).not.toHaveBeenCalled();
+  });
+
+  it('Volver tiene type="button"', async () => {
+    mockListClients.mockResolvedValue([]);
+    renderPage();
+    await waitForReady();
+    const btn = screen.getByRole('button', { name: /volver/i });
+    expect(btn).toHaveAttribute('type', 'button');
+  });
+
+  it('Crear responsable es el único submit', async () => {
+    mockListClients.mockResolvedValue([]);
+    renderPage();
+    await waitForReady();
+    const submitButtons = document.querySelectorAll('button[type="submit"]');
+    expect(submitButtons).toHaveLength(1);
+    expect(submitButtons[0].textContent).toContain('Crear responsable');
+  });
+});
+
+describe('ResponsibleCreatePage — Invalidación de respuestas', () => {
+  it('volver al cliente vacío invalida la respuesta anterior', async () => {
+    mockListClients.mockResolvedValue([makeClient({ id: 'c1', name: 'A' }), makeClient({ id: 'c2', name: 'B' })]);
+    mockGetBuildingsByClient.mockResolvedValueOnce([makeBuilding({ id: 'b1', name: 'Edificio 1' })]);
+    mockFilterElevators.mockResolvedValueOnce([makeElevator({ id: 'e1' })]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('A')).toBeInTheDocument(); });
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    await waitFor(() => { expect(screen.getByText('Edificio 1')).toBeInTheDocument(); });
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: '' } });
+    await waitFor(() => { expect(screen.getByText('Seleccioná un cliente para ver sus edificios.')).toBeInTheDocument(); });
+    expect(screen.queryByText('Edificio 1')).not.toBeInTheDocument();
+  });
+
+  it('una respuesta vieja no vuelve a mostrar edificios', async () => {
+    mockListClients.mockResolvedValue([makeClient({ id: 'c1', name: 'A' }), makeClient({ id: 'c2', name: 'B' })]);
+    const def1 = deferred<void>();
+    mockGetBuildingsByClient.mockImplementationOnce(() => { def1.resolve(); return new Promise(() => {}); });
+    mockFilterElevators.mockImplementationOnce(() => new Promise(() => {}));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('A')).toBeInTheDocument(); });
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    await act(async () => { def1.resolve(); });
+    mockGetBuildingsByClient.mockResolvedValueOnce([makeBuilding({ id: 'b2', name: 'Edificio 2' })]);
+    mockFilterElevators.mockResolvedValueOnce([makeElevator({ id: 'e2', building_id: 'b2' })]);
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c2' } });
+    await waitFor(() => { expect(screen.getByText('Edificio 2')).toBeInTheDocument(); });
+    expect(screen.queryByText('Edificio 1')).not.toBeInTheDocument();
+  });
+
+  it('desmontar invalida una carga pendiente', async () => {
+    mockListClients.mockResolvedValue([makeClient()]);
+    const def = deferred<ReturnType<typeof makeBuilding>[]>();
+    mockGetBuildingsByClient.mockReturnValue(def.promise);
+    mockFilterElevators.mockImplementationOnce(() => new Promise(() => {}));
+    const { unmount } = renderPage();
+    await waitFor(() => { expect(screen.getByText('Cliente Alpha')).toBeInTheDocument(); });
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    unmount();
+    def.resolve([makeBuilding({ id: 'b-late', name: 'Edificio Late' })]);
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    // Should not throw or update state after unmount
+  });
+});
+
+describe('ResponsibleCreatePage — Orden elevator_ids', () => {
+  it('elevator_ids se ordena por nombre de edificio y código', async () => {
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockGetBuildingsByClient.mockResolvedValue([
+      makeBuilding({ id: 'b2', name: 'Torre Norte' }),
+      makeBuilding({ id: 'b1', name: 'Edificio Centro' }),
+    ]);
+    mockFilterElevators.mockResolvedValue([
+      makeElevator({ id: 'e2', code: 'B100', building_id: 'b2' }),
+      makeElevator({ id: 'e1', code: 'A100', building_id: 'b1' }),
+      makeElevator({ id: 'e3', code: 'A200', building_id: 'b1' }),
+    ]);
+    mockCreateResponsible.mockResolvedValue({ user: { id: 'new-1' }, assigned_elevator_ids: ['e1', 'e3', 'e2'] });
+    renderPage();
+    await waitForReady();
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    await waitFor(() => { expect(screen.getByText('Edificio Centro')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('checkbox', { name: /edificio centro/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /torre norte/i }));
+    fillPersonal('Test', 'a@b.com', 'password1');
+    fireEvent.submit(getForm());
+    await waitFor(() => { expect(mockCreateResponsible).toHaveBeenCalledTimes(1); });
+    const ids = mockCreateResponsible.mock.calls[0][0].elevator_ids;
+    expect(ids).toEqual(['e1', 'e3', 'e2']);
+  });
+
+  it('desmarcar y volver a marcar un ascensor no altera el orden final', async () => {
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockGetBuildingsByClient.mockResolvedValue([makeBuilding()]);
+    mockFilterElevators.mockResolvedValue([
+      makeElevator({ id: 'e1', code: 'B100' }),
+      makeElevator({ id: 'e2', code: 'A100' }),
+    ]);
+    mockCreateResponsible.mockResolvedValue({ user: { id: 'new-1' }, assigned_elevator_ids: ['e2', 'e1'] });
+    renderPage();
+    await waitForReady();
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    await waitFor(() => { expect(screen.getByText('Edificio Centro')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('checkbox', { name: /edificio centro/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor b100/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor b100/i }));
+    fillPersonal('Test', 'a@b.com', 'password1');
+    fireEvent.submit(getForm());
+    await waitFor(() => { expect(mockCreateResponsible).toHaveBeenCalledTimes(1); });
+    const ids = mockCreateResponsible.mock.calls[0][0].elevator_ids;
+    expect(ids).toEqual(['e2', 'e1']);
+  });
+
+  it('elevator_ids no contiene duplicados', async () => {
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockGetBuildingsByClient.mockResolvedValue([makeBuilding()]);
+    mockFilterElevators.mockResolvedValue([makeElevator({ id: 'e1', code: 'A100' })]);
+    mockCreateResponsible.mockResolvedValue({ user: { id: 'new-1' }, assigned_elevator_ids: ['e1'] });
+    renderPage();
+    await waitForReady();
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    await waitFor(() => { expect(screen.getByText('Edificio Centro')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('checkbox', { name: /edificio centro/i }));
+    fillPersonal('Test', 'a@b.com', 'password1');
+    fireEvent.submit(getForm());
+    await waitFor(() => { expect(mockCreateResponsible).toHaveBeenCalledTimes(1); });
+    const ids = mockCreateResponsible.mock.calls[0][0].elevator_ids;
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('ResponsibleCreatePage — Accesibilidad', () => {
+  it('error de clientes posee role="alert"', async () => {
+    mockListClients.mockRejectedValueOnce(new Error('Falló'));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Falló')).toBeInTheDocument(); });
+    expect(screen.getByRole('alert')).toHaveTextContent('Falló');
+  });
+
+  it('error de asignaciones posee role="alert"', async () => {
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockGetBuildingsByClient.mockRejectedValueOnce(new Error('Falló'));
+    mockFilterElevators.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Cliente Alpha')).toBeInTheDocument(); });
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    await waitFor(() => { expect(screen.getByText('Falló')).toBeInTheDocument(); });
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts.some((a) => a.textContent?.includes('Falló'))).toBe(true);
+  });
+
+  it('formulario tiene aria-busy durante carga de clientes', async () => {
+    const def = deferred<ReturnType<typeof makeClient>[]>();
+    mockListClients.mockReturnValue(def.promise);
+    renderPage();
+    await waitFor(() => { expect(getForm()).toHaveAttribute('aria-busy', 'true'); });
+    def.resolve([]);
+    await waitFor(() => { expect(getForm()).toHaveAttribute('aria-busy', 'false'); });
+  });
+
+  it('formulario tiene aria-busy durante carga de asignaciones', async () => {
+    mockListClients.mockResolvedValue([makeClient()]);
+    const def = deferred<[ReturnType<typeof makeBuilding>[], ReturnType<typeof makeElevator>[]]>();
+    mockGetBuildingsByClient.mockReturnValue(def.promise);
+    mockFilterElevators.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Cliente Alpha')).toBeInTheDocument(); });
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    await waitFor(() => { expect(getForm()).toHaveAttribute('aria-busy', 'true'); });
+    def.resolve([[], []]);
+    await waitFor(() => { expect(getForm()).toHaveAttribute('aria-busy', 'false'); });
+  });
+
+  it('campos personales continúan habilitados mientras se cargan asignaciones', async () => {
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockGetBuildingsByClient.mockImplementationOnce(() => new Promise(() => {}));
+    mockFilterElevators.mockImplementationOnce(() => new Promise(() => {}));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Cliente Alpha')).toBeInTheDocument(); });
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    await waitFor(() => { expect(screen.getByText('Cargando edificios y ascensores...')).toBeInTheDocument(); });
+    expect(screen.getByLabelText(/nombre completo/i)).not.toBeDisabled();
+    expect(screen.getByLabelText(/email \*/i)).not.toBeDisabled();
+  });
+
+  it('doble submit continúa generando una sola llamada', async () => {
+    const def = deferred<{ user: { id: string }; assigned_elevator_ids: string[] }>();
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockGetBuildingsByClient.mockResolvedValue([makeBuilding()]);
+    mockFilterElevators.mockResolvedValue([makeElevator()]);
+    mockCreateResponsible.mockReturnValue(def.promise);
+    renderPage();
+    await waitForReady();
+    fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
+    await waitFor(() => { expect(screen.getByText('Edificio Centro')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('checkbox', { name: /edificio centro/i }));
+    fillPersonal('Test', 'a@b.com', 'password1');
+    fireEvent.submit(getForm());
+    fireEvent.submit(getForm());
+    fireEvent.submit(getForm());
+    expect(mockCreateResponsible).toHaveBeenCalledTimes(1);
+    def.resolve({ user: { id: 'new-1' }, assigned_elevator_ids: ['e1'] });
+    await waitFor(() => { expect(mockNavigate).toHaveBeenCalled(); });
+  });
+});
