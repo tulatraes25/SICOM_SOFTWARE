@@ -36,6 +36,7 @@ import ServiceOrderDetailPage from '@/pages/admin/ServiceOrderDetailPage';
 import VisitBookListPage from '@/pages/admin/VisitBookListPage';
 import UsersPage from '@/pages/admin/UsersPage';
 import UserCreatePage from '@/pages/admin/UserCreatePage';
+import ResponsibleCreatePage from '@/pages/admin/ResponsibleCreatePage';
 import UserDetailPage from '@/pages/admin/UserDetailPage';
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
 import UpdatePasswordPage from '@/pages/auth/UpdatePasswordPage';
@@ -233,6 +234,7 @@ export default function AppRouter() {
         <Route path="/admin/informes-mensuales/:id" element={<ProtectedRoute allowedRoles={['admin', 'supervisor']}><MonthlyReportDetailPage /></ProtectedRoute>} />
         <Route path="/admin/usuarios" element={<ProtectedRoute allowedRoles={['admin']}><UsersPage /></ProtectedRoute>} />
         <Route path="/admin/usuarios/nuevo" element={<ProtectedRoute allowedRoles={['admin']}><UserCreatePage /></ProtectedRoute>} />
+        <Route path="/admin/usuarios/responsables/nuevo" element={<ProtectedRoute allowedRoles={['admin']}><ResponsibleCreatePage /></ProtectedRoute>} />
         <Route path="/admin/usuarios/:id" element={<ProtectedRoute allowedRoles={['admin']}><UserDetailPage /></ProtectedRoute>} />
         <Route path="/recuperar-contrasena" element={<ForgotPasswordPage />} />
         <Route path="/actualizar-contrasena" element={<UpdatePasswordPage />} />

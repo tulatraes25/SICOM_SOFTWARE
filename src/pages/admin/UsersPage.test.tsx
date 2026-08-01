@@ -313,6 +313,57 @@ describe('UsersPage — Pestañas', () => {
     expect(screen.queryByRole('link', { name: /nuevo usuario/i })).not.toBeInTheDocument();
   });
 
+  it('pestaña Usuarios muestra Nuevo usuario', async () => {
+    mockListUsers.mockResolvedValue([makeUser()]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.getByRole('link', { name: /nuevo usuario/i })).toBeInTheDocument();
+  });
+
+  it('pestaña Usuarios no muestra Nuevo responsable', async () => {
+    mockListUsers.mockResolvedValue([makeUser()]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.queryByRole('link', { name: /nuevo responsable/i })).not.toBeInTheDocument();
+  });
+
+  it('pestaña Responsables muestra Nuevo responsable', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible' })]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.getByRole('link', { name: /nuevo responsable/i })).toBeInTheDocument();
+  });
+
+  it('pestaña Responsables no muestra Nuevo usuario', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible' })]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.queryByRole('link', { name: /nuevo usuario/i })).not.toBeInTheDocument();
+  });
+
+  it('Nuevo responsable enlaza a /admin/usuarios/responsables/nuevo', async () => {
+    mockListUsers.mockResolvedValue([makeUser({ role: 'responsible' })]);
+    renderPage('responsables');
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    const link = screen.getByRole('link', { name: /nuevo responsable/i });
+    expect(link).toHaveAttribute('href', '/admin/usuarios/responsables/nuevo');
+  });
+
+  it('cambiar pestañas no duplica botones', async () => {
+    mockListUsers.mockResolvedValue([
+      makeUser({ id: 's1', role: 'technician' }),
+      makeUser({ id: 'r1', role: 'responsible' }),
+    ]);
+    renderPage();
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.getByRole('link', { name: /nuevo usuario/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /nuevo responsable/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('tab', { name: /responsables de edificios/i }));
+    await waitFor(() => { expect(table()).toBeInTheDocument(); });
+    expect(screen.queryByRole('link', { name: /nuevo usuario/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /nuevo responsable/i })).toBeInTheDocument();
+  });
+
   it('enlace de detalle del responsable sigue funcionando', async () => {
     mockListUsers.mockResolvedValue([makeUser({ id: 'r1', role: 'responsible', full_name: 'Resp' })]);
     renderPage('responsables');

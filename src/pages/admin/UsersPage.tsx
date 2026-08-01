@@ -176,6 +176,7 @@ export default function UsersPage() {
               <RefreshCw size={14} className="mr-1" /> Actualizar
             </Button>
             {isStaff && <Link to="/admin/usuarios/nuevo"><Button><Plus size={16} className="mr-2" /> Nuevo usuario</Button></Link>}
+            {!isStaff && <Link to="/admin/usuarios/responsables/nuevo"><Button><Plus size={16} className="mr-2" /> Nuevo responsable</Button></Link>}
           </div>
         </div>
 
