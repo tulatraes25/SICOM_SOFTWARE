@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import ResponsibleCreatePage from './ResponsibleCreatePage';
 
@@ -72,8 +71,6 @@ function makeElevator(overrides: Record<string, unknown> = {}) {
   };
 }
 
-let user: ReturnType<typeof userEvent.setup>;
-
 function renderPage() {
   return render(<MemoryRouter initialEntries={['/admin/usuarios/responsables/nuevo']}><ResponsibleCreatePage /></MemoryRouter>);
 }
@@ -85,14 +82,6 @@ function waitForReady() {
 async function selectClient(cid: string) {
   fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: cid } });
   await waitFor(() => { expect(screen.getByText('Edificio Centro')).toBeInTheDocument(); });
-}
-
-async function toggleBuilding() {
-  await user.click(screen.getByRole('checkbox', { name: /edificio centro/i }));
-}
-
-async function toggleElevator(name: RegExp) {
-  await user.click(screen.getByRole('checkbox', { name }));
 }
 
 function getForm(): HTMLFormElement {
@@ -108,7 +97,7 @@ function fillPersonal(name: string, email: string, pw: string) {
   fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: pw } });
 }
 
-beforeEach(() => { vi.clearAllMocks(); user = userEvent.setup(); });
+beforeEach(() => { vi.clearAllMocks(); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('ResponsibleCreatePage — Renderizado', () => {
@@ -242,7 +231,6 @@ describe('ResponsibleCreatePage — Carga por cliente', () => {
   it('respuesta vieja no sobrescribe cliente nuevo', async () => {
     mockListClients.mockResolvedValue([makeClient({ id: 'c1', name: 'A' }), makeClient({ id: 'c2', name: 'B' })]);
     const def1 = deferred<void>();
-    const def2 = deferred<void>();
     mockGetBuildingsByClient.mockImplementationOnce(() => { def1.resolve(); return new Promise(() => {}); });
     mockFilterElevators.mockImplementationOnce(() => new Promise(() => {}));
     renderPage();
