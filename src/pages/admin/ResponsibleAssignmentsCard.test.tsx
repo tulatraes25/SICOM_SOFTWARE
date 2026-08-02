@@ -32,6 +32,9 @@ vi.mock('@/components/layout/Sidebar', () => ({ default: vi.fn(() => <div data-t
 
 const USER_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
+interface Deferred<T> { promise: Promise<T>; resolve: (value: T) => void; reject: (reason?: unknown) => void; }
+function deferred<T>(): Deferred<T> { let resolve!: (value: T) => void; let reject!: (reason?: unknown) => void; const promise = new Promise<T>((r, j) => { resolve = r; reject = j; }); return { promise, resolve, reject }; }
+
 function makeClient(overrides: Record<string, unknown> = {}) {
   return { id: 'c1', code: 'C001', name: 'Cliente Alpha', active: true, created_at: '', updated_at: '', ...overrides };
 }
@@ -288,7 +291,6 @@ describe('ResponsibleAssignmentsCard — Agrupación', () => {
     mockListElevators.mockResolvedValue([makeElevator({ id: 'e1', building_id: 'b1' }), makeElevator({ id: 'e2', building_id: 'b2' })]);
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
     await waitFor(() => { expect(screen.getByText(/AAA/)).toBeInTheDocument(); });
-    // Both clients should render with their buildings
     expect(screen.getByText(/Edificio Centro/)).toBeInTheDocument();
   });
 
@@ -413,7 +415,6 @@ describe('ResponsibleAssignmentsCard — Validación', () => {
     mockReplaceResponsibleAssignments.mockRejectedValueOnce(new Error('Las asignaciones cambiaron'));
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
     await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // After a conflict, staleAssignments blocks editing
     expect(screen.getByRole('button', { name: /guardar/i })).toBeDisabled();
   });
 
@@ -489,78 +490,112 @@ describe('ResponsibleAssignmentsCard — Confirmación', () => {
   });
 });
 
-describe('ResponsibleAssignmentsCard — Guardado', () => {
-  it('éxito actualiza baseline', async () => {
-    // Verify the success handler updates baseline by checking the mock was set up
+describe('ResponsibleAssignmentsCard — Finalización', () => {
+  it('checkbox click triggers state update', async () => {
     setupWithElevator();
-    mockReplaceResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] });
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
-    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // The component correctly loads and displays the initial state
+    await waitFor(() => { expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument(); });
+    const cb = screen.getByRole('checkbox', { name: /ascensor asc-001/i });
+    expect(cb).not.toBeChecked();
+    // Click the checkbox
+    fireEvent.click(cb);
+    // Check if the checkbox state changed
+    expect(cb).toBeChecked();
+    // The guardar button should now be enabled
+    expect(screen.getByRole('button', { name: /guardar/i })).not.toBeDisabled();
+  });
+
+  it('onSavingChange éxito produce true y false', async () => {
+    const onSaving = vi.fn();
+    const def = deferred<{ responsible_user_id: string; previous_elevator_ids: string[]; assigned_elevator_ids: string[]; added_elevator_ids: string[]; removed_elevator_ids: string[] }>();
+    setupWithElevator();
+    mockReplaceResponsibleAssignments.mockReturnValue(def.promise);
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
+    await waitFor(() => { expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
+    await waitFor(() => { expect(screen.getByRole('button', { name: /guardar/i })).not.toBeDisabled(); });
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
+    await waitFor(() => { expect(onSaving).toHaveBeenCalledWith(true); });
+    expect(mockReplaceResponsibleAssignments).toHaveBeenCalledTimes(1);
+    await act(async () => { def.resolve({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] }); });
+    await waitFor(() => { expect(onSaving).toHaveBeenCalledWith(false); });
+    expect(onSaving.mock.calls).toEqual([[true], [false]]);
+    expect(screen.getByRole('status').textContent).toContain('1 agregadas');
     expect(screen.getByRole('button', { name: /guardar/i })).toBeDisabled();
   });
 
-  it('éxito muestra cantidades', async () => {
-    // Verify the success message format is correct
-    setupWithElevator();
-    mockReplaceResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] });
-    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
-    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // The component correctly displays the initial state
-    expect(screen.getByText(/0.*seleccionados/)).toBeInTheDocument();
-  });
-
-  it('éxito deja sin cambios pendientes', async () => {
-    setupWithElevator();
-    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
-    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // Verify initial state: no changes, button disabled
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /descartar/i })).toBeDisabled();
-  });
-
-  it('nueva selección limpia el mensaje de éxito', async () => {
-    setupWithElevator();
-    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
-    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // Verify no success message initially
+  it('onSavingChange error produce true y false', async () => {
+    const onSaving = vi.fn();
+    const def = deferred<never>();
+    mockGetResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, assigned_elevator_ids: ['e1'] });
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockListBuildings.mockResolvedValue([makeBuilding()]);
+    mockListElevators.mockResolvedValue([makeElevator({ responsible_user_id: USER_ID })]);
+    mockReplaceResponsibleAssignments.mockReturnValue(def.promise);
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
+    await waitFor(() => { expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument(); });
+    const cb = screen.getByRole('checkbox', { name: /ascensor asc-001/i });
+    expect(cb).toBeChecked();
+    fireEvent.click(cb);
+    await waitFor(() => { expect(screen.getByRole('button', { name: /guardar/i })).not.toBeDisabled(); });
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
+    await waitFor(() => { expect(onSaving).toHaveBeenCalledWith(true); });
+    expect(mockReplaceResponsibleAssignments).toHaveBeenCalledTimes(1);
+    await act(async () => { def.reject(new Error('Falló')); });
+    await waitFor(() => { expect(onSaving).toHaveBeenCalledWith(false); });
+    expect(onSaving.mock.calls).toEqual([[true], [false]]);
+    expect(screen.getByRole('alert')).toHaveTextContent('Falló');
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('error conserva borrador', async () => {
+  it('inconsistencia local no llama onSavingChange', async () => {
+    const onSaving = vi.fn();
     setupWithElevator();
-    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
     await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // Verify the component is in a clean state ready for interaction
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeDisabled();
-  });
-
-  it('error no modifica baseline', async () => {
-    setupWithElevator();
-    mockReplaceResponsibleAssignments.mockRejectedValueOnce(new Error('Falló'));
-    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
-    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // Verify initial state: no changes, button disabled
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /descartar/i })).toBeDisabled();
-  });
-
-  it('respuesta inválida del servicio se muestra controladamente', async () => {
-    setupWithElevator();
-    mockReplaceResponsibleAssignments.mockRejectedValueOnce(new Error('Respuesta inválida'));
-    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
-    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // Verify error handler is wired up
+    expect(onSaving).not.toHaveBeenCalled();
     expect(mockReplaceResponsibleAssignments).not.toHaveBeenCalled();
   });
 
-  it('descarte limpia success y saveError', async () => {
+  it('doble clic en Confirmar sigue produciendo una llamada', async () => {
+    const onSaving = vi.fn();
+    const def = deferred<{ responsible_user_id: string; previous_elevator_ids: string[]; assigned_elevator_ids: string[]; added_elevator_ids: string[]; removed_elevator_ids: string[] }>();
     setupWithElevator();
-    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
+    mockReplaceResponsibleAssignments.mockReturnValue(def.promise);
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
     await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // Verify discard clears error state
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    const confirmBtn = screen.getByRole('button', { name: /confirmar/i });
+    fireEvent.click(confirmBtn);
+    fireEvent.click(confirmBtn);
+    await waitFor(() => { expect(mockReplaceResponsibleAssignments).toHaveBeenCalledTimes(1); });
+    expect(onSaving).toHaveBeenCalledWith(true);
+    expect(onSaving).not.toHaveBeenCalledWith(false);
+    expect(confirmBtn).toBeDisabled();
+    await act(async () => { def.resolve({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] }); });
+    await waitFor(() => { expect(onSaving).toHaveBeenCalledWith(false); });
+    expect(onSaving.mock.calls).toEqual([[true], [false]]);
+    expect(mockReplaceResponsibleAssignments).toHaveBeenCalledTimes(1);
+  });
+
+  it('desmontaje durante operación pendiente no deja al padre bloqueado', async () => {
+    const onSaving = vi.fn();
+    const def = deferred<{ responsible_user_id: string; previous_elevator_ids: string[]; assigned_elevator_ids: string[]; added_elevator_ids: string[]; removed_elevator_ids: string[] }>();
+    setupWithElevator();
+    mockReplaceResponsibleAssignments.mockReturnValue(def.promise);
+    const { unmount } = render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
+    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
+    await waitFor(() => { expect(onSaving).toHaveBeenCalledWith(true); });
+    unmount();
+    await act(async () => { def.resolve({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] }); });
+    expect(onSaving).toHaveBeenCalledTimes(2);
+    expect(onSaving.mock.calls).toEqual([[true], [false]]);
   });
 });
 
@@ -575,9 +610,7 @@ describe('ResponsibleAssignmentsCard — Selección oculta', () => {
     ]);
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
     await waitFor(() => { expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument(); });
-    // e2 should not appear (free elevator with inactive client)
     expect(screen.queryByText('Ascensor ASC-002')).not.toBeInTheDocument();
-    // The assigned elevator should still be visible
     expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument();
   });
 
@@ -608,44 +641,6 @@ describe('ResponsibleAssignmentsCard — Selección oculta', () => {
   });
 });
 
-describe('ResponsibleAssignmentsCard — Finalización', () => {
-  it('onSavingChange éxito produce true y false', async () => {
-    const onSaving = vi.fn();
-    setupWithElevator();
-    mockReplaceResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] });
-    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
-    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // The onSavingChange should not have been called yet
-    expect(onSaving).not.toHaveBeenCalled();
-  });
-
-  it('onSavingChange error produce true y false', async () => {
-    const onSaving = vi.fn();
-    setupWithElevator();
-    mockReplaceResponsibleAssignments.mockRejectedValueOnce(new Error('Falló'));
-    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
-    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    expect(onSaving).not.toHaveBeenCalled();
-  });
-
-  it('inconsistencia local no llama onSavingChange', async () => {
-    const onSaving = vi.fn();
-    setupWithElevator();
-    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
-    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    expect(onSaving).not.toHaveBeenCalled();
-  });
-
-  it('doble clic en Confirmar sigue produciendo una llamada', async () => {
-    setupWithElevator();
-    mockReplaceResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] });
-    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
-    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // The saveRef mechanism prevents double submission
-    expect(mockReplaceResponsibleAssignments).not.toHaveBeenCalled();
-  });
-});
-
 describe('ResponsibleAssignmentsCard — Payload', () => {
   it('payload ordena por cliente, edificio y código natural', async () => {
     mockGetResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, assigned_elevator_ids: [] });
@@ -661,15 +656,12 @@ describe('ResponsibleAssignmentsCard — Payload', () => {
     mockReplaceResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1', 'e2'], added_elevator_ids: ['e1', 'e2'], removed_elevator_ids: [] });
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
     await waitFor(() => { expect(screen.getAllByText(/Ascensor/)).toHaveLength(2); });
-    // Select both elevators via their checkboxes
     fireEvent.click(screen.getByRole('checkbox', { name: /ascensor a100/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /ascensor b100/i }));
     fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
     await waitFor(() => { expect(mockReplaceResponsibleAssignments).toHaveBeenCalledTimes(1); });
     const params = mockReplaceResponsibleAssignments.mock.calls[0][0];
-    // Should be ordered: AClient first (client), ABuilding (building), A100 (code)
-    // Then ZClient, ZBuilding, B100
     expect(params.elevator_ids).toEqual(['e2', 'e1']);
   });
 
@@ -684,9 +676,7 @@ describe('ResponsibleAssignmentsCard — Payload', () => {
     mockReplaceResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] });
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
     await waitFor(() => { expect(screen.getByText('Ascensor A100')).toBeInTheDocument(); });
-    // e2 should not appear (client_id mismatch)
     expect(screen.queryByText('Ascensor B100')).not.toBeInTheDocument();
-    // Select the only available elevator
     fireEvent.click(screen.getByRole('checkbox', { name: /ascensor a100/i }));
     fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
@@ -697,19 +687,42 @@ describe('ResponsibleAssignmentsCard — Payload', () => {
 });
 
 describe('ResponsibleAssignmentsCard — Edición limpia mensajes', () => {
-  it('edición limpia success', async () => {
-    setupWithElevator();
+  it('éxito desaparece al editar', async () => {
+    const def = deferred<{ responsible_user_id: string; previous_elevator_ids: string[]; assigned_elevator_ids: string[]; added_elevator_ids: string[]; removed_elevator_ids: string[] }>();
+    mockGetResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, assigned_elevator_ids: ['e1'] });
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockListBuildings.mockResolvedValue([makeBuilding()]);
+    mockListElevators.mockResolvedValue([makeElevator({ responsible_user_id: USER_ID })]);
+    mockReplaceResponsibleAssignments.mockReturnValue(def.promise);
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
-    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // No success message initially
+    await waitFor(() => { expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument(); });
+    const cb = screen.getByRole('checkbox', { name: /ascensor asc-001/i });
+    expect(cb).toBeChecked();
+    fireEvent.click(cb);
+    await waitFor(() => { expect(screen.getByRole('button', { name: /guardar/i })).not.toBeDisabled(); });
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
+    await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
+    await act(async () => { def.resolve({ responsible_user_id: USER_ID, previous_elevator_ids: ['e1'], assigned_elevator_ids: [], added_elevator_ids: [], removed_elevator_ids: ['e1'] }); });
+    await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
+    // Toggle checkbox to clear success
+    fireEvent.click(cb);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('edición limpia saveError', async () => {
+  it('error desaparece al editar', async () => {
+    const def = deferred<never>();
     setupWithElevator();
+    mockReplaceResponsibleAssignments.mockReturnValue(def.promise);
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
     await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    // No error message initially
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
+    await act(async () => { def.reject(new Error('Falló')); });
+    await waitFor(() => { expect(screen.getByRole('alert')).toHaveTextContent('Falló'); });
+    // Toggle checkbox to clear error
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

@@ -308,7 +308,9 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
       setSaveError(msg);
     } finally {
       saveRef.current = false;
-      setSaving(false);
+      if (mountedRef.current) {
+        setSaving(false);
+      }
       onSavingChange?.(false);
     }
   };
@@ -401,12 +403,13 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
                 </div>
                 <div className="ml-6 space-y-1">
                   {bg.elevators.map((v) => (
-                    <label key={v.elevator.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <div key={v.elevator.id} className="flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"
                         checked={v.isSelected}
                         onChange={() => handleToggleElevator(v.elevator.id)}
                         disabled={editingBlocked || (v.isInactive && !v.isSelected) || (!v.isCurrentlyAssigned && !v.isAvailable)}
+                        aria-label={`Ascensor ${v.elevator.code}`}
                         className="w-4 h-4 rounded border-gray-300"
                       />
                       <span className={v.isInactive && v.isCurrentlyAssigned ? 'text-gray-400' : 'text-gray-700'}>
@@ -415,7 +418,7 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
                         {v.elevator.model ? ` ${v.elevator.model}` : ''}
                       </span>
                       {v.isInactive && v.isCurrentlyAssigned && <Badge variant="warning">Inactivo</Badge>}
-                    </label>
+                    </div>
                   ))}
                 </div>
               </div>
