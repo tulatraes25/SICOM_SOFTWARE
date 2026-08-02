@@ -8,19 +8,10 @@ import { getResponsibleElevators, getResponsibleServiceRecords, getResponsibleSe
 import type { ResponsibleElevator, ResponsibleServiceRecord, ResponsibleServiceOrder, ResponsibleVisitEntry, ResponsibleMonthlyReport, ResponsibleTechnician, ResponsibleChecklistItem } from '@/services/responsiblePortalService';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS, STATUS_COLORS } from '@/types/elevators';
 import { ArrowLeft, AlertCircle, Clock, FileText, Wrench, CheckCircle, RefreshCw } from 'lucide-react';
+import { formatVisitDuration } from '@/utils/visitDuration';
 
 function formatDateOnly(v?: string | null): string { if (!v) return '-'; const [y, m, d] = v.slice(0, 10).split('-'); return `${Number(d)}/${Number(m)}/${y}`; }
 function formatTime(ts?: string | null): string { if (!ts) return '-'; return new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }); }
-function formatDuration(e: { duration_seconds?: number | null; duration_minutes?: number | null; check_in_at?: string | null; check_out_at?: string | null }): string {
-  if (e.duration_seconds !== null && e.duration_seconds !== undefined && e.duration_seconds > 0) {
-    if (e.duration_seconds < 60) return '<1 min';
-    if (e.duration_seconds < 3600) return `${Math.floor(e.duration_seconds / 60)} min`;
-    const h = Math.floor(e.duration_seconds / 3600); const m = Math.floor((e.duration_seconds % 3600) / 60);
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  }
-  if (e.duration_minutes) return `${e.duration_minutes} min`;
-  return '-';
-}
 const CHECKLIST_LABELS: Record<string, string> = { ok: 'Correcto', needs_attention: 'Requiere atención', failed: 'Falló', na: 'No aplica' };
 const SERVICE_TYPE_LABELS: Record<string, string> = { preventivo: 'Preventivo', correctivo: 'Correctivo', emergencia: 'Emergencia', inspeccion: 'Inspección', instalacion: 'Instalación', otro: 'Otro' };
 const ORDER_TYPE_LABELS: Record<string, string> = { preventive: 'Preventivo', corrective: 'Correctivo', emergency: 'Emergencia', inspection: 'Inspección', claim_response: 'Respuesta a reclamo', budgeted_work: 'Trabajo presupuestado', modernization: 'Modernización', other: 'Otro' };
@@ -177,7 +168,7 @@ export default function ResponsibleElevatorDetailPage() {
               <div key={v.id} className="p-3 bg-gray-50 rounded-lg" data-testid="responsible-visit-entry">
                 <div className="flex items-center gap-2"><span className="text-sm font-semibold">{formatDateOnly(v.visit_date)}</span>{v.case_number && <span className="text-xs text-gray-400">N.º {v.case_number}</span>}</div>
                 <p className="text-xs text-gray-600 mt-1">{v.title || v.description}</p>
-                <p className="text-xs text-gray-400">{formatDuration(v)} · {formatTime(v.check_in_at)} – {formatTime(v.check_out_at)}</p>
+                <p className="text-xs text-gray-400">{formatVisitDuration(v)} · {formatTime(v.check_in_at)} – {formatTime(v.check_out_at)}</p>
               </div>
             ))}
           </CardContent></Card>

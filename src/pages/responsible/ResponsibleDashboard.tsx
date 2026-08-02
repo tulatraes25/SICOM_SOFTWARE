@@ -8,18 +8,9 @@ import Badge from '@/components/ui/Badge';
 import { getResponsibleElevators, getResponsibleVisitEntries, getResponsibleMonthlyReports, getResponsibleBuildings, getErrorMessage } from '@/services/responsiblePortalService';
 import type { ResponsibleElevator, ResponsibleVisitEntry, ResponsibleMonthlyReport, ResponsibleBuilding } from '@/services/responsiblePortalService';
 import { Building2, FileText, Eye, Clock, AlertCircle, RefreshCw } from 'lucide-react';
+import { formatVisitDuration } from '@/utils/visitDuration';
 
 function formatDateOnly(v?: string | null): string { if (!v) return '-'; const [y, m, d] = v.slice(0, 10).split('-'); return `${Number(d)}/${Number(m)}/${y}`; }
-function formatDuration(e: { duration_seconds?: number | null; duration_minutes?: number | null }): string {
-  if (e.duration_seconds !== null && e.duration_seconds !== undefined && e.duration_seconds > 0) {
-    if (e.duration_seconds < 60) return '<1 min';
-    if (e.duration_seconds < 3600) return `${Math.floor(e.duration_seconds / 60)} min`;
-    const h = Math.floor(e.duration_seconds / 3600); const m = Math.floor((e.duration_seconds % 3600) / 60);
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  }
-  if (e.duration_minutes) return `${e.duration_minutes} min`;
-  return '-';
-}
 const ORIGIN_LABELS: Record<string, string> = { maintenance: 'Mantenimiento', service_order: 'Orden de servicio', inspection: 'Inspección', manual: 'Registro manual', claim: 'Reclamo' };
 
 export default function ResponsibleDashboard() {
@@ -94,7 +85,7 @@ export default function ResponsibleDashboard() {
                     </div>
                     <p className="text-sm text-gray-600 mt-1">{bld?.name || '-'} · {el?.code || '-'}</p>
                     <p className="text-xs text-gray-500">{ORIGIN_LABELS[v.origin_type || ''] || v.origin_type || '-'} · {v.title || v.description}</p>
-                    <p className="text-xs text-gray-400">{formatDuration(v)}</p>
+                    <p className="text-xs text-gray-400">{formatVisitDuration(v)}</p>
                   </div>
                   <Link to={`/responsable/ascensores/${v.elevator_id}`}><Button size="sm" variant="ghost"><Eye size={14} /></Button></Link>
                 </div>

@@ -8,6 +8,7 @@ import { getVisitEntry } from '@/services/elevatorVisitBook.service';
 import { VISIT_ENTRY_TYPE_LABELS, VISIT_ENTRY_STATUS_LABELS, VISIT_ORIGIN_LABELS } from '@/types/database';
 import type { ElevatorVisitEntry } from '@/types/database';
 import { ArrowLeft, AlertCircle, User, Calendar, Wrench, Clock, ExternalLink } from 'lucide-react';
+import { formatVisitDuration } from '@/utils/visitDuration';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default', in_progress: 'info', submitted: 'info',
@@ -19,33 +20,6 @@ function formatDateOnly(value?: string | null): string {
   const [year, month, day] = value.slice(0, 10).split('-');
   if (!year || !month || !day) return value;
   return `${Number(day)}/${Number(month)}/${year}`;
-}
-
-function formatVisitDuration(entry: any): string {
-  if (entry.duration_seconds !== null && entry.duration_seconds !== undefined && entry.duration_seconds > 0) {
-    if (entry.duration_seconds < 60) return '<1 min';
-    if (entry.duration_seconds < 120) return '1 min';
-    if (entry.duration_seconds < 3600) return `${Math.floor(entry.duration_seconds / 60)} min`;
-    const h = Math.floor(entry.duration_seconds / 3600);
-    const m = Math.floor((entry.duration_seconds % 3600) / 60);
-    return m > 0 ? `${h} h ${m} min` : `${h} h`;
-  }
-  if (entry.duration_minutes !== null && entry.duration_minutes !== undefined && entry.duration_minutes > 0) {
-    if (entry.duration_minutes < 60) return `${entry.duration_minutes} min`;
-    const h = Math.floor(entry.duration_minutes / 60);
-    const m = entry.duration_minutes % 60;
-    return m > 0 ? `${h} h ${m} min` : `${h} h`;
-  }
-  if (entry.check_in_at && entry.check_out_at) {
-    const diff = Math.floor((new Date(entry.check_out_at).getTime() - new Date(entry.check_in_at).getTime()) / 1000);
-    if (diff < 60) return '<1 min';
-    if (diff < 120) return '1 min';
-    if (diff < 3600) return `${Math.floor(diff / 60)} min`;
-    const h = Math.floor(diff / 3600);
-    const m = Math.floor((diff % 3600) / 60);
-    return m > 0 ? `${h} h ${m} min` : `${h} h`;
-  }
-  return '-';
 }
 
 export default function TechVisitDetailPage() {
