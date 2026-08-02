@@ -402,6 +402,100 @@ describe('UserDetailPage — Activación', () => {
   });
 });
 
+describe('UserDetailPage — Conflicto desactivación responsable', () => {
+  const RESPONSIBLE_MSG = 'Antes de desactivar este responsable, reasigná sus ascensores a otro responsable.';
+
+  it('conflicto del responsable muestra el mensaje exacto', async () => {
+    mockUpdateUser.mockRejectedValue(new Error(RESPONSIBLE_MSG));
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => { expect(screen.getByText(RESPONSIBLE_MSG)).toBeInTheDocument(); });
+  });
+
+  it('conflicto mantiene estado Activo', async () => {
+    mockUpdateUser.mockRejectedValue(new Error(RESPONSIBLE_MSG));
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => { expect(screen.getByText(RESPONSIBLE_MSG)).toBeInTheDocument(); });
+    expect(screen.getByText('Activo')).toBeInTheDocument();
+  });
+
+  it('conflicto no muestra éxito', async () => {
+    mockUpdateUser.mockRejectedValue(new Error(RESPONSIBLE_MSG));
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => { expect(screen.getByText(RESPONSIBLE_MSG)).toBeInTheDocument(); });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('desactivación válida muestra éxito', async () => {
+    mockUpdateUser.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => {
+      expect(mockUpdateUser).toHaveBeenCalledWith('u1', { active: false });
+      expect(screen.getByRole('status').textContent).toContain('desactivado correctamente');
+    });
+  });
+
+  it('reactivación sigue funcionando', async () => {
+    mockUpdateUser.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: false }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Inactivo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /reactivar/i })); });
+    await waitFor(() => {
+      expect(mockUpdateUser).toHaveBeenCalledWith('u1', { active: true });
+    });
+  });
+
+  it('doble clic produce una sola llamada', async () => {
+    const def = deferred<void>();
+    mockUpdateUser.mockReturnValue(def.promise);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    const toggleBtn = screen.getByRole('button', { name: /desactivar/i });
+    fireEvent.click(toggleBtn);
+    fireEvent.click(toggleBtn);
+    expect(mockUpdateUser).toHaveBeenCalledTimes(1);
+    def.resolve(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: false }));
+    await waitFor(() => { expect(screen.getByRole('status').textContent).toContain('desactivado correctamente'); });
+  });
+
+  it('botón queda deshabilitado mientras opera', async () => {
+    const def = deferred<void>();
+    mockUpdateUser.mockReturnValue(def.promise);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByRole('button', { name: /desactivar/i }));
+    await waitFor(() => { expect(screen.getByRole('button', { name: /desactivando/i })).toBeDisabled(); });
+    def.resolve(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: false }));
+    await waitFor(() => { expect(screen.queryByRole('button', { name: /desactivando/i })).not.toBeInTheDocument(); });
+  });
+
+  it('error genérico se muestra de manera controlada', async () => {
+    mockUpdateUser.mockRejectedValue(new Error('Error inesperado'));
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => { expect(screen.getByText('Error inesperado')).toBeInTheDocument(); });
+    expect(screen.getByText('Activo')).toBeInTheDocument();
+  });
+});
+
 describe('UserDetailPage — Operaciones simultáneas', () => {
   it('toggle bloqueado durante guardado', async () => {
     const saveDef = deferred<void>();

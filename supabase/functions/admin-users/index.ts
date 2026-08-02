@@ -324,20 +324,41 @@ serve(async (req): Promise<Response> => {
           }
         }
 
+        // Fetch target profile once for role-based guards
+        const { data: targetProfile, error: targetError } = await supabase
+          .from("profiles")
+          .select("id, role")
+          .eq("id", user_id)
+          .single();
+
+        if (targetError || !targetProfile) {
+          return json({ error: "Perfil no encontrado" }, 400);
+        }
+
         // Block responsible role transitions
         if (role !== undefined) {
-          const { data: targetProfile, error: targetError } = await supabase
-            .from("profiles")
-            .select("id, role")
-            .eq("id", user_id)
-            .single();
-
-          if (targetError || !targetProfile) {
-            return json({ error: "Perfil no encontrado" }, 400);
-          }
-
           if (role !== targetProfile.role && (targetProfile.role === "responsible" || role === "responsible")) {
             return json({ error: "El rol Responsable se administra desde Responsables de edificios" }, 409);
+          }
+        }
+
+        // Block deactivation of responsible with elevator assignments
+        if (active === false && targetProfile.role === "responsible") {
+          const { count: assignmentCount, error: assignCheckError } = await supabase
+            .from("elevators")
+            .select("id", { count: "exact", head: true })
+            .eq("responsible_user_id", user_id);
+
+          if (assignCheckError) {
+            log("RESPONSIBLE_ASSIGNMENTS_CHECK_FAILED", adminId, user_id);
+            return json({ error: "No se pudo verificar las asignaciones del responsable" }, 500);
+          }
+
+          if (assignmentCount !== null && assignmentCount > 0) {
+            log("RESPONSIBLE_HAS_ASSIGNMENTS", adminId, user_id);
+            return json({
+              error: "Antes de desactivar este responsable, reasigná sus ascensores a otro responsable.",
+            }, 409);
           }
         }
 

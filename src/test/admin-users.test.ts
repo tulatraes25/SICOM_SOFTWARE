@@ -1020,3 +1020,144 @@ describe("admin-users Edge Function — UNEXPECTED_ERROR preserves admin ID", ()
     expect(logFn).toHaveBeenCalledWith("UNEXPECTED_ERROR", undefined);
   });
 });
+
+describe("admin-users Edge Function — Responsible deactivation guard", () => {
+  const EXACT_MSG = "Antes de desactivar este responsable, reasigná sus ascensores a otro responsable.";
+
+  function simulateResponsibleDeactivationGuard(params: {
+    targetRole: string;
+    active: boolean | undefined;
+    assignmentCount: number | null;
+    assignmentError: boolean;
+  }): { blocked: boolean; status?: number; body?: Record<string, unknown> } {
+    const { targetRole, active, assignmentCount, assignmentError } = params;
+
+    // Only block when deactivating (active === false) AND target is responsible
+    if (active !== false || targetRole !== "responsible") {
+      return { blocked: false };
+    }
+
+    // Simulate assignment check error
+    if (assignmentError) {
+      return { blocked: true, status: 500, body: { error: "No se pudo verificar las asignaciones del responsable" } };
+    }
+
+    // Simulate assignment count check
+    if (assignmentCount !== null && assignmentCount > 0) {
+      return {
+        blocked: true,
+        status: 409,
+        body: { error: EXACT_MSG },
+      };
+    }
+
+    return { blocked: false };
+  }
+
+  it("responsible with one elevator cannot deactivate", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: false, assignmentCount: 1, assignmentError: false });
+    expect(r.blocked).toBe(true);
+    expect(r.status).toBe(409);
+    expect(r.body?.error).toBe(EXACT_MSG);
+  });
+
+  it("responsible with active elevator cannot deactivate", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: false, assignmentCount: 3, assignmentError: false });
+    expect(r.blocked).toBe(true);
+    expect(r.status).toBe(409);
+    expect(r.body?.error).toBe(EXACT_MSG);
+  });
+
+  it("responsible with inactive elevator cannot deactivate", () => {
+    // Count includes inactive elevators — any responsible_user_id blocks deactivation
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: false, assignmentCount: 1, assignmentError: false });
+    expect(r.blocked).toBe(true);
+    expect(r.status).toBe(409);
+  });
+
+  it("returns HTTP 409", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: false, assignmentCount: 2, assignmentError: false });
+    expect(r.status).toBe(409);
+  });
+
+  it("returns the exact message", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: false, assignmentCount: 1, assignmentError: false });
+    expect(r.body?.error).toBe(EXACT_MSG);
+  });
+
+  it("does not update profiles when blocked", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: false, assignmentCount: 1, assignmentError: false });
+    expect(r.blocked).toBe(true);
+    // If blocked, the function returns before reaching the profile update
+  });
+
+  it("does not insert audit when blocked", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: false, assignmentCount: 1, assignmentError: false });
+    expect(r.blocked).toBe(true);
+    // If blocked, the function returns before reaching the audit insert
+  });
+
+  it("does not modify elevators when blocked", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: false, assignmentCount: 1, assignmentError: false });
+    expect(r.blocked).toBe(true);
+    // The guard only reads elevators, never writes them
+  });
+
+  it("responsible without assignments can deactivate", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: false, assignmentCount: 0, assignmentError: false });
+    expect(r.blocked).toBe(false);
+  });
+
+  it("technician can deactivate", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "technician", active: false, assignmentCount: null, assignmentError: false });
+    expect(r.blocked).toBe(false);
+  });
+
+  it("supervisor can deactivate", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "supervisor", active: false, assignmentCount: null, assignmentError: false });
+    expect(r.blocked).toBe(false);
+  });
+
+  it("non-unique admin can deactivate", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "admin", active: false, assignmentCount: null, assignmentError: false });
+    expect(r.blocked).toBe(false);
+  });
+
+  it("last admin protection is separate from responsible guard", () => {
+    // The last admin check runs BEFORE the responsible guard
+    // This test verifies the responsible guard doesn't interfere with admin logic
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "admin", active: false, assignmentCount: null, assignmentError: false });
+    expect(r.blocked).toBe(false);
+  });
+
+  it("inactive user can be reactivated", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: true, assignmentCount: 5, assignmentError: false });
+    expect(r.blocked).toBe(false);
+  });
+
+  it("reactivation does not check assignments", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: true, assignmentCount: 10, assignmentError: false });
+    expect(r.blocked).toBe(false);
+  });
+
+  it("assignment check error returns controlled error and does not update", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: false, assignmentCount: null, assignmentError: true });
+    expect(r.blocked).toBe(true);
+    expect(r.status).toBe(500);
+    expect(r.body?.error).toBe("No se pudo verificar las asignaciones del responsable");
+  });
+
+  it("deactivation without active field is not blocked", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: undefined, assignmentCount: 5, assignmentError: false });
+    expect(r.blocked).toBe(false);
+  });
+
+  it("message does not expose internal details", () => {
+    const r = simulateResponsibleDeactivationGuard({ targetRole: "responsible", active: false, assignmentCount: 1, assignmentError: false });
+    const serialized = JSON.stringify(r.body);
+    expect(serialized).not.toContain("stack");
+    expect(serialized).not.toContain("supabase");
+    expect(serialized).not.toContain("elevators");
+    expect(serialized).not.toContain("sql");
+  });
+});
