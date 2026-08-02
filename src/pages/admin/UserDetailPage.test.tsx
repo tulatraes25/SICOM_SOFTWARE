@@ -1177,3 +1177,63 @@ describe('UserDetailPage — Separación de roles: responsible', () => {
     await waitFor(() => { expect(screen.getByText('Test User')).toBeInTheDocument(); });
   });
 });
+
+describe('UserDetailPage — Mensaje real de Edge Function', () => {
+  const MSG = 'Antes de desactivar este responsable, reasigná sus ascensores a otro responsable.';
+
+  it('conflicto muestra el mensaje exacto', async () => {
+    mockUpdateUser.mockRejectedValue(new Error(MSG));
+    mockGetUser.mockResolvedValue(makeUser({ full_name: 'Adriana Forquera', role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Adriana Forquera')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => { expect(screen.getByText(MSG)).toBeInTheDocument(); });
+  });
+
+  it('no muestra Edge Function returned a non-2xx status code', async () => {
+    mockUpdateUser.mockRejectedValue(new Error(MSG));
+    mockGetUser.mockResolvedValue(makeUser({ full_name: 'Adriana Forquera', role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Adriana Forquera')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => { expect(screen.getByText(MSG)).toBeInTheDocument(); });
+    expect(screen.queryByText(/Edge Function returned/)).not.toBeInTheDocument();
+  });
+
+  it('Adriana continua Activa', async () => {
+    mockUpdateUser.mockRejectedValue(new Error(MSG));
+    mockGetUser.mockResolvedValue(makeUser({ full_name: 'Adriana Forquera', role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => { expect(screen.getByText(MSG)).toBeInTheDocument(); });
+    expect(screen.getByText('Activo')).toBeInTheDocument();
+  });
+
+  it('no muestra exito', async () => {
+    mockUpdateUser.mockRejectedValue(new Error(MSG));
+    mockGetUser.mockResolvedValue(makeUser({ full_name: 'Adriana Forquera', role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Adriana Forquera')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => { expect(screen.getByText(MSG)).toBeInTheDocument(); });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('error de accion no muestra Reintentar', async () => {
+    mockUpdateUser.mockRejectedValue(new Error(MSG));
+    mockGetUser.mockResolvedValue(makeUser({ full_name: 'Adriana Forquera', role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Adriana Forquera')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => { expect(screen.getByText(MSG)).toBeInTheDocument(); });
+    expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
+  });
+
+  it('error inicial de carga si mantiene Reintentar', async () => {
+    mockGetUser.mockRejectedValue(new Error('Falló la carga'));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Falló la carga')).toBeInTheDocument(); });
+    expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
+  });
+});

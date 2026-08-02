@@ -1,4 +1,5 @@
 import { supabase } from '@/config/supabase';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 export type AdminUserRole = 'admin' | 'supervisor' | 'technician' | 'responsible';
 
@@ -70,11 +71,25 @@ export function getAdminUsersErrorMessage(error: unknown): string {
   return 'Error al gestionar usuarios';
 }
 
+async function getAdminUsersInvokeErrorMessage(error: unknown): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const body: unknown = await error.context.json();
+      if (isRecord(body) && typeof body.error === 'string' && body.error) {
+        return body.error;
+      }
+    } catch {
+      // body is not JSON or json() failed — fall through
+    }
+  }
+  return getAdminUsersErrorMessage(error);
+}
+
 export async function listUsers(): Promise<AdminUser[]> {
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'list_users' },
   });
-  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (error) throw new Error(await getAdminUsersInvokeErrorMessage(error));
   if (isRecord(data) && typeof data.error === 'string' && data.error) {
     throw new Error(data.error);
   }
@@ -92,7 +107,7 @@ export async function getUser(userId: string): Promise<AdminUser> {
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'get_user', data: { user_id: userId } },
   });
-  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (error) throw new Error(await getAdminUsersInvokeErrorMessage(error));
   if (isRecord(data) && typeof data.error === 'string' && data.error) {
     throw new Error(data.error);
   }
@@ -105,7 +120,7 @@ export async function createUser(params: {
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'create_user', data: params },
   });
-  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (error) throw new Error(await getAdminUsersInvokeErrorMessage(error));
   if (isRecord(data) && typeof data.error === 'string' && data.error) {
     throw new Error(data.error);
   }
@@ -118,7 +133,7 @@ export async function updateUser(userId: string, updates: {
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'update_user', data: { user_id: userId, ...updates } },
   });
-  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (error) throw new Error(await getAdminUsersInvokeErrorMessage(error));
   if (isRecord(data) && typeof data.error === 'string' && data.error) {
     throw new Error(data.error);
   }
@@ -129,7 +144,7 @@ export async function resetPassword(userId: string, newPassword: string): Promis
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'reset_password', data: { user_id: userId, new_password: newPassword } },
   });
-  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (error) throw new Error(await getAdminUsersInvokeErrorMessage(error));
   if (isRecord(data) && typeof data.error === 'string' && data.error) {
     throw new Error(data.error);
   }
@@ -140,7 +155,7 @@ export async function sendRecovery(email: string): Promise<void> {
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'send_recovery', data: { email } },
   });
-  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (error) throw new Error(await getAdminUsersInvokeErrorMessage(error));
   if (isRecord(data) && typeof data.error === 'string' && data.error) {
     throw new Error(data.error);
   }
@@ -227,7 +242,7 @@ export async function createResponsible(params: CreateResponsibleParams): Promis
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'create_responsible', data: params },
   });
-  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (error) throw new Error(await getAdminUsersInvokeErrorMessage(error));
   if (isRecord(data) && typeof data.error === 'string' && data.error) {
     throw new Error(data.error);
   }
@@ -263,7 +278,7 @@ export async function getResponsibleAssignments(
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'get_responsible_assignments', data: { responsible_user_id: responsibleUserId } },
   });
-  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (error) throw new Error(await getAdminUsersInvokeErrorMessage(error));
   if (isRecord(data) && typeof data.error === 'string' && data.error) {
     throw new Error(data.error);
   }
@@ -299,7 +314,7 @@ export async function replaceResponsibleAssignments(
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'replace_responsible_assignments', data: params },
   });
-  if (error) throw new Error(getAdminUsersErrorMessage(error));
+  if (error) throw new Error(await getAdminUsersInvokeErrorMessage(error));
   if (isRecord(data) && typeof data.error === 'string' && data.error) {
     throw new Error(data.error);
   }

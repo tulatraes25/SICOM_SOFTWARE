@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { listUsers, getUser, createUser, updateUser, resetPassword, sendRecovery, createResponsible, getResponsibleAssignments, replaceResponsibleAssignments, getAdminUsersErrorMessage } from './adminUsers.service';
 
 const { mockInvoke } = vi.hoisted(() => ({
@@ -862,5 +863,87 @@ describe('replaceResponsibleAssignments', () => {
     expect(params.expected_current_elevator_ids).toBe(expectedIds);
     expect(params.elevator_ids).toEqual([elev1, elev2]);
     expect(params.expected_current_elevator_ids).toEqual([elev1]);
+  });
+});
+
+describe('FunctionsHttpError extraction', () => {
+  function makeHttpError(body: unknown, status = 409): FunctionsHttpError {
+    const response = new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    return new FunctionsHttpError(response);
+  }
+
+  it('FunctionsHttpError con body JSON y propiedad error devuelve el mensaje exacto', async () => {
+    const MSG = 'Antes de desactivar este responsable, reasigná sus ascensores a otro responsable.';
+    mockInvoke.mockResolvedValue({ data: null, error: makeHttpError({ error: MSG }) });
+    await expect(updateUser('u1', { active: false })).rejects.toThrow(MSG);
+  });
+
+  it('updateUser propaga el mensaje exacto del HTTP 409', async () => {
+    const MSG = 'Antes de desactivar este responsable, reasigná sus ascensores a otro responsable.';
+    mockInvoke.mockResolvedValue({ data: null, error: makeHttpError({ error: MSG }) });
+    try {
+      await updateUser('u1', { active: false });
+      expect.fail('should have thrown');
+    } catch (e: unknown) {
+      expect(e).toBeInstanceOf(Error);
+      expect((e as Error).message).toBe(MSG);
+    }
+  });
+
+  it('FunctionsHttpError con JSON sin error usa fallback', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: makeHttpError({ details: 'something' }) });
+    await expect(updateUser('u1', { active: false })).rejects.toThrow('Edge Function returned a non-2xx status code');
+  });
+
+  it('FunctionsHttpError con body no JSON usa fallback', async () => {
+    const response = new Response('not json', { status: 500 });
+    const err = new FunctionsHttpError(response);
+    mockInvoke.mockResolvedValue({ data: null, error: err });
+    await expect(updateUser('u1', { active: false })).rejects.toThrow('Edge Function returned a non-2xx status code');
+  });
+
+  it('FunctionsHttpError con error vacío usa fallback', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: makeHttpError({ error: '' }) });
+    await expect(updateUser('u1', { active: false })).rejects.toThrow('Edge Function returned a non-2xx status code');
+  });
+
+  it('Error normal conserva error.message', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: new Error('custom msg') });
+    await expect(updateUser('u1', { active: false })).rejects.toThrow('custom msg');
+  });
+
+  it('error string conserva el texto', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: 'string error' });
+    await expect(updateUser('u1', { active: false })).rejects.toThrow('string error');
+  });
+
+  it('error desconocido devuelve mensaje genérico', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: 42 });
+    await expect(updateUser('u1', { active: false })).rejects.toThrow('Error al gestionar usuarios');
+  });
+
+  it('no expone details ni hint ni stack', async () => {
+    const MSG = 'Antes de desactivar este responsable, reasigná sus ascensores a otro responsable.';
+    mockInvoke.mockResolvedValue({ data: null, error: makeHttpError({ error: MSG, details: 'internal', hint: 'none' }) });
+    try {
+      await updateUser('u1', { active: false });
+      expect.fail('should have thrown');
+    } catch (e: unknown) {
+      const msg = (e as Error).message;
+      expect(msg).not.toContain('details');
+      expect(msg).not.toContain('hint');
+      expect(msg).not.toContain('stack');
+    }
+  });
+
+  it('el body de error se lee una sola vez', async () => {
+    const MSG = 'test message';
+    const jsonFn = vi.fn().mockResolvedValue({ error: MSG });
+    const response = new Response(null);
+    Object.defineProperty(response, 'json', { value: jsonFn });
+    const err = new FunctionsHttpError(response);
+    mockInvoke.mockResolvedValue({ data: null, error: err });
+    await expect(updateUser('u1', { active: false })).rejects.toThrow(MSG);
+    expect(jsonFn).toHaveBeenCalledTimes(1);
   });
 });

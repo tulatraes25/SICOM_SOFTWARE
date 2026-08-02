@@ -225,7 +225,7 @@ export default function UserDetailPage() {
           <ArrowLeft size={18} /> Volver
         </button>
 
-        {error && <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center justify-between"><span className="flex items-center gap-2"><AlertCircle size={16} /> {error}</span><Button variant="outline" size="sm" onClick={loadUser} disabled={isBusy} aria-label="Reintentar carga de usuario">Reintentar</Button></div>}
+        {error && <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
         {success && <div role="status" className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm flex items-center gap-2"><Check size={16} /> {success}</div>}
 
         <Card>
