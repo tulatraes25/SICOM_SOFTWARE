@@ -133,6 +133,7 @@ export default function UserDetailPage() {
 
   const handleToggleActive = async () => {
     if (!id || !user) return;
+    if (user.active && !window.confirm(`¿Desactivar a ${user.full_name}? El usuario no podrá iniciar sesión.`)) return;
     if (!beginOperation('toggling')) return;
     setError(''); setSuccess('');
     try {

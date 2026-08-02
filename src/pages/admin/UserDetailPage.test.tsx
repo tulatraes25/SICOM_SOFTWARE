@@ -69,7 +69,7 @@ function renderPage(route = '/admin/usuarios/u1') {
   return render(<MemoryRouter initialEntries={[route]}><Routes><Route path="/admin/usuarios/:id" element={<UserDetailPage />} /><Route path="/admin/usuarios" element={<div>Usuarios list</div>} /></Routes></MemoryRouter>);
 }
 
-beforeEach(() => { vi.clearAllMocks(); user = userEvent.setup(); });
+beforeEach(() => { vi.clearAllMocks(); vi.spyOn(window, 'confirm').mockReturnValue(true); user = userEvent.setup(); });
 afterEach(() => { vi.restoreAllMocks(); cleanup(); });
 
 describe('UserDetailPage — Ruta', () => {
@@ -399,6 +399,86 @@ describe('UserDetailPage — Activación', () => {
     def.resolve(undefined);
     mockGetUser.mockResolvedValue(makeUser({ active: false }));
     await waitFor(() => { expect(screen.getByRole('status').textContent).toContain('desactivado correctamente'); });
+  });
+});
+
+describe('UserDetailPage — Confirmación desactivación', () => {
+  it('desactivación muestra confirmación', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('el mensaje contiene el nombre completo', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ full_name: 'Adriana Forquera', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Adriana Forquera')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    expect(window.confirm).toHaveBeenCalledWith('¿Desactivar a Adriana Forquera? El usuario no podrá iniciar sesión.');
+  });
+
+  it('cancelar no llama updateUser', async () => {
+    (window.confirm as ReturnType<typeof vi.fn>).mockReturnValue(false);
+    mockGetUser.mockResolvedValue(makeUser({ active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+  });
+
+  it('confirmar llama updateUser con active:false', async () => {
+    (window.confirm as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    mockUpdateUser.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    expect(mockUpdateUser).toHaveBeenCalledWith('u1', { active: false });
+  });
+
+  it('reactivar no muestra confirmación', async () => {
+    mockGetUser.mockResolvedValue(makeUser({ active: false }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Inactivo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /reactivar/i })); });
+    expect(window.confirm).not.toHaveBeenCalled();
+  });
+
+  it('conflicto 409 continúa mostrando el mensaje exacto', async () => {
+    const MSG = 'Antes de desactivar este responsable, reasigná sus ascensores a otro responsable.';
+    (window.confirm as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    mockUpdateUser.mockRejectedValue(new Error(MSG));
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => { expect(screen.getByText(MSG)).toBeInTheDocument(); });
+  });
+
+  it('conflicto mantiene al usuario activo', async () => {
+    const MSG = 'Antes de desactivar este responsable, reasigná sus ascensores a otro responsable.';
+    (window.confirm as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    mockUpdateUser.mockRejectedValue(new Error(MSG));
+    mockGetUser.mockResolvedValue(makeUser({ role: 'responsible', active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /desactivar/i })); });
+    await waitFor(() => { expect(screen.getByText(MSG)).toBeInTheDocument(); });
+    expect(screen.getByText('Activo')).toBeInTheDocument();
+  });
+
+  it('doble clic continúa produciendo una sola llamada', async () => {
+    (window.confirm as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    mockUpdateUser.mockResolvedValue(undefined);
+    mockGetUser.mockResolvedValue(makeUser({ active: true }));
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Activo')).toBeInTheDocument(); });
+    const btn = screen.getByRole('button', { name: /desactivar/i });
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    expect(mockUpdateUser).toHaveBeenCalledTimes(1);
   });
 });
 
