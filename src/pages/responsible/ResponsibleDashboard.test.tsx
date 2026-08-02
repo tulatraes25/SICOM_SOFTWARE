@@ -101,9 +101,9 @@ const mockUseAuth = vi.mocked(useAuth);
 function makeAuthContext(fullName = 'Claudio Tula') {
   return {
     user: { id: 'user-1', email: 'claudio@test.com', app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: '' },
-    profile: { id: 'user-1', full_name: fullName, role: RESPONSIBLE_ROLE, email: 'claudio@test.com', active: true, created_at: '', updated_at: '', phone: undefined },
+    profile: { id: 'user-1', full_name: fullName, role: RESPONSIBLE_ROLE, email: 'claudio@test.com', active: true, created_at: '', updated_at: '', phone: undefined, must_change_password: false, temporary_password_issued_at: null, password_changed_at: null },
     logout: () => Promise.resolve(),
-    login: () => Promise.resolve({ error: null, profile: { id: 'user-1', full_name: fullName, role: RESPONSIBLE_ROLE, email: 'claudio@test.com', active: true, created_at: '', updated_at: '', phone: undefined } }),
+    login: () => Promise.resolve({ error: null, profile: { id: 'user-1', full_name: fullName, role: RESPONSIBLE_ROLE, email: 'claudio@test.com', active: true, created_at: '', updated_at: '', phone: undefined, must_change_password: false, temporary_password_issued_at: null, password_changed_at: null } }),
     getRedirectPath: () => '/responsable',
     hasRole: () => true,
     isAdmin: false,

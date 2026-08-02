@@ -19,6 +19,39 @@ export function getRoleDashboardPath(role: UserRole): string {
   return ROLE_DASHBOARD_PATHS[role];
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function validateProfile(data: unknown): Profile | null {
+  if (!isRecord(data)) return null;
+  const { id, email, full_name, role, active, created_at, updated_at,
+    must_change_password, temporary_password_issued_at, password_changed_at } = data;
+  if (typeof id !== 'string') return null;
+  if (typeof email !== 'string') return null;
+  if (typeof full_name !== 'string') return null;
+  if (typeof role !== 'string' || !isValidRole(role)) return null;
+  if (typeof active !== 'boolean') return null;
+  if (typeof created_at !== 'string') return null;
+  if (typeof updated_at !== 'string') return null;
+  if (typeof must_change_password !== 'boolean') return null;
+  if (temporary_password_issued_at !== null && typeof temporary_password_issued_at !== 'string') return null;
+  if (password_changed_at !== null && typeof password_changed_at !== 'string') return null;
+  return {
+    id,
+    email,
+    full_name,
+    role,
+    phone: typeof data.phone === 'string' ? data.phone : undefined,
+    active,
+    created_at,
+    updated_at,
+    must_change_password,
+    temporary_password_issued_at: temporary_password_issued_at as string | null,
+    password_changed_at: password_changed_at as string | null,
+  };
+}
+
 export async function getCurrentUserProfile(): Promise<Profile | null> {
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -26,25 +59,25 @@ export async function getCurrentUserProfile(): Promise<Profile | null> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select('id, email, full_name, role, phone, active, created_at, updated_at, must_change_password, temporary_password_issued_at, password_changed_at')
     .eq('id', user.id)
     .single();
 
   if (error || !data) return null;
 
-  return data as Profile;
+  return validateProfile(data);
 }
 
 export async function getProfileById(id: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select('id, email, full_name, role, phone, active, created_at, updated_at, must_change_password, temporary_password_issued_at, password_changed_at')
     .eq('id', id)
     .single();
 
   if (error || !data) return null;
 
-  return data as Profile;
+  return validateProfile(data);
 }
 
 export async function signIn(email: string, password: string) {

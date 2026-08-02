@@ -1,15 +1,15 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { COMPANY_NAME, COMPANY_WEBSITE } from '@/config/constants';
 import { SICOM_IMAGES } from '@/config/assets';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { Link } from 'react-router-dom';
 import { Eye, EyeOff, ExternalLink } from 'lucide-react';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, loading: authLoading, isAuthenticated, getRedirectPath } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,10 +17,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  if (isAuthenticated) {
-    navigate(getRedirectPath(), { replace: true });
-    return null;
-  }
+  const passwordChanged = (location.state as Record<string, unknown> | null)?.passwordChanged === true;
+  const inactiveMessage = (location.state as Record<string, unknown> | null)?.inactive === true
+    ? 'Tu usuario está inactivo. Contactá al administrador.'
+    : null;
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(getRedirectPath(), { replace: true });
+    }
+  }, [isAuthenticated, navigate, getRedirectPath]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,15 +52,13 @@ export default function LoginPage() {
     <div className="min-h-screen flex">
       {/* Left side - Branding with image */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        {/* Background image */}
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${SICOM_IMAGES.hero})` }}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-primary/95 via-primary/90 to-accent/80" />
         </div>
-        
-        {/* Content */}
+
         <div className="relative z-10 flex flex-col justify-center p-12 text-white">
           <img src={SICOM_IMAGES.logo} alt={COMPANY_NAME} className="h-16 mb-8 brightness-0 invert" />
 
@@ -82,9 +86,9 @@ export default function LoginPage() {
           </div>
 
           <div className="mt-12 pt-8 border-t border-white/20">
-            <a 
-              href={COMPANY_WEBSITE} 
-              target="_blank" 
+            <a
+              href={COMPANY_WEBSITE}
+              target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-white/60 hover:text-white transition-colors"
             >
@@ -98,7 +102,6 @@ export default function LoginPage() {
       {/* Right side - Login form */}
       <div className="flex-1 flex items-center justify-center p-8 bg-white">
         <div className="w-full max-w-md">
-          {/* Mobile logo */}
           <div className="lg:hidden mb-8 text-center">
             <img src={SICOM_IMAGES.logo} alt={COMPANY_NAME} className="h-14 mx-auto mb-4" />
           </div>
@@ -108,9 +111,21 @@ export default function LoginPage() {
             <p className="text-gray-600">Ingresa tus credenciales para acceder</p>
           </div>
 
+          {passwordChanged && (
+            <div role="status" className="p-3 bg-success/10 border border-success/30 rounded-lg text-success text-sm mb-4">
+              Contraseña actualizada correctamente. Iniciá sesión con tu nueva contraseña.
+            </div>
+          )}
+
+          {inactiveMessage && (
+            <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded-lg text-danger text-sm mb-4">
+              {inactiveMessage}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="p-3 bg-danger/10 border border-danger/30 rounded-lg text-danger text-sm">
+              <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded-lg text-danger text-sm">
                 {error}
               </div>
             )}
@@ -120,7 +135,7 @@ export default function LoginPage() {
               type="email"
               placeholder="tu@email.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setError(''); }}
               required
               autoComplete="email"
             />
@@ -131,7 +146,7 @@ export default function LoginPage() {
                 type={showPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); setError(''); }}
                 required
                 autoComplete="current-password"
               />
@@ -157,7 +172,7 @@ export default function LoginPage() {
           <div className="mt-6 text-center text-sm text-gray-500">
             <Link to="/recuperar-contrasena" className="text-secondary hover:underline">¿Olvidaste tu contraseña?</Link>
             <p className="text-xs text-gray-400">
-              Los usuarios deben ser creados desde el panel de Supabase Auth.
+              Las cuentas son administradas por SICOM Patagonia.
             </p>
           </div>
 

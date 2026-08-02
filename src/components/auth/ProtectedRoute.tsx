@@ -2,13 +2,16 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import type { UserRole } from '@/types/roles';
 
+const REQUIRED_PASSWORD_CHANGE_PATH = '/cambiar-contrasena-obligatoria';
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: UserRole[];
+  allowPasswordChangeRequired?: boolean;
 }
 
-export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { user, profile, loading, isAuthenticated } = useAuth();
+export default function ProtectedRoute({ children, allowedRoles, allowPasswordChangeRequired }: ProtectedRouteProps) {
+  const { user, profile, loading, isAuthenticated, logout } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -24,6 +27,19 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
 
   if (!isAuthenticated || !user || !profile) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (!profile.active) {
+    void logout();
+    return <Navigate to="/login" state={{ inactive: true }} replace />;
+  }
+
+  if (profile.must_change_password && !allowPasswordChangeRequired) {
+    return <Navigate to={REQUIRED_PASSWORD_CHANGE_PATH} replace />;
+  }
+
+  if (!profile.must_change_password && allowPasswordChangeRequired) {
+    return <Navigate to={profile.role === 'responsible' ? '/responsable' : `/admin`} replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(profile.role)) {

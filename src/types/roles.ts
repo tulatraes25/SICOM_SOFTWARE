@@ -9,6 +9,9 @@ export interface Profile {
   active: boolean;
   created_at: string;
   updated_at: string;
+  must_change_password: boolean;
+  temporary_password_issued_at: string | null;
+  password_changed_at: string | null;
 }
 
 export interface User {

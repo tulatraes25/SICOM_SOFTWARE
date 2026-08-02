@@ -13,6 +13,7 @@ export const ROUTES = {
 
   // Auth
   LOGIN: '/login',
+  REQUIRED_PASSWORD_CHANGE: '/cambiar-contrasena-obligatoria',
 
   // Admin
   ADMIN_DASHBOARD: '/admin',

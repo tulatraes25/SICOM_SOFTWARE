@@ -4,6 +4,7 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
 // Auth
 import LoginPage from '@/pages/auth/LoginPage';
+import RequiredPasswordChangePage from '@/pages/auth/RequiredPasswordChangePage';
 
 // Public
 import PublicElevatorView from '@/pages/public/PublicElevatorView';
@@ -75,6 +76,7 @@ export default function AppRouter() {
       <Routes>
         {/* Public routes */}
         <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+        <Route path={ROUTES.REQUIRED_PASSWORD_CHANGE} element={<ProtectedRoute allowPasswordChangeRequired><RequiredPasswordChangePage /></ProtectedRoute>} />
         <Route path={ROUTES.PUBLIC_ELEVATOR} element={<PublicElevatorView />} />
 
         {/* Admin routes */}
