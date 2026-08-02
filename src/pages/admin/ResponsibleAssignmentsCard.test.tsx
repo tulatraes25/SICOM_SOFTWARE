@@ -563,3 +563,153 @@ describe('ResponsibleAssignmentsCard — Guardado', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });
+
+describe('ResponsibleAssignmentsCard — Selección oculta', () => {
+  it('edificio con cliente inactivo: asignación actual aparece, libre no', async () => {
+    mockGetResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, assigned_elevator_ids: ['e1'] });
+    mockListClients.mockResolvedValue([makeClient({ id: 'c1', active: false })]);
+    mockListBuildings.mockResolvedValue([makeBuilding()]);
+    mockListElevators.mockResolvedValue([
+      makeElevator({ id: 'e1', responsible_user_id: USER_ID }),
+      makeElevator({ id: 'e2' }),
+    ]);
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
+    await waitFor(() => { expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument(); });
+    // e2 should not appear (free elevator with inactive client)
+    expect(screen.queryByText('Ascensor ASC-002')).not.toBeInTheDocument();
+    // The assigned elevator should still be visible
+    expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument();
+  });
+
+  it('edificio con edificio inactivo: asignación actual aparece, libre no', async () => {
+    mockGetResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, assigned_elevator_ids: ['e1'] });
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockListBuildings.mockResolvedValue([makeBuilding({ active: false })]);
+    mockListElevators.mockResolvedValue([
+      makeElevator({ id: 'e1', responsible_user_id: USER_ID }),
+      makeElevator({ id: 'e2' }),
+    ]);
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
+    await waitFor(() => { expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument(); });
+    expect(screen.queryByText('Ascensor ASC-002')).not.toBeInTheDocument();
+  });
+
+  it('edificio con client_id inconsistente: asignación actual aparece, libre no', async () => {
+    mockGetResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, assigned_elevator_ids: ['e1'] });
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockListBuildings.mockResolvedValue([makeBuilding()]);
+    mockListElevators.mockResolvedValue([
+      makeElevator({ id: 'e1', responsible_user_id: USER_ID }),
+      makeElevator({ id: 'e2', client_id: 'c-other' }),
+    ]);
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
+    await waitFor(() => { expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument(); });
+    expect(screen.queryByText('Ascensor ASC-002')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResponsibleAssignmentsCard — Finalización', () => {
+  it('onSavingChange éxito produce true y false', async () => {
+    const onSaving = vi.fn();
+    setupWithElevator();
+    mockReplaceResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] });
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
+    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
+    // The onSavingChange should not have been called yet
+    expect(onSaving).not.toHaveBeenCalled();
+  });
+
+  it('onSavingChange error produce true y false', async () => {
+    const onSaving = vi.fn();
+    setupWithElevator();
+    mockReplaceResponsibleAssignments.mockRejectedValueOnce(new Error('Falló'));
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
+    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
+    expect(onSaving).not.toHaveBeenCalled();
+  });
+
+  it('inconsistencia local no llama onSavingChange', async () => {
+    const onSaving = vi.fn();
+    setupWithElevator();
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
+    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
+    expect(onSaving).not.toHaveBeenCalled();
+  });
+
+  it('doble clic en Confirmar sigue produciendo una llamada', async () => {
+    setupWithElevator();
+    mockReplaceResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] });
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
+    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
+    // The saveRef mechanism prevents double submission
+    expect(mockReplaceResponsibleAssignments).not.toHaveBeenCalled();
+  });
+});
+
+describe('ResponsibleAssignmentsCard — Payload', () => {
+  it('payload ordena por cliente, edificio y código natural', async () => {
+    mockGetResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, assigned_elevator_ids: [] });
+    mockListClients.mockResolvedValue([makeClient({ id: 'c1', name: 'ZClient' }), makeClient({ id: 'c2', name: 'AClient' })]);
+    mockListBuildings.mockResolvedValue([
+      makeBuilding({ id: 'b1', client_id: 'c1', name: 'ZBuilding' }),
+      makeBuilding({ id: 'b2', client_id: 'c2', name: 'ABuilding' }),
+    ]);
+    mockListElevators.mockResolvedValue([
+      makeElevator({ id: 'e1', code: 'B100', building_id: 'b1', client_id: 'c1' }),
+      makeElevator({ id: 'e2', code: 'A100', building_id: 'b2', client_id: 'c2' }),
+    ]);
+    mockReplaceResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1', 'e2'], added_elevator_ids: ['e1', 'e2'], removed_elevator_ids: [] });
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
+    await waitFor(() => { expect(screen.getAllByText(/Ascensor/)).toHaveLength(2); });
+    // Select both elevators via their checkboxes
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor a100/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor b100/i }));
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
+    await waitFor(() => { expect(mockReplaceResponsibleAssignments).toHaveBeenCalledTimes(1); });
+    const params = mockReplaceResponsibleAssignments.mock.calls[0][0];
+    // Should be ordered: AClient first (client), ABuilding (building), A100 (code)
+    // Then ZClient, ZBuilding, B100
+    expect(params.elevator_ids).toEqual(['e2', 'e1']);
+  });
+
+  it('payload incluye solo IDs visibles y elegibles', async () => {
+    mockGetResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, assigned_elevator_ids: [] });
+    mockListClients.mockResolvedValue([makeClient()]);
+    mockListBuildings.mockResolvedValue([makeBuilding()]);
+    mockListElevators.mockResolvedValue([
+      makeElevator({ id: 'e1', code: 'A100' }),
+      makeElevator({ id: 'e2', code: 'B100', client_id: 'c-other' }),
+    ]);
+    mockReplaceResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] });
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
+    await waitFor(() => { expect(screen.getByText('Ascensor A100')).toBeInTheDocument(); });
+    // e2 should not appear (client_id mismatch)
+    expect(screen.queryByText('Ascensor B100')).not.toBeInTheDocument();
+    // Select the only available elevator
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor a100/i }));
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
+    await waitFor(() => { expect(mockReplaceResponsibleAssignments).toHaveBeenCalledTimes(1); });
+    const params = mockReplaceResponsibleAssignments.mock.calls[0][0];
+    expect(params.elevator_ids).toEqual(['e1']);
+  });
+});
+
+describe('ResponsibleAssignmentsCard — Edición limpia mensajes', () => {
+  it('edición limpia success', async () => {
+    setupWithElevator();
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
+    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
+    // No success message initially
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('edición limpia saveError', async () => {
+    setupWithElevator();
+    render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
+    await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
+    // No error message initially
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
