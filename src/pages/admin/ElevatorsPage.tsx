@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { listElevators, searchElevators, filterElevators, deactivateElevator } from '@/services/elevators.service';
+import { searchElevators, filterElevators, deactivateElevator, reactivateElevator } from '@/services/elevators.service';
 import { listClients } from '@/services/clients.service';
 import { createAuditLog } from '@/services/audit.service';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -11,33 +11,47 @@ import ElevatorForm from './ElevatorForm';
 import ModalQR from '@/components/qr/ModalQR';
 import type { Elevator, Client } from '@/types/database';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS, CONTRACTUAL_STATUS_LABELS, STATUS_COLORS } from '@/types/elevators';
-import { Plus, Search, Edit, Trash2, QrCode } from 'lucide-react';
+import { Plus, Search, Edit, PowerOff, RotateCcw, QrCode } from 'lucide-react';
+
+type ActiveFilter = 'active' | 'inactive' | 'all';
+
+function getRelationName(relation: unknown): string {
+  if (typeof relation === 'object' && relation !== null && 'name' in relation && typeof (relation as Record<string, unknown>).name === 'string') {
+    return (relation as Record<string, string>).name;
+  }
+  return '-';
+}
 
 export default function ElevatorsPage() {
   const [elevators, setElevators] = useState<Elevator[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [success, setSuccess] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('active');
   const [filters, setFilters] = useState({ operational_status: '', conservation_status: '', contractual_status: '', client_id: '' });
   const [showForm, setShowForm] = useState(false);
   const [editingElevator, setEditingElevator] = useState<Elevator | null>(null);
   const [qrModal, setQrModal] = useState<Elevator | null>(null);
+  const [actionElevatorId, setActionElevatorId] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
+  const actionRef = useRef(false);
 
   const loadElevators = async () => {
     try {
       setLoading(true);
+      setLoadError('');
       let data: Elevator[];
       if (searchQuery) {
-        data = await searchElevators(searchQuery);
-      } else if (Object.values(filters).some(v => v)) {
-        data = await filterElevators(filters);
+        data = await searchElevators(searchQuery, activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined);
       } else {
-        data = await listElevators();
+        data = await filterElevators({ ...filters, active: activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined });
       }
       setElevators(data);
     } catch (err) {
-      console.error('Error loading elevators:', err);
+      setLoadError('No se pudieron cargar los ascensores.');
     } finally {
       setLoading(false);
     }
@@ -53,26 +67,55 @@ export default function ElevatorsPage() {
   };
 
   useEffect(() => { loadClients(); }, []);
-  useEffect(() => { loadElevators(); }, [searchQuery, filters]);
+  useEffect(() => { loadElevators(); }, [searchQuery, filters, activeFilter]);
 
   const handleEdit = (elevator: Elevator) => {
-    console.debug('[ElevatorsPage] Edit clicked', elevator.id, elevator.code);
     setEditingElevator(elevator);
     setShowForm(true);
-    // Scroll to form
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   };
 
   const handleDeactivate = async (elevator: Elevator) => {
-    if (!confirm(`¿Desactivar ascensor "${elevator.code}"?`)) return;
+    if (elevator.responsible_user_id) {
+      setActionError('Antes de desactivar este ascensor, retiralo del responsable asignado desde Usuarios → Responsables de edificios.');
+      return;
+    }
+    if (!confirm(`¿Desactivar el ascensor «${elevator.code}»? Permanecerá disponible en el historial y podrá reactivarse posteriormente.`)) return;
+    if (actionRef.current) return;
+    actionRef.current = true;
+    setActionElevatorId(elevator.id);
+    setActionError('');
     try {
       await deactivateElevator(elevator.id);
       await createAuditLog({ action: 'deactivate', entity_type: 'elevator', entity_id: elevator.id });
+      setSuccess(`El ascensor ${elevator.code} fue desactivado correctamente.`);
       loadElevators();
     } catch (err) {
-      console.error('Error:', err);
+      setActionError('No se pudo desactivar el ascensor.');
+    } finally {
+      actionRef.current = false;
+      setActionElevatorId(null);
+    }
+  };
+
+  const handleReactivate = async (elevator: Elevator) => {
+    if (!confirm(`¿Reactivar el ascensor «${elevator.code}»?`)) return;
+    if (actionRef.current) return;
+    actionRef.current = true;
+    setActionElevatorId(elevator.id);
+    setActionError('');
+    try {
+      await reactivateElevator(elevator.id);
+      await createAuditLog({ action: 'reactivate', entity_type: 'elevator', entity_id: elevator.id });
+      setSuccess(`El ascensor ${elevator.code} fue reactivado correctamente.`);
+      loadElevators();
+    } catch (err) {
+      setActionError('No se pudo reactivar el ascensor.');
+    } finally {
+      actionRef.current = false;
+      setActionElevatorId(null);
     }
   };
 
@@ -86,6 +129,14 @@ export default function ElevatorsPage() {
     setShowForm(false);
     setEditingElevator(null);
   };
+
+  const emptyMessage = searchQuery
+    ? 'No se encontraron ascensores para la búsqueda.'
+    : activeFilter === 'active'
+      ? 'No hay ascensores activos.'
+      : activeFilter === 'inactive'
+        ? 'No hay ascensores inactivos.'
+        : 'No se encontraron ascensores.';
 
   return (
     <DashboardLayout role="admin" title="Ascensores">
@@ -105,25 +156,48 @@ export default function ElevatorsPage() {
             </div>
             <div className="flex flex-wrap gap-3">
               <div className="w-44">
-                <Select value={filters.client_id} onChange={(e) => setFilters({ ...filters, client_id: e.target.value })}
+                <Select label="Vigencia" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as ActiveFilter)}
+                  options={[{ value: 'active', label: 'Activos' }, { value: 'inactive', label: 'Inactivos' }, { value: 'all', label: 'Todos' }]} />
+              </div>
+              <div className="w-44">
+                <Select label="Cliente" value={filters.client_id} onChange={(e) => setFilters({ ...filters, client_id: e.target.value })}
                   options={[{ value: '', label: 'Todos los clientes' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} />
               </div>
               <div className="w-44">
-                <Select value={filters.operational_status} onChange={(e) => setFilters({ ...filters, operational_status: e.target.value })}
+                <Select label="Estado operativo" value={filters.operational_status} onChange={(e) => setFilters({ ...filters, operational_status: e.target.value })}
                   options={[{ value: '', label: 'Todos los estados' }, ...Object.entries(OPERATIONAL_STATUS_LABELS).map(([v, l]) => ({ value: v, label: l }))]} />
               </div>
               <div className="w-44">
-                <Select value={filters.conservation_status} onChange={(e) => setFilters({ ...filters, conservation_status: e.target.value })}
+                <Select label="Conservación" value={filters.conservation_status} onChange={(e) => setFilters({ ...filters, conservation_status: e.target.value })}
                   options={[{ value: '', label: 'Todas las conservaciones' }, ...Object.entries(CONSERVATION_STATUS_LABELS).map(([v, l]) => ({ value: v, label: l }))]} />
               </div>
               <div className="w-44">
-                <Select value={filters.contractual_status} onChange={(e) => setFilters({ ...filters, contractual_status: e.target.value })}
+                <Select label="Contractual" value={filters.contractual_status} onChange={(e) => setFilters({ ...filters, contractual_status: e.target.value })}
                   options={[{ value: '', label: 'Todos los contractuales' }, ...Object.entries(CONTRACTUAL_STATUS_LABELS).map(([v, l]) => ({ value: v, label: l }))]} />
               </div>
             </div>
           </div>
           <Button onClick={() => { setEditingElevator(null); setShowForm(true); }}><Plus size={18} className="mr-2" /> Nuevo Ascensor</Button>
         </div>
+
+        {loadError && (
+          <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center justify-between">
+            <span>{loadError}</span>
+            <Button variant="outline" size="sm" onClick={loadElevators}>Reintentar</Button>
+          </div>
+        )}
+
+        {actionError && (
+          <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm">
+            {actionError}
+          </div>
+        )}
+
+        {success && (
+          <div role="status" className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm">
+            {success}
+          </div>
+        )}
 
         {/* Form */}
         <div ref={formRef}>
@@ -146,7 +220,7 @@ export default function ElevatorsPage() {
             {loading ? (
               <div className="text-center py-8"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin mx-auto" /></div>
             ) : elevators.length === 0 ? (
-              <div className="text-center py-8"><p className="text-gray-500">No se encontraron ascensores</p></div>
+              <div className="text-center py-8"><p className="text-gray-500">{emptyMessage}</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -156,6 +230,7 @@ export default function ElevatorsPage() {
                       <th className="text-left py-3 px-4 font-medium text-gray-600">Cliente</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-600">Edificio</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-600">Estado</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-600">Vigencia</th>
                       <th className="text-right py-3 px-4 font-medium text-gray-600">Acciones</th>
                     </tr>
                   </thead>
@@ -163,14 +238,21 @@ export default function ElevatorsPage() {
                     {elevators.map((elevator) => (
                       <tr key={elevator.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-3 px-4 font-mono font-medium">{elevator.code}</td>
-                        <td className="py-3 px-4 text-gray-600">{(elevator.client as any)?.name || '-'}</td>
-                        <td className="py-3 px-4 text-gray-600">{(elevator.building as any)?.name || '-'}</td>
+                        <td className="py-3 px-4 text-gray-600">{getRelationName(elevator.client)}</td>
+                        <td className="py-3 px-4 text-gray-600">{getRelationName(elevator.building)}</td>
                         <td className="py-3 px-4"><Badge className={STATUS_COLORS[elevator.operational_status] || ''}>{OPERATIONAL_STATUS_LABELS[elevator.operational_status as keyof typeof OPERATIONAL_STATUS_LABELS] || elevator.operational_status}</Badge></td>
                         <td className="py-3 px-4">
+                          <Badge variant={elevator.active ? 'success' : 'danger'}>{elevator.active ? 'Activo' : 'Inactivo'}</Badge>
+                        </td>
+                        <td className="py-3 px-4">
                           <div className="flex justify-end gap-1">
-                            <Button size="sm" variant="ghost" onClick={() => setQrModal(elevator)} title="Ver QR"><QrCode size={16} /></Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleEdit(elevator)} title="Editar"><Edit size={16} /></Button>
-                            {elevator.active && <Button size="sm" variant="ghost" onClick={() => handleDeactivate(elevator)} title="Desactivar" className="text-danger hover:text-danger"><Trash2 size={16} /></Button>}
+                            <Button size="sm" variant="ghost" onClick={() => setQrModal(elevator)} title="Ver QR" type="button"><QrCode size={16} /></Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleEdit(elevator)} title="Editar" type="button"><Edit size={16} /></Button>
+                            {elevator.active ? (
+                              <Button size="sm" variant="ghost" onClick={() => handleDeactivate(elevator)} title={`Desactivar ascensor ${elevator.code}`} type="button" disabled={actionElevatorId === elevator.id} className="text-danger hover:text-danger"><PowerOff size={16} /></Button>
+                            ) : (
+                              <Button size="sm" variant="ghost" onClick={() => handleReactivate(elevator)} title={`Reactivar ascensor ${elevator.code}`} type="button" disabled={actionElevatorId === elevator.id} className="text-success hover:text-success"><RotateCcw size={16} /></Button>
+                            )}
                           </div>
                         </td>
                       </tr>

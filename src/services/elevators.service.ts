@@ -1,6 +1,18 @@
 import { supabase } from '@/config/supabase';
 import type { Elevator } from '@/types/database';
 
+export type CreateElevatorInput = Omit<
+  Elevator,
+  'id' | 'created_at' | 'updated_at' | 'qr_token' | 'responsible_user_id' | 'building' | 'client'
+> & {
+  qr_token?: string;
+};
+
+export type UpdateElevatorInput = Omit<
+  Partial<Elevator>,
+  'id' | 'created_at' | 'updated_at' | 'qr_token' | 'responsible_user_id' | 'building' | 'client'
+>;
+
 function generateQRToken(length: number = 12): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
@@ -42,12 +54,18 @@ export async function getElevatorByToken(token: string): Promise<Elevator | null
   return data;
 }
 
-export async function searchElevators(query: string): Promise<Elevator[]> {
-  const { data, error } = await supabase
+export async function searchElevators(query: string, active?: boolean): Promise<Elevator[]> {
+  let q = supabase
     .from('elevators')
     .select('*, building:buildings(name, address), client:clients(name)')
     .or(`code.ilike.%${query}%,serial_number.ilike.%${query}%,manufacturer.ilike.%${query}%`)
     .order('code');
+
+  if (active !== undefined) {
+    q = q.eq('active', active);
+  }
+
+  const { data, error } = await q;
 
   if (error) throw error;
   return data || [];
@@ -59,6 +77,7 @@ export async function filterElevators(filters: {
   contractual_status?: string;
   client_id?: string;
   building_id?: string;
+  active?: boolean;
 }): Promise<Elevator[]> {
   let query = supabase
     .from('elevators')
@@ -79,6 +98,9 @@ export async function filterElevators(filters: {
   if (filters.building_id) {
     query = query.eq('building_id', filters.building_id);
   }
+  if (filters.active !== undefined) {
+    query = query.eq('active', filters.active);
+  }
 
   const { data, error } = await query.order('code');
 
@@ -86,10 +108,10 @@ export async function filterElevators(filters: {
   return data || [];
 }
 
-export async function createElevator(elevator: Omit<Elevator, 'id' | 'created_at' | 'updated_at' | 'qr_token'> & { qr_token?: string }): Promise<Elevator> {
+export async function createElevator(input: CreateElevatorInput): Promise<Elevator> {
   const elevatorData = {
-    ...elevator,
-    qr_token: elevator.qr_token || generateQRToken(),
+    ...input,
+    qr_token: input.qr_token || generateQRToken(),
   };
 
   const { data, error } = await supabase
@@ -102,7 +124,7 @@ export async function createElevator(elevator: Omit<Elevator, 'id' | 'created_at
   return data;
 }
 
-export async function updateElevator(id: string, updates: Partial<Elevator>): Promise<Elevator> {
+export async function updateElevator(id: string, updates: UpdateElevatorInput): Promise<Elevator> {
   const { data, error } = await supabase
     .from('elevators')
     .update({ ...updates, updated_at: new Date().toISOString() })
@@ -118,6 +140,15 @@ export async function deactivateElevator(id: string): Promise<void> {
   const { error } = await supabase
     .from('elevators')
     .update({ active: false, updated_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function reactivateElevator(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('elevators')
+    .update({ active: true, updated_at: new Date().toISOString() })
     .eq('id', id);
 
   if (error) throw error;

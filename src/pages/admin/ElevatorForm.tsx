@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { listClients } from '@/services/clients.service';
 import { getBuildingsByClient } from '@/services/buildings.service';
-import { listResponsible } from '@/services/profiles.service';
 import { createElevator, updateElevator } from '@/services/elevators.service';
 import { createAuditLog } from '@/services/audit.service';
 import RecipientsManager from './RecipientsManager';
@@ -12,10 +11,10 @@ import {
   ELEVATOR_TYPE_LABELS,
 } from '@/types/elevators';
 import type { Client, Building, Elevator } from '@/types/database';
-import type { Profile } from '@/types/roles';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import Badge from '@/components/ui/Badge';
 
 interface ElevatorFormProps {
   elevator?: Elevator | null;
@@ -28,7 +27,6 @@ export default function ElevatorForm({ elevator, onSuccess, onCancel }: Elevator
   const [error, setError] = useState('');
   const [clients, setClients] = useState<Client[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
-  const [responsibleUsers, setResponsibleUsers] = useState<Profile[]>([]);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [formData, setFormData] = useState({
     code: '',
@@ -44,7 +42,6 @@ export default function ElevatorForm({ elevator, onSuccess, onCancel }: Elevator
     operational_status: 'operativo',
     conservation_status: 'conforme',
     contractual_status: 'activo',
-    responsible_user_id: '',
     conservation_company: '',
     supervisor_name: '',
     supervisor_phone: '',
@@ -70,7 +67,6 @@ export default function ElevatorForm({ elevator, onSuccess, onCancel }: Elevator
         operational_status: elevator.operational_status || 'operativo',
         conservation_status: elevator.conservation_status || 'conforme',
         contractual_status: elevator.contractual_status || 'activo',
-        responsible_user_id: elevator.responsible_user_id || '',
         conservation_company: elevator.conservation_company || '',
         supervisor_name: elevator.supervisor_name || '',
         supervisor_phone: elevator.supervisor_phone || '',
@@ -82,14 +78,10 @@ export default function ElevatorForm({ elevator, onSuccess, onCancel }: Elevator
 
   const loadInitialData = async () => {
     try {
-      const [clientsData, responsibleData] = await Promise.all([
-        listClients(),
-        listResponsible(),
-      ]);
+      const clientsData = await listClients();
       setClients(clientsData.filter(c => c.active));
-      setResponsibleUsers(responsibleData);
     } catch (err) {
-      console.error('Error loading data:', err);
+      console.error('Error loading clients:', err);
     }
   };
 
@@ -265,13 +257,20 @@ export default function ElevatorForm({ elevator, onSuccess, onCancel }: Elevator
       <div className="border-t pt-4 mt-4">
         <h4 className="font-medium text-gray-700 mb-3">Asignaciones</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select
-            label="Responsable Autorizado"
-            value={formData.responsible_user_id}
-            onChange={(e) => setFormData({ ...formData, responsible_user_id: e.target.value })}
-            options={responsibleUsers.map(u => ({ value: u.id, label: u.full_name }))}
-            placeholder="Sin asignar"
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Estado del responsable</label>
+            {elevator?.responsible_user_id ? (
+              <div className="space-y-2">
+                <Badge variant="success">Asignado</Badge>
+                <p className="text-sm text-gray-500">Este ascensor tiene un responsable asignado. Para modificarlo, utilizá Usuarios → Responsables de edificios.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Badge variant="default">Sin asignar</Badge>
+                <p className="text-sm text-gray-500">El responsable se asigna después de crear el ascensor desde Usuarios → Responsables de edificios.</p>
+              </div>
+            )}
+          </div>
           <Input
             label="Empresa Conservadora"
             value={formData.conservation_company}
