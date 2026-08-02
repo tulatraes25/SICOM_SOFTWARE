@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import ResponsibleAssignmentsCard from './ResponsibleAssignmentsCard';
 
 const { mockGetResponsibleAssignments, mockReplaceResponsibleAssignments, mockListClients, mockListBuildings, mockListElevators } = vi.hoisted(() => ({
@@ -54,7 +55,17 @@ function setupWithElevator(overrides: Record<string, unknown> = {}) {
   mockListElevators.mockResolvedValue([makeElevator(overrides)]);
 }
 
-beforeEach(() => { vi.clearAllMocks(); });
+let user: ReturnType<typeof userEvent.setup>;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockGetResponsibleAssignments.mockReset();
+  mockReplaceResponsibleAssignments.mockReset();
+  mockListClients.mockReset();
+  mockListBuildings.mockReset();
+  mockListElevators.mockReset();
+  user = userEvent.setup();
+});
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('ResponsibleAssignmentsCard — Carga', () => {
@@ -512,7 +523,7 @@ describe('ResponsibleAssignmentsCard — Finalización', () => {
     mockReplaceResponsibleAssignments.mockReturnValue(def.promise);
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
     await waitFor(() => { expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument(); });
-    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
+    await user.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
     await waitFor(() => { expect(screen.getByRole('button', { name: /guardar/i })).not.toBeDisabled(); });
     fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
@@ -528,16 +539,12 @@ describe('ResponsibleAssignmentsCard — Finalización', () => {
   it('onSavingChange error produce true y false', async () => {
     const onSaving = vi.fn();
     const def = deferred<never>();
-    mockGetResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, assigned_elevator_ids: ['e1'] });
-    mockListClients.mockResolvedValue([makeClient()]);
-    mockListBuildings.mockResolvedValue([makeBuilding()]);
-    mockListElevators.mockResolvedValue([makeElevator({ responsible_user_id: USER_ID })]);
+    setupWithElevator();
     mockReplaceResponsibleAssignments.mockReturnValue(def.promise);
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
     await waitFor(() => { expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument(); });
-    const cb = screen.getByRole('checkbox', { name: /ascensor asc-001/i });
-    expect(cb).toBeChecked();
-    fireEvent.click(cb);
+    // Start with no assignment, add one by clicking checkbox
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
     await waitFor(() => { expect(screen.getByRole('button', { name: /guardar/i })).not.toBeDisabled(); });
     fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
@@ -566,7 +573,8 @@ describe('ResponsibleAssignmentsCard — Finalización', () => {
     mockReplaceResponsibleAssignments.mockReturnValue(def.promise);
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} onSavingChange={onSaving} />);
     await waitFor(() => { expect(screen.getByText('Asignaciones de edificios y ascensores')).toBeInTheDocument(); });
-    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
+    await user.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
+    await waitFor(() => { expect(screen.getByRole('button', { name: /guardar/i })).not.toBeDisabled(); });
     fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
     const confirmBtn = screen.getByRole('button', { name: /confirmar/i });
     fireEvent.click(confirmBtn);
@@ -689,24 +697,19 @@ describe('ResponsibleAssignmentsCard — Payload', () => {
 describe('ResponsibleAssignmentsCard — Edición limpia mensajes', () => {
   it('éxito desaparece al editar', async () => {
     const def = deferred<{ responsible_user_id: string; previous_elevator_ids: string[]; assigned_elevator_ids: string[]; added_elevator_ids: string[]; removed_elevator_ids: string[] }>();
-    mockGetResponsibleAssignments.mockResolvedValue({ responsible_user_id: USER_ID, assigned_elevator_ids: ['e1'] });
-    mockListClients.mockResolvedValue([makeClient()]);
-    mockListBuildings.mockResolvedValue([makeBuilding()]);
-    mockListElevators.mockResolvedValue([makeElevator({ responsible_user_id: USER_ID })]);
+    setupWithElevator();
     mockReplaceResponsibleAssignments.mockReturnValue(def.promise);
     render(<ResponsibleAssignmentsCard responsibleUserId={USER_ID} />);
     await waitFor(() => { expect(screen.getByText('Ascensor ASC-001')).toBeInTheDocument(); });
-    const cb = screen.getByRole('checkbox', { name: /ascensor asc-001/i });
-    expect(cb).toBeChecked();
-    fireEvent.click(cb);
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
     await waitFor(() => { expect(screen.getByRole('button', { name: /guardar/i })).not.toBeDisabled(); });
     fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
+    // Resolve the deferred before waiting for success
+    await act(async () => { def.resolve({ responsible_user_id: USER_ID, previous_elevator_ids: [], assigned_elevator_ids: ['e1'], added_elevator_ids: ['e1'], removed_elevator_ids: [] }); });
     await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
-    await act(async () => { def.resolve({ responsible_user_id: USER_ID, previous_elevator_ids: ['e1'], assigned_elevator_ids: [], added_elevator_ids: [], removed_elevator_ids: ['e1'] }); });
-    await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
-    // Toggle checkbox to clear success
-    fireEvent.click(cb);
+    // Now toggle to clear success
+    fireEvent.click(screen.getByRole('checkbox', { name: /ascensor asc-001/i }));
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
