@@ -8,6 +8,7 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { getUser, updateUser, resetPassword, getAdminUsersErrorMessage } from '@/services/adminUsers.service';
 import type { AdminUser, AdminUserRole } from '@/services/adminUsers.service';
+import ResponsibleAssignmentsCard from './ResponsibleAssignmentsCard';
 import { ArrowLeft, AlertCircle, Check, Key, UserX, UserCheck } from 'lucide-react';
 
 const STAFF_ROLE_OPTIONS: { value: AdminUserRole; label: string }[] = [
@@ -61,9 +62,16 @@ export default function UserDetailPage() {
   const [resetError, setResetError] = useState('');
   const [operation, setOperation] = useState<Operation>(null);
   const operationRef = useRef<Operation>(null);
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const assignmentSavingRef = useRef(false);
+
+  const handleAssignmentSavingChange = (saving: boolean) => {
+    assignmentSavingRef.current = saving;
+    setAssignmentSaving(saving);
+  };
 
   function beginOperation(next: Exclude<Operation, null>): boolean {
-    if (operationRef.current !== null) return false;
+    if (operationRef.current !== null || assignmentSavingRef.current) return false;
     operationRef.current = next;
     setOperation(next);
     return true;
@@ -191,7 +199,7 @@ export default function UserDetailPage() {
     );
   }
 
-  const isBusy = operation !== null;
+  const isBusy = operation !== null || assignmentSaving;
 
   if (error && !user && operation !== 'loading') {
     return (
@@ -255,6 +263,14 @@ export default function UserDetailPage() {
             )}
           </CardContent>
         </Card>
+
+        {user?.role === 'responsible' && (
+          <ResponsibleAssignmentsCard
+            responsibleUserId={user.id}
+            disabled={operation !== null}
+            onSavingChange={handleAssignmentSavingChange}
+          />
+        )}
 
         <Card>
           <CardHeader><h3 className="font-semibold">Acciones</h3></CardHeader>

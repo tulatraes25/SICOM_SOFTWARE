@@ -35,6 +35,22 @@ vi.mock('@/hooks/useAuth', () => ({
 
 vi.mock('@/components/layout/Sidebar', () => ({ default: vi.fn(() => <div data-testid="sidebar" />) }));
 
+vi.mock('./ResponsibleAssignmentsCard', () => {
+  const callbacks: Array<(saving: boolean) => void> = [];
+  return {
+    default: vi.fn(({ responsibleUserId, disabled, onSavingChange }: { responsibleUserId: string; disabled?: boolean; onSavingChange?: (saving: boolean) => void }) => {
+      if (onSavingChange) callbacks.push(onSavingChange);
+      return (
+        <div data-testid="responsible-assignments-card">
+          <span data-testid="assignment-user-id">{responsibleUserId}</span>
+          <span data-testid="assignment-disabled">{String(disabled)}</span>
+        </div>
+      );
+    }),
+    _callbacks: callbacks,
+  };
+});
+
 interface Deferred<T> { promise: Promise<T>; resolve: (value: T) => void; }
 function deferred<T>(): Deferred<T> { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; }
 
