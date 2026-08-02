@@ -184,10 +184,22 @@ function isValidUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_RE.test(value);
 }
 
-function validateStringArray(value: unknown, min: number, max: number): string[] | never {
-  if (!Array.isArray(value)) throw new Error('Se esperaba un array');
-  if (value.length < min) throw new Error(`Debe contener al menos ${min} elemento(s)`);
-  if (value.length > max) throw new Error(`No puede contener más de ${max} elementos`);
+function validateElevatorIds(value: unknown): string[] | never {
+  if (!Array.isArray(value)) throw new Error('Debe seleccionar al menos un ascensor');
+  if (value.length < 1) throw new Error('Debe seleccionar al menos un ascensor');
+  if (value.length > 100) throw new Error('No se pueden asignar más de 100 ascensores');
+  const ids: string[] = [];
+  for (const item of value) {
+    if (!isValidUuid(item)) throw new Error('La selección de ascensores es inválida');
+    ids.push(item);
+  }
+  if (new Set(ids).size !== ids.length) throw new Error('No se permiten ascensores duplicados');
+  return ids;
+}
+
+function validateExpectedIds(value: unknown): string[] | never {
+  if (!Array.isArray(value)) throw new Error('expected_current_elevator_ids es obligatorio');
+  if (value.length > 100) throw new Error('La selección de ascensores es inválida');
   const ids: string[] = [];
   for (const item of value) {
     if (!isValidUuid(item)) throw new Error('La selección de ascensores es inválida');
@@ -245,6 +257,9 @@ export async function createResponsible(params: CreateResponsibleParams): Promis
 export async function getResponsibleAssignments(
   responsibleUserId: string,
 ): Promise<ResponsibleAssignmentsSnapshot> {
+  if (!isValidUuid(responsibleUserId)) {
+    throw new Error('responsible_user_id es obligatorio');
+  }
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'get_responsible_assignments', data: { responsible_user_id: responsibleUserId } },
   });
@@ -262,7 +277,7 @@ export async function getResponsibleAssignments(
     throw new Error('Respuesta de asignaciones inválida');
   }
   const ids = data.assigned_elevator_ids;
-  if (!ids.every((id: unknown) => typeof id === 'string')) {
+  if (!ids.every((id) => isValidUuid(id))) {
     throw new Error('Respuesta de asignaciones inválida');
   }
   const idsStr = ids as string[];
@@ -278,8 +293,8 @@ export async function replaceResponsibleAssignments(
   if (!isValidUuid(params.responsible_user_id)) {
     throw new Error('responsible_user_id es obligatorio');
   }
-  validateStringArray(params.elevator_ids, 1, 100);
-  validateStringArray(params.expected_current_elevator_ids, 0, 100);
+  validateElevatorIds(params.elevator_ids);
+  validateExpectedIds(params.expected_current_elevator_ids);
 
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: { action: 'replace_responsible_assignments', data: params },
@@ -300,11 +315,11 @@ export async function replaceResponsibleAssignments(
     if (!Array.isArray(data[key])) {
       throw new Error('Respuesta de actualización de asignaciones inválida');
     }
-    if (!(data[key] as unknown[]).every((id: unknown) => typeof id === 'string')) {
+    const arr = data[key] as unknown[];
+    if (!arr.every((id) => isValidUuid(id))) {
       throw new Error('Respuesta de actualización de asignaciones inválida');
     }
-    const arr = data[key] as string[];
-    if (new Set(arr).size !== arr.length) {
+    if (new Set(arr as string[]).size !== arr.length) {
       throw new Error('Respuesta de actualización de asignaciones inválida');
     }
   }

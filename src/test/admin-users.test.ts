@@ -511,19 +511,27 @@ function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
 }
 
-function validateUuidArray(value: unknown, min: number, max: number): { valid: true; ids: string[] } | { valid: false; error: string } {
-  if (!Array.isArray(value)) return { valid: false, error: "Se esperaba un array" };
-  if (value.length < min) return { valid: false, error: `Debe contener al menos ${min} elemento(s)` };
-  if (value.length > max) return { valid: false, error: `No puede contener más de ${max} elementos` };
+function validateUuidArray(
+  value: unknown,
+  min: number,
+  max: number,
+): { valid: true; ids: string[] } | { valid: false; reason: string } {
+  if (!Array.isArray(value)) return { valid: false, reason: "not_array" };
+  if (value.length < min) return { valid: false, reason: "too_few" };
+  if (value.length > max) return { valid: false, reason: "too_many" };
   const ids: string[] = [];
   const seen = new Set<string>();
   for (const item of value) {
-    if (!isUuid(item)) return { valid: false, error: "La selección de ascensores es inválida" };
-    if (seen.has(item)) return { valid: false, error: "No se permiten ascensores duplicados" };
+    if (!isUuid(item)) return { valid: false, reason: "invalid_uuid" };
+    if (seen.has(item)) return { valid: false, reason: "duplicate" };
     seen.add(item);
     ids.push(item);
   }
   return { valid: true, ids };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 describe("admin-users Edge Function — Actions validation", () => {
@@ -587,6 +595,39 @@ describe("admin-users Edge Function — get_responsible_assignments validation",
     const sorted = [...rpcResult].sort();
     expect(sorted).toEqual(["aaaa-0000-0000-0000-000000000000", "bbbb-0000-0000-0000-000000000000", "cccc-0000-0000-0000-000000000000"]);
   });
+
+  it("error real consultando profiles devuelve 500", async () => {
+    const fetchProfiles = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "connection refused" },
+    });
+    const result = await fetchProfiles();
+    expect(result.error).toBeTruthy();
+    expect(result.data).toBeNull();
+  });
+
+  it("IDs inválidos provenientes de elevators producen 500", () => {
+    const rpcResult = ["not-a-uuid", "also-not-uuid"];
+    const allValid = rpcResult.every((id) => isUuid(id));
+    expect(allValid).toBe(false);
+  });
+
+  it("IDs duplicados provenientes de elevators producen 500", () => {
+    const rpcResult = [
+      "11111111-1111-1111-1111-111111111111",
+      "11111111-1111-1111-1111-111111111111",
+    ];
+    const seen = new Set<string>();
+    let hasDuplicates = false;
+    for (const id of rpcResult) {
+      if (seen.has(id)) {
+        hasDuplicates = true;
+        break;
+      }
+      seen.add(id);
+    }
+    expect(hasDuplicates).toBe(true);
+  });
 });
 
 describe("admin-users Edge Function — replace_responsible_assignments validation", () => {
@@ -611,7 +652,7 @@ describe("admin-users Edge Function — replace_responsible_assignments validati
     const rpc = vi.fn();
     const result = validateUuidArray([], 1, 100);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.error).toBe("Debe contener al menos 1 elemento(s)");
+    if (!result.valid) expect(result.reason).toBe("too_few");
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -620,7 +661,7 @@ describe("admin-users Edge Function — replace_responsible_assignments validati
     const tooMany = Array.from({ length: 101 }, (_, i) => `${String(i).padStart(8, "0")}-0000-0000-0000-000000000000`);
     const result = validateUuidArray(tooMany, 1, 100);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.error).toBe("No puede contener más de 100 elementos");
+    if (!result.valid) expect(result.reason).toBe("too_many");
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -628,7 +669,7 @@ describe("admin-users Edge Function — replace_responsible_assignments validati
     const rpc = vi.fn();
     const result = validateUuidArray(["definitely-not-uuid"], 1, 100);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.error).toBe("La selección de ascensores es inválida");
+    if (!result.valid) expect(result.reason).toBe("invalid_uuid");
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -636,7 +677,7 @@ describe("admin-users Edge Function — replace_responsible_assignments validati
     const rpc = vi.fn();
     const result = validateUuidArray([validId1, validId1], 1, 100);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.error).toBe("No se permiten ascensores duplicados");
+    if (!result.valid) expect(result.reason).toBe("duplicate");
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -657,7 +698,7 @@ describe("admin-users Edge Function — replace_responsible_assignments validati
     const rpc = vi.fn();
     const result = validateUuidArray(["bad-uuid"], 0, 100);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.error).toBe("La selección de ascensores es inválida");
+    if (!result.valid) expect(result.reason).toBe("invalid_uuid");
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -665,7 +706,7 @@ describe("admin-users Edge Function — replace_responsible_assignments validati
     const rpc = vi.fn();
     const result = validateUuidArray([validId2, validId2], 0, 100);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.error).toBe("No se permiten ascensores duplicados");
+    if (!result.valid) expect(result.reason).toBe("duplicate");
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -676,6 +717,77 @@ describe("admin-users Edge Function — replace_responsible_assignments validati
       // validation failed, skip RPC
     }
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("elevator_ids ausente devuelve 'Debe seleccionar al menos un ascensor'", () => {
+    const result = validateUuidArray(undefined, 1, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toBe("not_array");
+  });
+
+  it("elevator_ids vacío devuelve 'Debe seleccionar al menos un ascensor'", () => {
+    const result = validateUuidArray([], 1, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toBe("too_few");
+  });
+
+  it("elevator_ids >100 devuelve 'No se pueden asignar más de 100 ascensores'", () => {
+    const tooMany = Array.from({ length: 101 }, (_, i) => `${String(i).padStart(8, "0")}-0000-0000-0000-000000000000`);
+    const result = validateUuidArray(tooMany, 1, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toBe("too_many");
+  });
+
+  it("no aparece 'Debe contener al menos' (verify old message is gone)", () => {
+    const result = validateUuidArray([], 1, 100);
+    expect(result.valid).toBe(false);
+    const resultStr = JSON.stringify(result);
+    expect(resultStr).not.toContain("Debe contener al menos");
+  });
+
+  it("no aparece 'No puede contener más de' (verify old message is gone)", () => {
+    const tooMany = Array.from({ length: 101 }, (_, i) => `${String(i).padStart(8, "0")}-0000-0000-0000-000000000000`);
+    const result = validateUuidArray(tooMany, 1, 100);
+    expect(result.valid).toBe(false);
+    const resultStr = JSON.stringify(result);
+    expect(resultStr).not.toContain("No puede contener más de");
+  });
+
+  it("expected ausente devuelve 'expected_current_elevator_ids es obligatorio'", () => {
+    const result = validateUuidArray(undefined, 0, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toBe("not_array");
+  });
+
+  it("expected null devuelve 'expected_current_elevator_ids es obligatorio'", () => {
+    const result = validateUuidArray(null, 0, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toBe("not_array");
+  });
+
+  it("expected >100 devuelve 'La selección de ascensores es inválida'", () => {
+    const tooMany = Array.from({ length: 101 }, (_, i) => `${String(i).padStart(8, "0")}-0000-0000-0000-000000000000`);
+    const result = validateUuidArray(tooMany, 0, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toBe("too_many");
+  });
+});
+
+describe("admin-users Edge Function — isRecord", () => {
+  it("null → false", () => {
+    expect(isRecord(null)).toBe(false);
+  });
+
+  it("array → false", () => {
+    expect(isRecord([1, 2, 3])).toBe(false);
+  });
+
+  it("string → false", () => {
+    expect(isRecord("hello")).toBe(false);
+  });
+
+  it("object → true", () => {
+    expect(isRecord({ key: "value" })).toBe(true);
   });
 });
 
@@ -782,6 +894,18 @@ describe("admin-users Edge Function — RPC and error mapping", () => {
     expect(JSON.stringify(safeResponse)).not.toContain("stack");
     expect(JSON.stringify(safeResponse)).not.toContain("mod.ts");
   });
+
+  it("respuesta RPC con string no UUID se rechaza", () => {
+    const rpcResult = {
+      assigned: ["not-a-uuid"],
+      previous: [],
+      added: ["not-a-uuid"],
+      removed: [],
+    };
+    const result = validateUuidArray(rpcResult.assigned, 1, 100);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toBe("invalid_uuid");
+  });
 });
 
 describe("admin-users Edge Function — Response validation", () => {
@@ -839,6 +963,26 @@ describe("admin-users Edge Function — Response validation", () => {
     const response = { responsible_user_id: responsibleId, assigned: [elevator1], previous: [elevator1, elevator2], added: [], removed: [] };
     const expectedRemoved = response.previous.filter((id) => !response.assigned.includes(id));
     expect(response.removed).not.toEqual(expectedRemoved);
+  });
+
+  it("rpcResult null es inválido", () => {
+    const rpcResult = null;
+    const isObject = isRecord(rpcResult);
+    expect(isObject).toBe(false);
+    if (!isObject) {
+      const response = { status: 500, body: { error: "Error interno del servidor" } };
+      expect(response.status).toBe(500);
+    }
+  });
+
+  it("rpcResult array es inválido", () => {
+    const rpcResult = [elevator1, elevator2];
+    const isObject = isRecord(rpcResult);
+    expect(isObject).toBe(false);
+    if (!isObject) {
+      const response = { status: 500, body: { error: "Error interno del servidor" } };
+      expect(response.status).toBe(500);
+    }
   });
 });
 

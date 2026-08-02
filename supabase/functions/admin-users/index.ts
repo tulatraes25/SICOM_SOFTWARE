@@ -14,19 +14,25 @@ function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+type UuidArrayCode = "not_array" | "too_few" | "too_many" | "invalid_uuid" | "duplicate";
+
 function validateUuidArray(
   value: unknown,
   min: number,
   max: number,
-): { valid: true; ids: string[] } | { valid: false; error: string } {
-  if (!Array.isArray(value)) return { valid: false, error: "Se esperaba un array" };
-  if (value.length < min) return { valid: false, error: `Debe contener al menos ${min} elemento(s)` };
-  if (value.length > max) return { valid: false, error: `No puede contener más de ${max} elementos` };
+): { valid: true; ids: string[] } | { valid: false; reason: UuidArrayCode } {
+  if (!Array.isArray(value)) return { valid: false, reason: "not_array" };
+  if (value.length < min) return { valid: false, reason: "too_few" };
+  if (value.length > max) return { valid: false, reason: "too_many" };
   const ids: string[] = [];
   const seen = new Set<string>();
   for (const item of value) {
-    if (!isUuid(item)) return { valid: false, error: "La selección de ascensores es inválida" };
-    if (seen.has(item)) return { valid: false, error: "No se permiten ascensores duplicados" };
+    if (!isUuid(item)) return { valid: false, reason: "invalid_uuid" };
+    if (seen.has(item)) return { valid: false, reason: "duplicate" };
     seen.add(item);
     ids.push(item);
   }
@@ -655,10 +661,14 @@ serve(async (req): Promise<Response> => {
           .from("profiles")
           .select("id, role")
           .eq("id", responsible_user_id)
-          .single();
+          .maybeSingle();
 
-        if (targetError || !targetProfile) {
+        if (targetError) {
           log("GET_ASSIGNMENTS_PROFILE_FAILED", adminId, responsible_user_id);
+          return json({ error: "No se pudieron obtener las asignaciones" }, 500);
+        }
+
+        if (!targetProfile) {
           return json({ error: "Responsable no encontrado" }, 404);
         }
 
@@ -677,9 +687,17 @@ serve(async (req): Promise<Response> => {
           return json({ error: "No se pudieron obtener las asignaciones" }, 500);
         }
 
+        const elevatorIds = (elevators || []).map((e) => e.id);
+
+        // Validate response IDs are valid UUIDs without duplicates
+        if (elevatorIds.some((id) => !isUuid(id)) || new Set(elevatorIds).size !== elevatorIds.length) {
+          log("GET_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
+          return json({ error: "No se pudieron obtener las asignaciones" }, 500);
+        }
+
         return json({
           responsible_user_id,
-          assigned_elevator_ids: (elevators || []).map((e) => e.id),
+          assigned_elevator_ids: elevatorIds,
         });
       }
 
@@ -693,7 +711,14 @@ serve(async (req): Promise<Response> => {
 
         const elevatorResult = validateUuidArray(d?.elevator_ids, 1, 100);
         if (!elevatorResult.valid) {
-          return json({ error: elevatorResult.error }, 400);
+          const msg = elevatorResult.reason === "too_many"
+            ? "No se pueden asignar más de 100 ascensores"
+            : elevatorResult.reason === "duplicate"
+              ? "No se permiten ascensores duplicados"
+              : elevatorResult.reason === "invalid_uuid"
+                ? "La selección de ascensores es inválida"
+                : "Debe seleccionar al menos un ascensor";
+          return json({ error: msg }, 400);
         }
 
         if (!Array.isArray(d?.expected_current_elevator_ids)) {
@@ -702,7 +727,12 @@ serve(async (req): Promise<Response> => {
 
         const expectedResult = validateUuidArray(d?.expected_current_elevator_ids, 0, 100);
         if (!expectedResult.valid) {
-          return json({ error: expectedResult.error }, 400);
+          const msg = expectedResult.reason === "too_many" || expectedResult.reason === "invalid_uuid"
+            ? "La selección de ascensores es inválida"
+            : expectedResult.reason === "duplicate"
+              ? "No se permiten ascensores duplicados"
+              : "expected_current_elevator_ids es obligatorio";
+          return json({ error: msg }, 400);
         }
 
         const { data: rpcResult, error: rpcError } = await supabase.rpc(
@@ -767,7 +797,12 @@ serve(async (req): Promise<Response> => {
             log("REPLACE_RESPONSIBLE_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
             return json({ error: "Respuesta de asignaciones inválida" }, 500);
           }
-          if (!(result[key] as unknown[]).every((id) => typeof id === "string")) {
+          const arr = result[key] as unknown[];
+          if (!arr.every((id) => isUuid(id))) {
+            log("REPLACE_RESPONSIBLE_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
+            return json({ error: "Respuesta de asignaciones inválida" }, 500);
+          }
+          if (new Set(arr).size !== arr.length) {
             log("REPLACE_RESPONSIBLE_ASSIGNMENTS_FAILED", adminId, responsible_user_id);
             return json({ error: "Respuesta de asignaciones inválida" }, 500);
           }

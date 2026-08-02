@@ -439,6 +439,27 @@ describe('getResponsibleAssignments', () => {
     mockInvoke.mockResolvedValue({ data: null, error: new Error('Network fail') });
     await expect(getResponsibleAssignments(userId)).rejects.toThrow('Network fail');
   });
+
+  it('con ID inválido no invoca Edge', async () => {
+    await expect(getResponsibleAssignments('not-a-uuid')).rejects.toThrow();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('snapshot con responsible_user_id no UUID se rechaza', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { responsible_user_id: 'not-a-uuid', assigned_elevator_ids: [elev1] },
+      error: null,
+    });
+    await expect(getResponsibleAssignments(userId)).rejects.toThrow('Respuesta de asignaciones inválida');
+  });
+
+  it('snapshot con ascensor no UUID se rechaza', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { responsible_user_id: userId, assigned_elevator_ids: ['not-a-uuid'] },
+      error: null,
+    });
+    await expect(getResponsibleAssignments(userId)).rejects.toThrow('Respuesta de asignaciones inválida');
+  });
 });
 
 describe('replaceResponsibleAssignments', () => {
@@ -510,7 +531,7 @@ describe('replaceResponsibleAssignments', () => {
       responsible_user_id: userId,
       elevator_ids: [],
       expected_current_elevator_ids: [],
-    })).rejects.toThrow('Debe contener al menos 1 elemento(s)');
+    })).rejects.toThrow('Debe seleccionar al menos un ascensor');
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
@@ -523,7 +544,7 @@ describe('replaceResponsibleAssignments', () => {
       responsible_user_id: userId,
       elevator_ids: manyIds,
       expected_current_elevator_ids: [],
-    })).rejects.toThrow('No puede contener más de 100 elementos');
+    })).rejects.toThrow('No se pueden asignar más de 100 ascensores');
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
@@ -718,5 +739,128 @@ describe('replaceResponsibleAssignments', () => {
       elevator_ids: [elev1],
       expected_current_elevator_ids: [],
     })).rejects.toThrow('Timeout');
+  });
+
+  it('elevator_ids vacío usa mensaje exacto "Debe seleccionar al menos un ascensor"', async () => {
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [],
+      expected_current_elevator_ids: [],
+    })).rejects.toThrow('Debe seleccionar al menos un ascensor');
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('elevator_ids >100 usa mensaje exacto "No se pueden asignar más de 100 ascensores"', async () => {
+    const manyIds = Array.from({ length: 101 }, (_, i) => {
+      const hex = i.toString(16).padStart(12, '0');
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-0000-0000-000000000000`;
+    });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: manyIds,
+      expected_current_elevator_ids: [],
+    })).rejects.toThrow('No se pueden asignar más de 100 ascensores');
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('elevator_ids no array usa mensaje exacto "Debe seleccionar al menos un ascensor"', async () => {
+    const callWith = (elevatorIds: unknown) =>
+      replaceResponsibleAssignments({
+        responsible_user_id: userId,
+        elevator_ids: elevatorIds as string[],
+        expected_current_elevator_ids: [],
+      });
+    await expect(callWith('not-array')).rejects.toThrow('Debe seleccionar al menos un ascensor');
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('expected no array usa mensaje exacto "expected_current_elevator_ids es obligatorio"', async () => {
+    const callWith = (expected: unknown) =>
+      replaceResponsibleAssignments({
+        responsible_user_id: userId,
+        elevator_ids: [elev1],
+        expected_current_elevator_ids: expected as string[],
+      });
+    await expect(callWith('not-array')).rejects.toThrow('expected_current_elevator_ids es obligatorio');
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('expected >100 usa "La selección de ascensores es inválida"', async () => {
+    const manyIds = Array.from({ length: 101 }, (_, i) => {
+      const hex = i.toString(16).padStart(12, '0');
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-0000-0000-000000000000`;
+    });
+    await expect(replaceResponsibleAssignments({
+      responsible_user_id: userId,
+      elevator_ids: [elev1],
+      expected_current_elevator_ids: manyIds,
+    })).rejects.toThrow('La selección de ascensores es inválida');
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('no aparece "elemento(s)" en mensaje de elevator_ids vacío', async () => {
+    let message = '';
+    try {
+      await replaceResponsibleAssignments({
+        responsible_user_id: userId,
+        elevator_ids: [],
+        expected_current_elevator_ids: [],
+      });
+    } catch (error: unknown) {
+      if (error instanceof Error) message = error.message;
+    }
+    expect(message).toBeTruthy();
+    expect(message).not.toContain('elemento(s)');
+  });
+
+  it('no aparece "No puede contener más de" en mensaje de elevator_ids >100', async () => {
+    const manyIds = Array.from({ length: 101 }, (_, i) => {
+      const hex = i.toString(16).padStart(12, '0');
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-0000-0000-000000000000`;
+    });
+    let message = '';
+    try {
+      await replaceResponsibleAssignments({
+        responsible_user_id: userId,
+        elevator_ids: manyIds,
+        expected_current_elevator_ids: [],
+      });
+    } catch (error: unknown) {
+      if (error instanceof Error) message = error.message;
+    }
+    expect(message).toBeTruthy();
+    expect(message).not.toContain('No puede contener más de');
+  });
+
+  it('respuesta replace con ID no UUID se rechaza en cada array', async () => {
+    const arrayKeys = ['previous_elevator_ids', 'assigned_elevator_ids', 'added_elevator_ids', 'removed_elevator_ids'] as const;
+    for (const key of arrayKeys) {
+      mockInvoke.mockResolvedValue({
+        data: makeReplaceResponse({ [key]: ['not-a-uuid'] }),
+        error: null,
+      });
+      await expect(replaceResponsibleAssignments({
+        responsible_user_id: userId,
+        elevator_ids: [elev1],
+        expected_current_elevator_ids: [],
+      })).rejects.toThrow('Respuesta de actualización de asignaciones inválida');
+    }
+  });
+
+  it('parámetros continúan sin mutarse', async () => {
+    const elevatorIds = [elev1, elev2];
+    const expectedIds = [elev1];
+    const params = {
+      responsible_user_id: userId,
+      elevator_ids: elevatorIds,
+      expected_current_elevator_ids: expectedIds,
+    };
+    mockInvoke.mockResolvedValue({ data: makeReplaceResponse(), error: null });
+    await replaceResponsibleAssignments(params);
+    expect(params.responsible_user_id).toBe(userId);
+    expect(params.elevator_ids).toBe(elevatorIds);
+    expect(params.expected_current_elevator_ids).toBe(expectedIds);
+    expect(params.elevator_ids).toEqual([elev1, elev2]);
+    expect(params.expected_current_elevator_ids).toEqual([elev1]);
   });
 });
