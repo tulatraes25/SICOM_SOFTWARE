@@ -19,8 +19,8 @@ const naturalSort = new Intl.Collator('es', { numeric: true, sensitivity: 'base'
 
 interface ElevatorView {
   elevator: Elevator;
-  building: Building | undefined;
-  client: Client | undefined;
+  building: Building;
+  client: Client;
   isCurrentlyAssigned: boolean;
   isAvailable: boolean;
   isInactive: boolean;
@@ -29,7 +29,7 @@ interface ElevatorView {
 
 interface BuildingGroup {
   building: Building;
-  client: Client | undefined;
+  client: Client;
   elevators: ElevatorView[];
   allActiveSelected: boolean;
   activeCount: number;
@@ -64,6 +64,9 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
     setLoading(true);
     setLoadError('');
     setCatalogError('');
+    setSaveError('');
+    setSuccess('');
+    setShowConfirmation(false);
     try {
       const [snapshot, c, b, e] = await Promise.all([
         getResponsibleAssignments(responsibleUserId),
@@ -73,15 +76,41 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
       ]);
       if (reqId !== requestRef.current) return;
 
-      // Validate snapshot against catalog
+      const buildingMap = new Map(b.map((bl) => [bl.id, bl]));
+      const clientMap = new Map(c.map((cl) => [cl.id, cl]));
       const elevatorMap = new Map(e.map((el) => [el.id, el]));
+
       for (const id of snapshot.assigned_elevator_ids) {
         const el = elevatorMap.get(id);
-        if (!el || el.responsible_user_id !== responsibleUserId) {
+        if (!el) {
           setCatalogError('No se pudo reconstruir el conjunto actual de asignaciones. Actualizá la página e intentá nuevamente.');
-          setClients(c);
-          setBuildings(b);
-          setElevators(e);
+          setClients(c); setBuildings(b); setElevators(e);
+          setLoading(false);
+          return;
+        }
+        if (el.responsible_user_id !== responsibleUserId) {
+          setCatalogError('No se pudo reconstruir el conjunto actual de asignaciones. Actualizá la página e intentá nuevamente.');
+          setClients(c); setBuildings(b); setElevators(e);
+          setLoading(false);
+          return;
+        }
+        const bl = buildingMap.get(el.building_id);
+        if (!bl) {
+          setCatalogError('No se pudo reconstruir el conjunto actual de asignaciones. Actualizá la página e intentá nuevamente.');
+          setClients(c); setBuildings(b); setElevators(e);
+          setLoading(false);
+          return;
+        }
+        const cl = clientMap.get(bl.client_id);
+        if (!cl) {
+          setCatalogError('No se pudo reconstruir el conjunto actual de asignaciones. Actualizá la página e intentá nuevamente.');
+          setClients(c); setBuildings(b); setElevators(e);
+          setLoading(false);
+          return;
+        }
+        if (bl.client_id !== el.client_id) {
+          setCatalogError('No se pudo reconstruir el conjunto actual de asignaciones. Actualizá la página e intentá nuevamente.');
+          setClients(c); setBuildings(b); setElevators(e);
           setLoading(false);
           return;
         }
@@ -110,6 +139,8 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
   const buildingMap = new Map(buildings.map((b) => [b.id, b]));
   const clientMap = new Map(clients.map((c) => [c.id, c]));
 
+  const editingBlocked = disabled || saving || staleAssignments || Boolean(loadError) || Boolean(catalogError);
+
   const viewData: ClientGroup[] = [];
   for (const client of [...clients].sort((a, b) => naturalSort.compare(a.name, b.name))) {
     const clientBuildings = buildings
@@ -119,10 +150,19 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
     for (const building of clientBuildings) {
       const bElevators = elevators
         .filter((e) => e.building_id === building.id)
-        .sort((a, b) => naturalSort.compare(a.code, b.code))
+        .sort((a, b) => {
+          const codeCmp = naturalSort.compare(a.code, b.code);
+          return codeCmp !== 0 ? codeCmp : a.id.localeCompare(b.id);
+        })
         .map((e) => {
           const isCurrentlyAssigned = e.responsible_user_id === responsibleUserId;
-          const isAvailable = e.active && !e.responsible_user_id;
+          const bldg = buildingMap.get(e.building_id);
+          const cli = bldg ? clientMap.get(bldg.client_id) : undefined;
+          const isAvailable = e.active
+            && !e.responsible_user_id
+            && !!bldg && bldg.active
+            && !!cli && cli.active
+            && bldg.client_id === e.client_id;
           const isInactive = !e.active;
           return {
             elevator: e,
@@ -135,6 +175,7 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
           };
         });
       const visible = bElevators.filter((v) => v.isCurrentlyAssigned || v.isAvailable);
+      if (visible.length === 0) continue;
       const activeVisible = visible.filter((v) => !v.isInactive);
       const selectedActive = activeVisible.filter((v) => v.isSelected);
       bGroups.push({
@@ -161,7 +202,19 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
     return el && !el.active;
   });
 
+  const validationMessage =
+    hasChanges && selectedElevatorIds.size === 0
+      ? 'Debe seleccionar al menos un ascensor'
+      : selectedElevatorIds.size > 100
+        ? 'No se pueden asignar más de 100 ascensores'
+        : hasInactiveSelected
+          ? 'Los ascensores inactivos no pueden conservarse asignados. Desmarcalos para continuar.'
+          : '';
+
   const handleToggleElevator = (id: string) => {
+    setSuccess('');
+    setSaveError('');
+    setShowConfirmation(false);
     setSelectedElevatorIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -171,6 +224,9 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
   };
 
   const handleToggleBuilding = (buildingId: string) => {
+    setSuccess('');
+    setSaveError('');
+    setShowConfirmation(false);
     const bElevators = elevators
       .filter((e) => e.building_id === buildingId && (e.responsible_user_id === responsibleUserId || (e.active && !e.responsible_user_id)));
     const activeVisible = bElevators.filter((e) => e.active);
@@ -190,10 +246,12 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
   const handleDiscard = () => {
     setSelectedElevatorIds(new Set(originalAssignedIds));
     setSaveError('');
+    setSuccess('');
     setShowConfirmation(false);
   };
 
-  const canSave = hasChanges && !hasInactiveSelected && !staleAssignments && !loading && !saving && !disabled && selectedElevatorIds.size > 0 && selectedElevatorIds.size <= 100 && !catalogError;
+  const canSave = hasChanges && !hasInactiveSelected && !staleAssignments && !loading && !saving && !disabled && !catalogError && !loadError
+    && selectedElevatorIds.size > 0 && selectedElevatorIds.size <= 100;
 
   const handleSave = async () => {
     if (!canSave || saveRef.current) return;
@@ -205,10 +263,20 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
       const elevatorIds = [...viewData]
         .flatMap((cg) => cg.buildings.flatMap((bg) => bg.elevators
           .filter((v) => v.isSelected)
-          .map((v) => v.elevator.id)
-          .sort((a, b) => naturalSort.compare(a, b))
-        ))
-        .sort((a, b) => naturalSort.compare(a, b));
+          .sort((a, b) => {
+            const codeCmp = naturalSort.compare(a.elevator.code, b.elevator.code);
+            return codeCmp !== 0 ? codeCmp : a.elevator.id.localeCompare(b.elevator.id);
+          })
+          .map((v) => v.elevator.id),
+        ));
+
+      if (elevatorIds.length !== selectedElevatorIds.size || new Set(elevatorIds).size !== elevatorIds.length) {
+        setSaveError('Inconsistencia en la selección de ascensores. Actualizá la página e intentá nuevamente.');
+        saveRef.current = false;
+        setSaving(false);
+        onSavingChange?.(false);
+        return;
+      }
 
       const result = await replaceResponsibleAssignments({
         responsible_user_id: responsibleUserId,
@@ -216,9 +284,21 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
         expected_current_elevator_ids: originalArray,
       });
 
-      const newAssigned = new Set(result.assigned_elevator_ids);
-      setOriginalAssignedIds(newAssigned);
-      setSelectedElevatorIds(new Set(newAssigned));
+      const newAssignedSet = new Set(result.assigned_elevator_ids);
+      const removedSet = new Set(result.removed_elevator_ids);
+
+      setElevators((prev) => prev.map((el) => {
+        if (newAssignedSet.has(el.id) && el.responsible_user_id !== responsibleUserId) {
+          return { ...el, responsible_user_id: responsibleUserId };
+        }
+        if (removedSet.has(el.id) && el.responsible_user_id === responsibleUserId) {
+          return { ...el, responsible_user_id: undefined };
+        }
+        return el;
+      }));
+
+      setOriginalAssignedIds(newAssignedSet);
+      setSelectedElevatorIds(new Set(newAssignedSet));
       setShowConfirmation(false);
       setSuccess(`Asignaciones actualizadas correctamente: ${result.added_elevator_ids.length} agregadas y ${result.removed_elevator_ids.length} retiradas.`);
     } catch (err: unknown) {
@@ -310,7 +390,7 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
                     id={`building-${bg.building.id}`}
                     checked={bg.allActiveSelected}
                     onChange={() => handleToggleBuilding(bg.building.id)}
-                    disabled={disabled || saving || bg.activeCount === 0}
+                    disabled={editingBlocked || bg.activeCount === 0}
                     className="w-4 h-4 rounded border-gray-300"
                   />
                   <label htmlFor={`building-${bg.building.id}`} className="text-sm font-medium text-gray-800 cursor-pointer">
@@ -327,7 +407,7 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
                         type="checkbox"
                         checked={v.isSelected}
                         onChange={() => handleToggleElevator(v.elevator.id)}
-                        disabled={disabled || saving || (v.isInactive && !v.isSelected) || (!v.isCurrentlyAssigned && !v.isAvailable)}
+                        disabled={editingBlocked || (v.isInactive && !v.isSelected) || (!v.isCurrentlyAssigned && !v.isAvailable)}
                         className="w-4 h-4 rounded border-gray-300"
                       />
                       <span className={v.isInactive && v.isCurrentlyAssigned ? 'text-gray-400' : 'text-gray-700'}>
@@ -351,9 +431,9 @@ export default function ResponsibleAssignmentsCard({ responsibleUserId, disabled
           <div><span className="text-gray-500">Se retirarán: </span><span className="font-medium">{removedIds.length}</span></div>
         </div>
 
-        {hasInactiveSelected && (
-          <div role="note" className="p-3 bg-warning/10 border border-warning/30 rounded text-warning text-sm">
-            Los ascensores inactivos no pueden conservarse asignados. Desmarcalos para continuar.
+        {validationMessage && (
+          <div role="alert" className="p-3 bg-warning/10 border border-warning/30 rounded text-warning text-sm">
+            {validationMessage}
           </div>
         )}
 
