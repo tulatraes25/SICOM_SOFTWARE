@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { getPublicElevatorByToken, logQRScan, getPublicServiceHistory } from '@/services/publicElevator.service';
-import type { PublicServiceHistory } from '@/services/publicElevator.service';
+import { getPublicElevatorByToken, logQRScan } from '@/services/publicElevator.service';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import { COMPANY_NAME, COMPANY_SLOGAN, COMPANY_WEBSITE, COMPANY_PHONE, COMPANY_EMAIL, COMPANY_ADDRESS } from '@/config/constants';
 import { ArrowRight, ExternalLink, CheckCircle, XCircle, Wrench, MapPin, Clock, Phone, Mail, AlertCircle, FileText } from 'lucide-react';
@@ -48,7 +47,6 @@ export default function PublicElevatorView() {
   const { token } = useParams<{ token: string }>();
   const [showIntro, setShowIntro] = useState(true);
   const [elevator, setElevator] = useState<PublicElevatorData | null>(null);
-  const [history, setHistory] = useState<PublicServiceHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -64,8 +62,6 @@ export default function PublicElevatorView() {
       if (!data) { setError('No se encontró un ascensor asociado a este código QR.'); return; }
       setElevator(data);
       await logQRScan(token!);
-      const historyData = await getPublicServiceHistory(token!);
-      setHistory(historyData);
     } catch { setError('Error al cargar la información del ascensor.'); }
     finally { setLoading(false); }
   };
@@ -200,48 +196,6 @@ export default function PublicElevatorView() {
               </p>
             </div>
           </div>
-        </div>
-
-        {/* HISTORIAL RECIENTE */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Clock size={18} className="text-secondary" />
-            Historial Reciente
-          </h3>
-          {history.length > 0 ? (
-            <div className="space-y-4">
-              {history.map((item, index) => (
-                <div key={index} className={`${index < history.length - 1 ? 'border-b border-gray-100 pb-4' : ''}`}>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-                    <div>
-                      <p className="text-xs text-gray-500">Fecha</p>
-                      <p className="font-medium text-gray-900">
-                        {new Date(item.service_date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Tipo</p>
-                      <p className="font-medium text-gray-900 capitalize">{item.service_type}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Estado</p>
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${CONSERVATION_COLORS[item.operational_status] || 'bg-gray-100 text-gray-500'}`}>
-                        {getStatusLabel(item.operational_status, OPERATIONAL_STATUS_LABELS)}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Conservación</p>
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${CONSERVATION_COLORS[item.conservation_status] || 'bg-gray-100 text-gray-500'}`}>
-                        {getStatusLabel(item.conservation_status, CONSERVATION_STATUS_LABELS)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">Este ascensor aún no posee historial de mantenimientos.</p>
-          )}
         </div>
 
         {/* Company info */}

@@ -42,9 +42,8 @@ describe('Public Elevator Service', () => {
     expect(result).toBeNull();
   });
 
-  it('getPublicServiceHistory retorna array vacío para token inválido', async () => {
-    const { getPublicServiceHistory } = await import('@/services/publicElevator.service');
-    const result = await getPublicServiceHistory('invalid-token');
-    expect(result).toEqual([]);
+  it('logQRScan no lanza excepción', async () => {
+    const { logQRScan } = await import('@/services/publicElevator.service');
+    await expect(logQRScan('test-token')).resolves.not.toThrow();
   });
 });

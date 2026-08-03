@@ -32,7 +32,7 @@ export async function getPublicElevatorByToken(token: string): Promise<(PublicEl
 
   const row = data[0];
   return {
-    id: row.code, // Usar code como identificador público
+    id: row.code,
     code: row.code,
     manufacturer: row.manufacturer,
     model: row.model,
@@ -60,30 +60,4 @@ export async function logQRScan(token: string): Promise<void> {
   } catch (err) {
     console.error('Error logging QR scan:', err);
   }
-}
-
-export interface PublicServiceHistory {
-  service_date: string;
-  service_type: string;
-  operational_status: string;
-  conservation_status: string;
-}
-
-/**
- * Obtener historial público por token.
- * Solo muestra registros approved.
- */
-export async function getPublicServiceHistory(token: string): Promise<PublicServiceHistory[]> {
-  const { data, error } = await supabase
-    .rpc('get_public_elevator_history_by_token', {
-      p_token: token,
-      p_limit: 5,
-    });
-
-  if (error) {
-    console.error('Error fetching service history:', error);
-    return [];
-  }
-
-  return data || [];
 }
