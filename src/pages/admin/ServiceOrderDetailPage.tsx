@@ -27,6 +27,7 @@ const STATUS_LABELS_ADMIN: Record<string, string> = {
 
 const EVENT_LABELS: Record<string, string> = {
   order_created: 'Orden creada',
+  marked_ready: 'Preparada para asignación',
   technician_assigned: 'Técnico asignado',
   order_started: 'Trabajo iniciado',
   visit_registered: 'Visita registrada',

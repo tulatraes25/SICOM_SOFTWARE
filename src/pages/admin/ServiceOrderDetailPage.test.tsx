@@ -272,3 +272,14 @@ describe('ServiceOrderDetailPage — reviewer_notes', () => {
     expect(screen.getByText('Revisado y aprobado')).toBeInTheDocument();
   });
 });
+
+describe('ServiceOrderDetailPage — Evento marked_ready', () => {
+  it('marked_ready se muestra como Preparada para asignación', async () => {
+    const events = [{ id: 'e1', service_order_id: 'order-1', event_type: 'marked_ready', performed_by: 'admin', details: {}, created_at: '2026-01-01T00:00:00Z' }];
+    mockGetOrderEvents.mockResolvedValue(events);
+    await renderWithOrder({ status: 'ready' });
+    expect(screen.getByText('Preparada para asignación')).toBeInTheDocument();
+    expect(screen.queryByText('marked_ready')).not.toBeInTheDocument();
+    expect(screen.queryByText('Marcada como lista')).not.toBeInTheDocument();
+  });
+});
