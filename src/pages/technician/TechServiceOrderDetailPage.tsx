@@ -76,11 +76,10 @@ export default function TechServiceOrderDetailPage() {
   const isChangesRequested = order.status === 'changes_requested';
 
   const myAssignment = order.technicians?.find(t => t.technician?.id === userId);
-  const isLead = myAssignment?.is_lead ?? false;
   const isAssigned = !!myAssignment;
 
   const canStart = (order.status === 'assigned' || isChangesRequested) && isAssigned;
-  const canComplete = ['in_progress', 'visited'].includes(order.status) && isLead;
+  const canComplete = ['in_progress', 'visited'].includes(order.status) && isAssigned;
   const canProgress = ['in_progress', 'visited'].includes(order.status) && isAssigned;
 
   return (
@@ -92,7 +91,6 @@ export default function TechServiceOrderDetailPage() {
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-bold text-gray-900">{numLabel}</h2>
               <Badge variant={STATUS_BADGE[order.status] || 'default'}>{SERVICE_ORDER_STATUS_LABELS[order.status]}</Badge>
-              {isLead && <Badge variant="success">Sos el técnico principal</Badge>}
             </div>
           </div>
           <div className="flex gap-2">

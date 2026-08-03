@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { getServiceOrder, markReady, assignTechnicians, cancelOrder, approveOrder, requestCorrections, getOrderEvents, getOrderProgress, addProgress, generateOrderPDF, getOrderPDFUrl } from '@/services/serviceOrders.service';
+import { getServiceOrder, assignTechnician, cancelOrder, approveOrder, requestCorrections, getOrderEvents, getOrderProgress, addProgress, generateOrderPDF, getOrderPDFUrl } from '@/services/serviceOrders.service';
 import type { ServiceOrderEvent, ServiceOrderProgress } from '@/services/serviceOrders.service';
 import ServiceOrderReportPDF from '@/components/pdf/ServiceOrderReportPDF';
 import SendOrderEmailModal from '@/components/serviceOrders/SendOrderEmailModal';
@@ -19,19 +19,21 @@ const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' 
   completed: 'success', approved: 'success', changes_requested: 'warning', cancelled: 'danger',
 };
 
-const EVENT_LABELS: Record<string, string> = {
-  order_created: 'Orden creada', marked_ready: 'Marcada como lista',
-  technician_assigned: 'Técnico asignado', technician_removed: 'Técnico removido',
-  technician_notified: 'Técnico notificado', order_started: 'Trabajo iniciado',
-  visit_registered: 'Visita registrada', progress_added: 'Avance registrado',
-  order_completed: 'Trabajo completado', order_cancelled: 'Orden cancelada',
-  order_reopened: 'Orden reabierta', order_approved: 'Orden aprobada',
-  corrections_requested: 'Correcciones solicitadas', pdf_generated: 'PDF generado',
-  email_sent: 'Correo enviado',
+const STATUS_LABELS_ADMIN: Record<string, string> = {
+  draft: 'Pendiente de asignación', ready: 'Pendiente de asignación',
+  assigned: 'Asignada', in_progress: 'En progreso', completed: 'Completada',
+  approved: 'Aprobada', changes_requested: 'Correcciones solicitadas', cancelled: 'Cancelada',
 };
 
-const REVIEW_BADGE: Record<string, string> = {
-  completed: 'Pendiente de revisión', approved: 'Aprobado', changes_requested: 'Correcciones solicitadas',
+const EVENT_LABELS: Record<string, string> = {
+  order_created: 'Orden creada',
+  technician_assigned: 'Técnico asignado',
+  order_started: 'Trabajo iniciado',
+  visit_registered: 'Visita registrada',
+  progress_added: 'Avance registrado',
+  order_completed: 'Trabajo completado', order_cancelled: 'Orden cancelada',
+  order_reopened: 'Orden reabierta', order_approved: 'Orden aprobada',
+  corrections_requested: 'Correcciones solicitadas',
 };
 
 interface TechOption { id: string; full_name: string; }
@@ -49,8 +51,7 @@ export default function ServiceOrderDetailPage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [selectedTechs, setSelectedTechs] = useState<string[]>([]);
-  const [leadTechId, setLeadTechId] = useState('');
+  const [selectedTechId, setSelectedTechId] = useState('');
   const [technicians, setTechnicians] = useState<TechOption[]>([]);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressNote, setProgressNote] = useState('');
@@ -93,24 +94,20 @@ export default function ServiceOrderDetailPage() {
     }
   };
 
-  const handleReady = () => { if (!confirm('¿Marcar como listo?')) return; handleAction(() => markReady(id!)); };
-
   const openAssignModal = () => {
     if (!order) return;
-    const currentTechs = (order.technicians || []).map(t => t.technician?.id || '').filter(Boolean);
-    const currentLead = (order.technicians || []).find(t => t.is_lead)?.technician?.id || '';
-    setSelectedTechs(currentTechs);
-    setLeadTechId(currentLead);
+    const currentTechId = order.technicians?.[0]?.technician?.id || '';
+    setSelectedTechId(currentTechId);
     setShowAssignModal(true);
   };
 
   const handleAssign = () => {
-    if (!leadTechId || !selectedTechs.includes(leadTechId)) {
-      setError('Debe seleccionar un técnico principal que esté en la asignación.');
+    if (!selectedTechId) {
+      setError('Debe seleccionar un técnico.');
       return;
     }
-    handleAction(() => assignTechnicians(id!, selectedTechs, leadTechId)).then((ok) => {
-      if (ok) { setShowAssignModal(false); setSelectedTechs([]); setLeadTechId(''); }
+    handleAction(() => assignTechnician(id!, selectedTechId)).then((ok) => {
+      if (ok) { setShowAssignModal(false); setSelectedTechId(''); }
     });
   };
 
@@ -162,9 +159,10 @@ export default function ServiceOrderDetailPage() {
   const caseNum = order.service_case?.case_number;
   const caseMode = order.service_case?.numbering_mode;
   const numLabel = caseMode === 'test' ? `PRUEBA N.º ${caseNum}` : `N.º ${caseNum}`;
-  const reviewLabel = REVIEW_BADGE[order.status] || SERVICE_ORDER_STATUS_LABELS[order.status];
+  const statusLabel = STATUS_LABELS_ADMIN[order.status] || SERVICE_ORDER_STATUS_LABELS[order.status];
   const isReviewable = order.status === 'completed';
   const canAssign = ['draft', 'ready', 'assigned'].includes(order.status);
+  const assignedTech = order.technicians?.[0];
 
   return (
     <DashboardLayout role="admin" title={`Orden ${numLabel}`}>
@@ -174,12 +172,11 @@ export default function ServiceOrderDetailPage() {
             <button onClick={() => navigate('/admin/ordenes-servicio')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-2"><ArrowLeft size={18} /> Volver</button>
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-bold text-gray-900">{numLabel}</h2>
-              <Badge variant={STATUS_BADGE[order.status]}>{reviewLabel}</Badge>
+              <Badge variant={STATUS_BADGE[order.status]}>{statusLabel}</Badge>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {order.status === 'draft' && <Button onClick={handleReady}>Marcar Listo</Button>}
-            {canAssign && <Button onClick={openAssignModal}>Asignar Técnicos</Button>}
+            {canAssign && <Button onClick={openAssignModal}>Asignar técnico</Button>}
             {isReviewable && <>
               <Button variant="outline" onClick={() => setShowCorrectionsModal(true)}>Solicitar correcciones</Button>
               <Button onClick={() => setShowApproveModal(true)}>Aprobar orden</Button>
@@ -255,16 +252,17 @@ export default function ServiceOrderDetailPage() {
               <div><span className="text-gray-500">Cliente: </span>{order.client?.name || '-'}</div>
               <div><span className="text-gray-500">Edificio: </span>{order.building?.name || '-'}</div>
               <div><span className="text-gray-500">Ascensor: </span>{order.elevator?.code || '-'}</div>
-              {order.technicians && order.technicians.length > 0 && (
-                <div><span className="text-gray-500">Técnicos:</span>
-                  <ul className="mt-1">{order.technicians.map((t, i) => <li key={i}>{t.technician?.full_name}{t.is_lead ? ' (Principal)' : ''}</li>)}</ul>
-                </div>
+              {assignedTech ? (
+                <div><span className="text-gray-500">Técnico asignado: </span>{assignedTech.technician?.full_name || '-'}</div>
+              ) : (
+                <div><span className="text-gray-500">Técnico asignado: </span><span className="text-gray-400 italic">Sin asignar</span></div>
               )}
             </CardContent></Card>
           </div>
         </div>
       </div>
 
+      {/* Approve modal */}
       {showApproveModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-xl max-w-md w-full p-6">
         <h3 className="text-lg font-semibold mb-2">Aprobar orden de servicio</h3>
         <p className="text-sm text-gray-600 mb-3">¿Confirmás que el trabajo fue revisado y aprobado?</p>
@@ -272,6 +270,7 @@ export default function ServiceOrderDetailPage() {
         <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setShowApproveModal(false)}>Cancelar</Button><Button onClick={handleApprove} disabled={actionLoading}>Aprobar</Button></div>
       </div></div>}
 
+      {/* Corrections modal */}
       {showCorrectionsModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-xl max-w-md w-full p-6">
         <h3 className="text-lg font-semibold mb-2">Solicitar correcciones</h3>
         <p className="text-sm text-gray-600 mb-3">Indicá las correcciones necesarias. El técnico deberá retomar el trabajo.</p>
@@ -279,45 +278,32 @@ export default function ServiceOrderDetailPage() {
         <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setShowCorrectionsModal(false)}>Cancelar</Button><Button variant="danger" onClick={handleCorrections} disabled={!correctionsNotes.trim() || actionLoading}>Solicitar correcciones</Button></div>
       </div></div>}
 
+      {/* Assign modal — single technician */}
       {showAssignModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-xl max-w-md w-full p-6">
-        <h3 className="text-lg font-semibold mb-2">Asignar Técnicos</h3>
-        <p className="text-xs text-gray-500 mb-3">El técnico principal será quien podrá finalizar la orden.</p>
-        <div className="space-y-3">
+        <h3 className="text-lg font-semibold mb-4">Asignar técnico</h3>
+        <div className="space-y-2">
           {technicians.map(t => (
-            <div key={t.id} className="flex items-center gap-3">
-              <input type="checkbox" id={`tech-${t.id}`} checked={selectedTechs.includes(t.id)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedTechs([...selectedTechs, t.id]);
-                    if (!leadTechId) setLeadTechId(t.id);
-                  } else {
-                    setSelectedTechs(selectedTechs.filter(x => x !== t.id));
-                    if (leadTechId === t.id) setLeadTechId('');
-                  }
-                }} />
-              <label htmlFor={`tech-${t.id}`} className="text-sm">{t.full_name}</label>
-              {selectedTechs.includes(t.id) && (
-                <label className="flex items-center gap-1 text-xs text-gray-500 ml-auto">
-                  <input type="radio" name="leadTech" checked={leadTechId === t.id} onChange={() => setLeadTechId(t.id)} />
-                  Principal
-                </label>
-              )}
-            </div>
+            <label key={t.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedTechId === t.id ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-gray-50'}`}>
+              <input type="radio" name="techAssign" checked={selectedTechId === t.id} onChange={() => setSelectedTechId(t.id)} className="accent-primary" />
+              <span className="text-sm font-medium">{t.full_name}</span>
+            </label>
           ))}
+          {technicians.length === 0 && <p className="text-gray-500 text-sm">No hay técnicos disponibles.</p>}
         </div>
-        {selectedTechs.length > 0 && !leadTechId && <p className="text-danger text-xs mt-2">Debe seleccionar un técnico principal.</p>}
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="outline" onClick={() => setShowAssignModal(false)}>Cancelar</Button>
-          <Button onClick={handleAssign} disabled={selectedTechs.length === 0 || !leadTechId || actionLoading}>Asignar</Button>
+          <Button onClick={handleAssign} disabled={!selectedTechId || actionLoading}>Asignar</Button>
         </div>
       </div></div>}
 
+      {/* Cancel modal */}
       {showCancelModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-xl max-w-md w-full p-6">
         <h3 className="text-lg font-semibold mb-4">Cancelar Orden</h3>
         <textarea className="w-full border rounded px-3 py-2 text-sm resize-none" rows={3} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Motivo..." />
         <div className="flex justify-end gap-2 mt-4"><Button variant="outline" onClick={() => setShowCancelModal(false)}>Cancelar</Button><Button variant="danger" onClick={handleCancel} disabled={!cancelReason.trim() || actionLoading}>Cancelar orden</Button></div>
       </div></div>}
 
+      {/* Progress modal */}
       {showProgressModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-xl max-w-md w-full p-6">
         <h3 className="text-lg font-semibold mb-4">Registrar Avance</h3>
         <select className="w-full border rounded px-3 py-2 text-sm mb-3" value={progressType} onChange={(e) => setProgressType(e.target.value)}>

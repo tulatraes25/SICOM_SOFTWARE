@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ServiceOrderDetailPage from './ServiceOrderDetailPage';
 
-const { mockGetServiceOrder, mockMarkReady, mockAssignTechnicians, mockCancelOrder, mockApproveOrder, mockRequestCorrections, mockGetOrderEvents, mockGetOrderProgress, mockAddProgress, mockGenerateOrderPDF, mockGetOrderPDFUrl, mockNavigate, mockSupabaseFrom } = vi.hoisted(() => ({
+const { mockGetServiceOrder, mockMarkReady, mockAssignTechnician, mockCancelOrder, mockApproveOrder, mockRequestCorrections, mockGetOrderEvents, mockGetOrderProgress, mockAddProgress, mockGenerateOrderPDF, mockGetOrderPDFUrl, mockNavigate, mockSupabaseFrom } = vi.hoisted(() => ({
   mockGetServiceOrder: vi.fn(),
   mockMarkReady: vi.fn(),
-  mockAssignTechnicians: vi.fn(),
+  mockAssignTechnician: vi.fn(),
   mockCancelOrder: vi.fn(),
   mockApproveOrder: vi.fn(),
   mockRequestCorrections: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('react-router-dom', async () => {
 vi.mock('@/services/serviceOrders.service', () => ({
   getServiceOrder: (...a: unknown[]) => mockGetServiceOrder(...a),
   markReady: (...a: unknown[]) => mockMarkReady(...a),
-  assignTechnicians: (...a: unknown[]) => mockAssignTechnicians(...a),
+  assignTechnician: (...a: unknown[]) => mockAssignTechnician(...a),
   cancelOrder: (...a: unknown[]) => mockCancelOrder(...a),
   approveOrder: (...a: unknown[]) => mockApproveOrder(...a),
   requestCorrections: (...a: unknown[]) => mockRequestCorrections(...a),
@@ -100,11 +100,15 @@ beforeEach(() => {
   mockGetOrderProgress.mockResolvedValue([]);
   mockGenerateOrderPDF.mockResolvedValue(undefined);
   mockGetOrderPDFUrl.mockResolvedValue('https://example.com/pdf');
-  mockSupabaseFrom.mockReturnValue({
+  const chainObj = {
     select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
+    eq: vi.fn(),
     order: vi.fn().mockResolvedValue({ data: [{ id: 't1', full_name: 'Técnico 1' }], error: null }),
-  });
+  };
+  chainObj.eq
+    .mockReturnValueOnce(chainObj)
+    .mockResolvedValueOnce({ data: [{ id: 't1', full_name: 'Técnico 1' }], error: null });
+  mockSupabaseFrom.mockReturnValue(chainObj);
 });
 
 afterEach(() => { vi.restoreAllMocks(); cleanup(); });
@@ -118,21 +122,102 @@ async function renderWithOrder(orderOverrides: Record<string, unknown> = {}) {
 }
 
 describe('ServiceOrderDetailPage — Draft', () => {
-  it('draft muestra Marcar Listo', async () => {
+  it('draft muestra "Pendiente de asignación"', async () => {
     await renderWithOrder({ status: 'draft' });
-    expect(screen.getByRole('button', { name: /marcar listo/i })).toBeInTheDocument();
+    expect(screen.getByText('Pendiente de asignación')).toBeInTheDocument();
   });
 
-  it('draft muestra Asignar Técnicos', async () => {
+  it('draft muestra "Asignar técnico"', async () => {
     await renderWithOrder({ status: 'draft' });
-    expect(screen.getByRole('button', { name: /asignar técnicos/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /asignar técnico/i })).toBeInTheDocument();
+  });
+
+  it('draft NO muestra "Marcar Listo"', async () => {
+    await renderWithOrder({ status: 'draft' });
+    expect(screen.queryByRole('button', { name: /marcar listo/i })).not.toBeInTheDocument();
   });
 });
 
 describe('ServiceOrderDetailPage — Ready', () => {
-  it('ready muestra Asignar Técnicos', async () => {
+  it('ready muestra "Pendiente de asignación"', async () => {
     await renderWithOrder({ status: 'ready' });
-    expect(screen.getByRole('button', { name: /asignar técnicos/i })).toBeInTheDocument();
+    expect(screen.getByText('Pendiente de asignación')).toBeInTheDocument();
+  });
+
+  it('ready muestra "Asignar técnico"', async () => {
+    await renderWithOrder({ status: 'ready' });
+    expect(screen.getByRole('button', { name: /asignar técnico/i })).toBeInTheDocument();
+  });
+});
+
+describe('ServiceOrderDetailPage — Asignación (single)', () => {
+  it('no existen checkboxes, solo radio', async () => {
+    await renderWithOrder({ status: 'draft' });
+    fireEvent.click(screen.getByRole('button', { name: /asignar técnico/i }));
+    await waitFor(() => { expect(screen.getByText('Técnico 1')).toBeInTheDocument(); });
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('radio').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('existe selección única', async () => {
+    await renderWithOrder({ status: 'draft' });
+    fireEvent.click(screen.getByRole('button', { name: /asignar técnico/i }));
+    await waitFor(() => { expect(screen.getByText('Técnico 1')).toBeInTheDocument(); });
+    const radios = screen.getAllByRole('radio');
+    expect(radios).toHaveLength(1);
+  });
+
+  it('no aparece "Principal" en la selección de técnico', async () => {
+    await renderWithOrder({ status: 'draft' });
+    fireEvent.click(screen.getByRole('button', { name: /asignar técnico/i }));
+    await waitFor(() => { expect(screen.getByText('Técnico 1')).toBeInTheDocument(); });
+    expect(screen.queryByText(/Técnico 1.*Principal/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Técnico 1 \(Principal\)/)).not.toBeInTheDocument();
+  });
+
+  it('exige un técnico', async () => {
+    const emptyChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
+    };
+    mockSupabaseFrom.mockReturnValue(emptyChain);
+    await renderWithOrder({ status: 'draft' });
+    fireEvent.click(screen.getByRole('button', { name: /asignar técnico/i }));
+    await waitFor(() => { expect(screen.getByText(/no hay técnicos disponibles/i)).toBeInTheDocument(); });
+    expect(screen.getByRole('button', { name: /^asignar$/i })).toBeDisabled();
+  });
+
+  it('llama assignTechnician una vez', async () => {
+    mockAssignTechnician.mockResolvedValue(undefined);
+    await renderWithOrder({ status: 'draft' });
+    fireEvent.click(screen.getByRole('button', { name: /asignar técnico/i }));
+    await waitFor(() => { expect(screen.getByText('Técnico 1')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Técnico 1'));
+    fireEvent.click(screen.getByRole('button', { name: /^asignar$/i }));
+    await waitFor(() => { expect(mockAssignTechnician).toHaveBeenCalledTimes(1); });
+  });
+
+  it('envía un solo ID', async () => {
+    mockAssignTechnician.mockResolvedValue(undefined);
+    await renderWithOrder({ status: 'draft' });
+    fireEvent.click(screen.getByRole('button', { name: /asignar técnico/i }));
+    await waitFor(() => { expect(screen.getByText('Técnico 1')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Técnico 1'));
+    fireEvent.click(screen.getByRole('button', { name: /^asignar$/i }));
+    await waitFor(() => { expect(mockAssignTechnician).toHaveBeenCalledWith('order-1', 't1'); });
+  });
+
+  it('precarga técnico existente', async () => {
+    mockAssignTechnician.mockResolvedValue(undefined);
+    await renderWithOrder({
+      status: 'ready',
+      technicians: [{ technician: { id: 't1', full_name: 'Técnico 1' }, is_lead: true }],
+    });
+    fireEvent.click(screen.getByRole('button', { name: /asignar técnico/i }));
+    await waitFor(() => { expect(screen.getAllByRole('radio').length).toBeGreaterThanOrEqual(1); });
+    const radio = screen.getByRole('radio', { checked: true });
+    expect(radio).toBeInTheDocument();
   });
 });
 
@@ -142,22 +227,21 @@ describe('ServiceOrderDetailPage — Assigned', () => {
       status: 'assigned',
       technicians: [{ technician: { id: 't1', full_name: 'Técnico 1' }, is_lead: true }],
     });
-    expect(screen.getByRole('button', { name: /asignar técnicos/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /asignar técnico/i })).toBeInTheDocument();
   });
 });
 
 describe('ServiceOrderDetailPage — In progress', () => {
-  it('in_progress no muestra Asignar Técnicos', async () => {
+  it('in_progress no muestra Asignar técnico', async () => {
     await renderWithOrder({ status: 'in_progress' });
-    expect(screen.queryByRole('button', { name: /asignar técnicos/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /asignar técnico/i })).not.toBeInTheDocument();
   });
 });
 
 describe('ServiceOrderDetailPage — Completed', () => {
   it('completed no muestra botones de acción principales', async () => {
     await renderWithOrder({ status: 'completed' });
-    expect(screen.queryByRole('button', { name: /marcar listo/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /asignar técnicos/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /asignar técnico/i })).not.toBeInTheDocument();
   });
 });
 
@@ -171,9 +255,7 @@ describe('ServiceOrderDetailPage — Approved', () => {
 describe('ServiceOrderDetailPage — Cancelled', () => {
   it('cancelled no muestra botones de acción', async () => {
     await renderWithOrder({ status: 'cancelled' });
-    expect(screen.queryByRole('button', { name: /marcar listo/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /asignar técnicos/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /aprobar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /asignar técnico/i })).not.toBeInTheDocument();
   });
 });
 

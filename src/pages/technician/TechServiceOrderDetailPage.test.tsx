@@ -93,7 +93,7 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); cleanup(); });
 
 async function renderWithOrder(orderOverrides: Record<string, unknown> = {}, techOverrides: Array<Record<string, unknown>> = []) {
-  const techs = techOverrides.length > 0 ? techOverrides : [{ technician: { id: 'tech-1', full_name: 'Técnico 1' }, is_lead: false }];
+  const techs = techOverrides.length > 0 ? techOverrides : [{ technician: { id: 'tech-1', full_name: 'Técnico 1' }, is_lead: true }];
   const order = makeOrder({ technicians: techs, ...orderOverrides });
   mockGetServiceOrder.mockResolvedValue(order);
   render(<MemoryRouter><TechServiceOrderDetailPage /></MemoryRouter>);
@@ -102,18 +102,24 @@ async function renderWithOrder(orderOverrides: Record<string, unknown> = {}, tec
 }
 
 describe('TechServiceOrderDetailPage — Lead badge', () => {
-  it('técnico principal ve insignia', async () => {
+  it('no aparece "Sos el técnico principal"', async () => {
     await renderWithOrder({}, [{ technician: { id: 'tech-1', full_name: 'Técnico 1' }, is_lead: true }]);
-    expect(screen.getByText(/sos el técnico principal/i)).toBeInTheDocument();
-  });
-
-  it('técnico secundario no ve insignia principal', async () => {
-    await renderWithOrder({}, [{ technician: { id: 'tech-1', full_name: 'Técnico 1' }, is_lead: false }]);
     expect(screen.queryByText(/sos el técnico principal/i)).not.toBeInTheDocument();
   });
 });
 
 describe('TechServiceOrderDetailPage — Acciones por estado', () => {
+  it('técnico asignado puede completar', async () => {
+    await renderWithOrder({ status: 'in_progress' }, [{ technician: { id: 'tech-1', full_name: 'Técnico 1' }, is_lead: true }]);
+    expect(screen.getByRole('button', { name: /completar/i })).toBeInTheDocument();
+  });
+
+  it('usuario no asignado no puede completar', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'other-user' } } });
+    await renderWithOrder({ status: 'in_progress' }, [{ technician: { id: 'tech-1', full_name: 'Técnico 1' }, is_lead: true }]);
+    expect(screen.queryByRole('button', { name: /completar/i })).not.toBeInTheDocument();
+  });
+
   it('assigned permite comenzar', async () => {
     await renderWithOrder({ status: 'assigned' }, [{ technician: { id: 'tech-1', full_name: 'Técnico 1' }, is_lead: true }]);
     expect(screen.getByRole('button', { name: /comenzar trabajo/i })).toBeInTheDocument();

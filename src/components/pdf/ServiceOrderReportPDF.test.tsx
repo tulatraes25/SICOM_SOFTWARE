@@ -110,25 +110,33 @@ describe('ServiceOrderReportPDF — Trabajo Realizado', () => {
 });
 
 describe('ServiceOrderReportPDF — Técnicos', () => {
-  it('muestra técnicos', () => {
+  it('PDF muestra "Técnico Asignado" (not "Técnicos Asignados")', () => {
     renderPdf({
       technicians: [
-        { technician: { id: 't1', full_name: 'Juan Pérez' }, is_lead: false },
-        { technician: { id: 't2', full_name: 'María García' }, is_lead: true },
+        { technician: { id: 't1', full_name: 'Juan Pérez' }, is_lead: true },
+      ],
+    });
+    expect(screen.getAllByText('Técnico Asignado').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Técnicos Asignados')).not.toBeInTheDocument();
+  });
+
+  it('muestra técnico asignado', () => {
+    renderPdf({
+      technicians: [
+        { technician: { id: 't1', full_name: 'Juan Pérez' }, is_lead: true },
       ],
     });
     expect(screen.getAllByText(/Juan Pérez/).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/María García/).length).toBeGreaterThanOrEqual(1);
   });
 
-  it('identifica al principal', () => {
+  it('PDF no muestra "Principal" en técnico', () => {
     renderPdf({
       technicians: [
-        { technician: { id: 't1', full_name: 'Juan Pérez' }, is_lead: false },
-        { technician: { id: 't2', full_name: 'María García' }, is_lead: true },
+        { technician: { id: 't1', full_name: 'Juan Pérez' }, is_lead: true },
       ],
     });
-    expect(screen.getAllByText(/María García — Principal/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/Juan Pérez — Principal/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Juan Pérez \(Principal\)/)).not.toBeInTheDocument();
   });
 });
 

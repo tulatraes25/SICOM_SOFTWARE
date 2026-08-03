@@ -99,12 +99,12 @@ describe('TechServiceOrdersPage — Separación por estado', () => {
 });
 
 describe('TechServiceOrdersPage — Técnico principal', () => {
-  it('identifica Técnico principal', async () => {
+  it('muestra nombre del edificio del técnico asignado', async () => {
     mockListMyServiceOrders.mockResolvedValue([
-      makeOrder({ id: 'o1', technicians: [{ technician: { id: 'tech-1' }, is_lead: true }] }),
+      makeOrder({ id: 'o1', building: { name: 'Edificio Central' }, technicians: [{ technician: { id: 'tech-1', full_name: 'Juan Pérez' }, is_lead: true }] }),
     ]);
     render(<MemoryRouter><TechServiceOrdersPage /></MemoryRouter>);
-    await waitFor(() => { expect(screen.getByText('Principal')).toBeInTheDocument(); });
+    await waitFor(() => { expect(screen.getByText('Edificio Central')).toBeInTheDocument(); });
   });
 });
 

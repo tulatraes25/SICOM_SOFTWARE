@@ -44,7 +44,6 @@ export default function TechServiceOrdersPage() {
     const caseNum = order.service_case?.case_number;
     const caseMode = order.service_case?.numbering_mode;
     const numLabel = caseMode === 'test' ? `PRUEBA N.º ${caseNum}` : `N.º ${caseNum}`;
-    const isLead = order.technicians?.some(t => t.is_lead);
 
     return (
       <div key={order.id} className={`rounded-lg border-2 ${p.border} ${p.bg} p-4`}>
@@ -53,7 +52,6 @@ export default function TechServiceOrdersPage() {
             {order.status === 'assigned' && <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded mr-2">NUEVA</span>}
             {order.status === 'changes_requested' && <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded mr-2">CORRECCIONES</span>}
             <span className="font-mono font-bold text-gray-900">{numLabel}</span>
-            {isLead && <span className="text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded ml-2">Principal</span>}
           </div>
           <Badge variant={order.status === 'changes_requested' ? 'danger' : p.badge}>{CLAIM_PRIORITY_LABELS[order.priority as keyof typeof CLAIM_PRIORITY_LABELS]}</Badge>
         </div>

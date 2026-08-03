@@ -106,22 +106,22 @@ describe('serviceOrders.service — listMyServiceOrders', () => {
   });
 });
 
-describe('serviceOrders.service — assignTechnicians', () => {
+describe('serviceOrders.service — assignTechnicians (single)', () => {
   it('envía p_order_id', async () => {
     mockRpc.mockResolvedValue({ data: null, error: null });
-    await assignTechnicians('order-1', ['t1', 't2'], 't1');
+    await assignTechnicians('order-1', ['t1'], 't1');
     expect(mockRpc).toHaveBeenCalledWith('assign_service_order_technicians', expect.objectContaining({ p_order_id: 'order-1' }));
   });
 
-  it('envía p_technician_ids', async () => {
+  it('envía p_technician_ids como array de 1', async () => {
     mockRpc.mockResolvedValue({ data: null, error: null });
-    await assignTechnicians('order-1', ['t1', 't2'], 't1');
-    expect(mockRpc).toHaveBeenCalledWith('assign_service_order_technicians', expect.objectContaining({ p_technician_ids: ['t1', 't2'] }));
+    await assignTechnicians('order-1', ['t1'], 't1');
+    expect(mockRpc).toHaveBeenCalledWith('assign_service_order_technicians', expect.objectContaining({ p_technician_ids: ['t1'] }));
   });
 
-  it('envía p_is_lead', async () => {
+  it('envía p_is_lead igual al técnico', async () => {
     mockRpc.mockResolvedValue({ data: null, error: null });
-    await assignTechnicians('order-1', ['t1', 't2'], 't1');
+    await assignTechnicians('order-1', ['t1'], 't1');
     expect(mockRpc).toHaveBeenCalledWith('assign_service_order_technicians', expect.objectContaining({ p_is_lead: 't1' }));
   });
 
@@ -131,7 +131,7 @@ describe('serviceOrders.service — assignTechnicians', () => {
     expect(mockRpc).toHaveBeenCalledWith('assign_service_order_technicians', expect.objectContaining({ p_is_lead: null }));
   });
 
-  it('propaga error de supabase.rpc', async () => {
+  it('propaga error de Supabase', async () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'rpc failed' } });
     await expect(assignTechnicians('order-1', ['t1'])).rejects.toEqual({ message: 'rpc failed' });
   });

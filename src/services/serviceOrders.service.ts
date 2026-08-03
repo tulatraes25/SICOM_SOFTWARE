@@ -177,6 +177,14 @@ export async function assignTechnicians(orderId: string, technicianIds: string[]
   if (data?.error) throw new Error(data.error);
 }
 
+export async function assignTechnician(orderId: string, technicianId: string): Promise<void> {
+  const { data, error } = await supabase.rpc('assign_service_order_technicians', {
+    p_order_id: orderId, p_technician_ids: [technicianId], p_is_lead: technicianId,
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+}
+
 export async function startOrder(orderId: string): Promise<void> {
   const { data, error } = await supabase.rpc('start_service_order_with_visit', { p_order_id: orderId });
   if (error) throw error;

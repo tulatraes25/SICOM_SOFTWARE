@@ -139,10 +139,10 @@ export default function ServiceOrderReportPDF({ order, progress, events, isTest,
           {/* Technicians */}
           {order.technicians && order.technicians.length > 0 && (
             <View style={s.section}>
-              <Text style={s.sectionTitle}>Técnicos Asignados</Text>
+              <Text style={s.sectionTitle}>Técnico Asignado</Text>
               {order.technicians.map((t: any, i: number) => (
                 <View key={i} style={{ marginBottom: 3 }}>
-                  <Text style={s.value}>{t.technician?.full_name || 'N/D'}{t.is_lead ? ' — Principal' : ''}</Text>
+                  <Text style={s.value}>{t.technician?.full_name || 'N/D'}</Text>
                 </View>
               ))}
             </View>
