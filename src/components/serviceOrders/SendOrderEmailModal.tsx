@@ -1,8 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Button from '@/components/ui/Button';
 import { X } from 'lucide-react';
 import { listServiceOrderRecipients } from '@/services/buildingRecipients.service';
 import { supabase } from '@/config/supabase';
+
+interface EmailDeliveryResult {
+  email: string;
+  status: 'sent' | 'mock' | 'failed';
+  error?: string;
+}
+
+interface EmailFunctionResponse {
+  success: number;
+  failed: number;
+  results: EmailDeliveryResult[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 interface SendOrderEmailModalProps {
   isOpen: boolean;
@@ -29,6 +45,9 @@ export default function SendOrderEmailModal({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState('');
+  const [extraName, setExtraName] = useState('');
+  const [extraEmail, setExtraEmail] = useState('');
+  const submitRef = useRef(false);
 
   const numberLabel = numberingMode === 'test' ? `PRUEBA N.º ${caseNumber}` : `N.º ${caseNumber}`;
 
@@ -42,6 +61,8 @@ export default function SendOrderEmailModal({
       setBody(`Estimado/a:\n\nAdjuntamos la Orden de Servicio ${numberLabel} correspondiente al ascensor ${elevatorCode} del edificio ${buildingName}.\n\nEl documento se encuentra adjunto en formato PDF.\n\nSaludos cordiales,\nSICOM Patagonia SRL\n+54 297 421-4430\nsicompatagonia.com`);
       setExtraRecipients([]);
       setResult('');
+      setExtraName('');
+      setExtraEmail('');
     }
   }, [isOpen, numberLabel, elevatorCode, buildingName]);
 
@@ -57,6 +78,8 @@ export default function SendOrderEmailModal({
   const handleSend = async () => {
     const allEmails = [...selectedEmails, ...extraRecipients.map(r => r.email)];
     if (allEmails.length === 0) return;
+    if (submitRef.current) return;
+    submitRef.current = true;
     setSending(true); setResult('');
     try {
       const recipientsList = [
@@ -64,25 +87,52 @@ export default function SendOrderEmailModal({
         ...extraRecipients.map(r => ({ email: r.email, name: r.name || undefined })),
       ];
 
-      let sent = 0, failed = 0;
-      for (const r of recipientsList) {
-        try {
-          await supabase.functions.invoke('send-service-order-email', {
-            body: { service_order_id: orderId, recipients: [r], subject, body: body.replace(/\n/g, '<br>') },
-          });
-          sent++;
-        } catch { failed++; }
+      const { data, error } = await supabase.functions.invoke('send-service-order-email', {
+        body: {
+          service_order_id: orderId,
+          recipients: recipientsList,
+          subject,
+          body: body.replace(/\n/g, '<br>'),
+        },
+      });
+
+      if (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        setResult(`Error al enviar: ${msg}`);
+        return;
       }
 
-      if (sent > 0) {
-        try { await supabase.rpc('mark_budget_sent', { p_order_id: orderId }); } catch {}
-        setResult(`Orden enviada correctamente a ${sent} destinatario(s)${failed > 0 ? `. Falló ${failed}` : ''}`);
-        onSent();
-      } else {
-        setResult('No se pudo enviar la orden');
+      if (!isRecord(data) || typeof data.success !== 'number' || typeof data.failed !== 'number' || !Array.isArray(data.results)) {
+        setResult('La respuesta del servicio de correo no es válida.');
+        return;
       }
-    } catch (err: any) { setResult('Error: ' + (err?.message || '')); }
-    finally { setSending(false); }
+
+      const resp = data as unknown as EmailFunctionResponse;
+      const { success, failed, results: resList } = resp;
+
+      if (success === 0) {
+        setResult(`No se pudo enviar la orden${failed > 0 ? `. ${failed} destinatario(s) fallaron` : ''}`);
+        return;
+      }
+
+      const hasRealSend = resList.some((r: EmailDeliveryResult) => r.status === 'sent');
+
+      if (failed === 0) {
+        setResult(hasRealSend
+          ? `Orden enviada correctamente a ${success} destinatario(s)`
+          : `Envío de prueba registrado. El proveedor de correo no está configurado.`);
+      } else {
+        setResult(`Orden enviada a ${success} destinatario(s). Fallaron ${failed}.`);
+      }
+
+      onSent();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setResult(`Error al enviar: ${msg}`);
+    } finally {
+      submitRef.current = false;
+      setSending(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -132,15 +182,15 @@ export default function SendOrderEmailModal({
                 )}
 
                 <div className="flex gap-2">
-                  <input className="flex-1 border rounded px-3 py-2 text-sm" placeholder="Nombre (opcional)" id="extra-name" />
-                  <input className="flex-1 border rounded px-3 py-2 text-sm" placeholder="Correo" id="extra-email" type="email" />
+                  <input className="flex-1 border rounded px-3 py-2 text-sm" placeholder="Nombre (opcional)" value={extraName} onChange={(e) => setExtraName(e.target.value)} />
+                  <input className="flex-1 border rounded px-3 py-2 text-sm" placeholder="Correo" type="email" value={extraEmail} onChange={(e) => setExtraEmail(e.target.value)} />
                   <Button size="sm" variant="outline" onClick={() => {
-                    const n = (document.getElementById('extra-name') as HTMLInputElement)?.value?.trim() || '';
-                    const e = (document.getElementById('extra-email') as HTMLInputElement)?.value?.trim().toLowerCase();
+                    const n = extraName.trim();
+                    const e = extraEmail.trim().toLowerCase();
                     if (!e || !e.includes('@')) return;
                     setExtraRecipients([...extraRecipients, { name: n, email: e }]);
-                    (document.getElementById('extra-name') as HTMLInputElement).value = '';
-                    (document.getElementById('extra-email') as HTMLInputElement).value = '';
+                    setExtraName('');
+                    setExtraEmail('');
                   }}>Agregar</Button>
                 </div>
               </>

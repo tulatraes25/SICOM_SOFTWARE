@@ -12,6 +12,10 @@ import Select from '@/components/ui/Select';
 import { getUserSignatureForPDF } from '@/services/userSignatures.service';
 import { ArrowLeft, AlertCircle, Check } from 'lucide-react';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'info'> = {
   draft: 'default', generated: 'warning', reviewed: 'warning', approved: 'info', sent: 'success',
 };
@@ -170,9 +174,21 @@ export default function MonthlyReportDetailPage() {
 
   const handleSendEmail = async () => {
     if (!report) return;
+    if (recipients.length === 0) {
+      setEmailResult('No hay destinatarios para enviar.');
+      return;
+    }
+    if (report.status !== 'approved') {
+      setEmailResult('El informe debe estar aprobado para enviarse.');
+      return;
+    }
+    if (!report.pdf_url) {
+      setEmailResult('Primero generá el PDF del informe.');
+      return;
+    }
     setEmailSending(true); setEmailResult('');
     try {
-      const result = await supabase.functions.invoke('send-monthly-report-email', {
+      const { data, error } = await supabase.functions.invoke('send-monthly-report-email', {
         body: {
           monthly_report_id: report.id,
           recipients: recipients.map(r => ({ email: r.email, name: r.name })),
@@ -180,11 +196,41 @@ export default function MonthlyReportDetailPage() {
           body: `Adjuntamos el informe mensual correspondiente a ${elevator?.code || ''} del período ${MONTH_NAMES[report.report_month || 0]} ${report.report_year}.`,
         },
       });
-      if (result.error) throw new Error(result.error);
-      setEmailResult('Informe enviado correctamente');
+
+      if (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        setEmailResult(`Error al enviar: ${msg}`);
+        return;
+      }
+
+      if (!isRecord(data) || typeof data.success !== 'number' || typeof data.failed !== 'number' || !Array.isArray(data.results)) {
+        setEmailResult('La respuesta del servicio de correo no es válida.');
+        return;
+      }
+
+      const success = data.success as number;
+      const failed = data.failed as number;
+      const results = data.results as Array<{ email: string; status: string }>;
+
+      if (success === 0) {
+        setEmailResult(`No se pudo enviar el informe${failed > 0 ? `. ${failed} destinatario(s) fallaron` : ''}`);
+        return;
+      }
+
+      const hasRealSend = results.some(r => r.status === 'sent');
+
+      if (failed === 0) {
+        setEmailResult(hasRealSend
+          ? 'Informe enviado correctamente'
+          : 'Envío de prueba registrado. El proveedor de correo no está configurado.');
+      } else {
+        setEmailResult(`Informe enviado a ${success} destinatario(s). Fallaron ${failed}.`);
+      }
+
       await loadReport();
-    } catch (err: any) {
-      setEmailResult('Error: ' + (err?.message || ''));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setEmailResult(`Error al enviar: ${msg}`);
     } finally { setEmailSending(false); }
   };
 
