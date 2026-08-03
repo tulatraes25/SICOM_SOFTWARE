@@ -146,7 +146,23 @@ describe('Migration 065 — permissions', () => {
 });
 
 describe('Migration 065 — backfill', () => {
-  it('backfill solo actualiza diferencias', () => {
+  it('UPDATE y GET DIAGNOSTICS están dentro del mismo bloque DO', () => {
+    const doBlockStart = migration.indexOf('DO $$');
+    const doBlockEnd = migration.indexOf('END $$;', doBlockStart) + 'END $$;'.length;
+    const backfillBlock = migration.slice(doBlockStart, doBlockEnd);
+    expect(backfillBlock).toContain('UPDATE public.elevator_visit_entries');
+    expect(backfillBlock).toContain('GET DIAGNOSTICS v_count = ROW_COUNT');
+  });
+
+  it('existe GET DIAGNOSTICS v_count = ROW_COUNT', () => {
+    expect(migration).toContain('GET DIAGNOSTICS v_count = ROW_COUNT');
+  });
+
+  it('el bloque informa el conteo', () => {
+    expect(migration).toContain("RAISE NOTICE 'Migration 065: corrected duration for % rows'");
+  });
+
+  it('backfill usa IS DISTINCT FROM', () => {
     expect(migration).toContain('IS DISTINCT FROM');
   });
 

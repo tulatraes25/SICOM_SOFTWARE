@@ -10,34 +10,36 @@
 -- ============================================================
 -- 1. Backfill historical records (only where values differ)
 -- ============================================================
-WITH calculated AS (
-  SELECT
-    id,
-    GREATEST(
-      FLOOR(EXTRACT(EPOCH FROM (check_out_at - check_in_at)))::INTEGER,
-      0
-    ) AS expected_seconds,
-    GREATEST(
-      FLOOR(EXTRACT(EPOCH FROM (check_out_at - check_in_at)) / 60.0)::INTEGER,
-      0
-    ) AS expected_minutes
-  FROM public.elevator_visit_entries
-  WHERE check_in_at IS NOT NULL
-    AND check_out_at IS NOT NULL
-    AND check_out_at >= check_in_at
-)
-UPDATE public.elevator_visit_entries eve
-SET duration_seconds = c.expected_seconds,
-    duration_minutes = c.expected_minutes
-FROM calculated c
-WHERE eve.id = c.id
-  AND (eve.duration_seconds IS DISTINCT FROM c.expected_seconds
-       OR eve.duration_minutes IS DISTINCT FROM c.expected_minutes);
-
 DO $$
 DECLARE
   v_count INTEGER := 0;
 BEGIN
+  WITH calculated AS (
+    SELECT
+      id,
+      GREATEST(
+        FLOOR(EXTRACT(EPOCH FROM (check_out_at - check_in_at)))::INTEGER,
+        0
+      ) AS expected_seconds,
+      GREATEST(
+        FLOOR(EXTRACT(EPOCH FROM (check_out_at - check_in_at)) / 60.0)::INTEGER,
+        0
+      ) AS expected_minutes
+    FROM public.elevator_visit_entries
+    WHERE check_in_at IS NOT NULL
+      AND check_out_at IS NOT NULL
+      AND check_out_at >= check_in_at
+  )
+  UPDATE public.elevator_visit_entries eve
+  SET duration_seconds = c.expected_seconds,
+      duration_minutes = c.expected_minutes
+  FROM calculated c
+  WHERE eve.id = c.id
+    AND (
+      eve.duration_seconds IS DISTINCT FROM c.expected_seconds
+      OR eve.duration_minutes IS DISTINCT FROM c.expected_minutes
+    );
+
   GET DIAGNOSTICS v_count = ROW_COUNT;
   RAISE NOTICE 'Migration 065: corrected duration for % rows', v_count;
 END $$;
