@@ -14,63 +14,82 @@ GRANT EXECUTE ON FUNCTION public.get_public_elevator_history_by_token(TEXT, INTE
 -- 2. VERIFICATION
 -- ============================================================
 DO $$
+DECLARE
+  v_history_oid OID :=
+    to_regprocedure(
+      'public.get_public_elevator_history_by_token(text,integer)'
+    );
+
+  v_elevator_oid OID :=
+    to_regprocedure(
+      'public.get_public_elevator_by_token(text)'
+    );
+
+  v_scan_oid OID :=
+    to_regprocedure(
+      'public.register_public_qr_scan(text,text)'
+    );
 BEGIN
-  -- Function must exist
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc p
-    JOIN pg_namespace n ON p.pronamespace = n.oid
-    WHERE n.nspname = 'public' AND p.proname = 'get_public_elevator_history_by_token'
-  ) THEN
-    RAISE EXCEPTION 'Function get_public_elevator_history_by_token does not exist';
+  IF v_history_oid IS NULL THEN
+    RAISE EXCEPTION
+      'Function get_public_elevator_history_by_token(text,integer) does not exist';
   END IF;
 
-  -- anon must not be able to execute
-  IF EXISTS (
-    SELECT 1 FROM pg_proc p
-    JOIN pg_namespace n ON p.pronamespace = n.oid
-    JOIN pg_proc_acl acl ON acl.proacl IS NOT NULL
-    WHERE n.nspname = 'public'
-      AND p.proname = 'get_public_elevator_history_by_token'
-      AND EXISTS (SELECT 1 FROM unnest(p.proacl) a WHERE a.grantee = 'anon'::regrole)
-  ) THEN
-    RAISE EXCEPTION 'anon can still execute get_public_elevator_history_by_token';
+  IF v_elevator_oid IS NULL THEN
+    RAISE EXCEPTION
+      'Function get_public_elevator_by_token(text) does not exist';
   END IF;
 
-  -- authenticated must not be able to execute
-  IF EXISTS (
-    SELECT 1 FROM pg_proc p
-    JOIN pg_namespace n ON p.pronamespace = n.oid
-    JOIN pg_proc_acl acl ON acl.proacl IS NOT NULL
-    WHERE n.nspname = 'public'
-      AND p.proname = 'get_public_elevator_history_by_token'
-      AND EXISTS (SELECT 1 FROM unnest(p.proacl) a WHERE a.grantee = 'authenticated'::regrole)
-  ) THEN
-    RAISE EXCEPTION 'authenticated can still execute get_public_elevator_history_by_token';
+  IF v_scan_oid IS NULL THEN
+    RAISE EXCEPTION
+      'Function register_public_qr_scan(text,text) does not exist';
   END IF;
 
-  -- get_public_elevator_by_token must still be executable by anon
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc p
-    JOIN pg_namespace n ON p.pronamespace = n.oid
-    JOIN pg_proc_acl acl ON acl.proacl IS NOT NULL
-    WHERE n.nspname = 'public'
-      AND p.proname = 'get_public_elevator_by_token'
-      AND EXISTS (SELECT 1 FROM unnest(p.proacl) a WHERE a.grantee = 'anon'::regrole)
+  IF has_function_privilege(
+    'anon',
+    v_history_oid,
+    'EXECUTE'
   ) THEN
-    RAISE EXCEPTION 'get_public_elevator_by_token lost anon access';
+    RAISE EXCEPTION
+      'anon can still execute public elevator history';
   END IF;
 
-  -- register_public_qr_scan must still be executable by anon
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc p
-    JOIN pg_namespace n ON p.pronamespace = n.oid
-    JOIN pg_proc_acl acl ON acl.proacl IS NOT NULL
-    WHERE n.nspname = 'public'
-      AND p.proname = 'register_public_qr_scan'
-      AND EXISTS (SELECT 1 FROM unnest(p.proacl) a WHERE a.grantee = 'anon'::regrole)
+  IF has_function_privilege(
+    'authenticated',
+    v_history_oid,
+    'EXECUTE'
   ) THEN
-    RAISE EXCEPTION 'register_public_qr_scan lost anon access';
+    RAISE EXCEPTION
+      'authenticated can still execute public elevator history';
   END IF;
 
-  RAISE NOTICE 'Migration 069 verification passed';
+  IF NOT has_function_privilege(
+    'service_role',
+    v_history_oid,
+    'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION
+      'service_role lost access to public elevator history';
+  END IF;
+
+  IF NOT has_function_privilege(
+    'anon',
+    v_elevator_oid,
+    'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION
+      'get_public_elevator_by_token lost anon access';
+  END IF;
+
+  IF NOT has_function_privilege(
+    'anon',
+    v_scan_oid,
+    'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION
+      'register_public_qr_scan lost anon access';
+  END IF;
+
+  RAISE NOTICE
+    'Migration 069 verification passed';
 END $$;
