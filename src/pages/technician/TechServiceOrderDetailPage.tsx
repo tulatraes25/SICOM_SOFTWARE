@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { getServiceOrder, startOrder, completeOrder, addProgress, getOrderProgress, getOrderEvents } from '@/services/serviceOrders.service';
+import type { ServiceOrderEvent, ServiceOrderProgress } from '@/services/serviceOrders.service';
 import { SERVICE_ORDER_STATUS_LABELS, SERVICE_ORDER_TYPE_LABELS, CLAIM_PRIORITY_LABELS } from '@/types/database';
 import type { ServiceOrder } from '@/types/database';
 import { ArrowLeft, AlertCircle, Play, CheckCircle } from 'lucide-react';
+import { supabase } from '@/config/supabase';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   assigned: 'warning', in_progress: 'warning', visited: 'info',
@@ -27,8 +29,8 @@ export default function TechServiceOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<ServiceOrder | null>(null);
-  const [progress, setProgress] = useState<any[]>([]);
-  const [events, setEvents] = useState<any[]>([]);
+  const [progress, setProgress] = useState<ServiceOrderProgress[]>([]);
+  const [events, setEvents] = useState<ServiceOrderEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -37,6 +39,12 @@ export default function TechServiceOrderDetailPage() {
   const [progressType, setProgressType] = useState('update');
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [completionSummary, setCompletionSummary] = useState('');
+  const [userId, setUserId] = useState('');
+  const actionRef = useRef(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => { if (data.user) setUserId(data.user.id); });
+  }, []);
 
   useEffect(() => { if (id) loadData(); }, [id]);
 
@@ -44,24 +52,36 @@ export default function TechServiceOrderDetailPage() {
     if (!id) return;
     try {
       const [o, prog, evts] = await Promise.all([getServiceOrder(id), getOrderProgress(id), getOrderEvents(id)]);
-      setOrder(o); setProgress(prog); setEvents(evts);
-    } catch (err: any) { setError(err?.message || 'Error'); } finally { setLoading(false); }
+      setOrder(o); setProgress(prog as ServiceOrderProgress[]); setEvents(evts as ServiceOrderEvent[]);
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error'); } finally { setLoading(false); }
   };
 
   const handleAction = async (action: () => Promise<void>) => {
+    if (actionRef.current) return;
+    actionRef.current = true;
     setActionLoading(true); setError('');
-    try { await action(); await loadData(); } catch (err: any) { setError(err?.message || 'Error'); } finally { setActionLoading(false); }
+    try { await action(); await loadData(); }
+    catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error'); }
+    finally { actionRef.current = false; setActionLoading(false); }
   };
 
   if (loading) return <DashboardLayout role="technician" title="Orden"><div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
   if (error && !order) return <DashboardLayout role="technician" title="Orden"><div className="max-w-2xl mx-auto"><button onClick={() => navigate('/tecnico/ordenes')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"><ArrowLeft size={18} /> Volver</button><Card><CardContent><div className="text-center py-8"><AlertCircle size={48} className="mx-auto text-danger mb-4" /><p className="text-gray-600">{error}</p></div></CardContent></Card></div></DashboardLayout>;
   if (!order) return null;
 
-  const caseNum = (order.service_case as any)?.case_number;
-  const caseMode = (order.service_case as any)?.numbering_mode;
+  const caseNum = order.service_case?.case_number;
+  const caseMode = order.service_case?.numbering_mode;
   const numLabel = caseMode === 'test' ? `PRUEBA N.º ${caseNum}` : `N.º ${caseNum}`;
   const isCompleted = order.status === 'completed';
   const isChangesRequested = order.status === 'changes_requested';
+
+  const myAssignment = order.technicians?.find(t => t.technician?.id === userId);
+  const isLead = myAssignment?.is_lead ?? false;
+  const isAssigned = !!myAssignment;
+
+  const canStart = (order.status === 'assigned' || isChangesRequested) && isAssigned;
+  const canComplete = ['in_progress', 'visited'].includes(order.status) && isLead;
+  const canProgress = ['in_progress', 'visited'].includes(order.status) && isAssigned;
 
   return (
     <DashboardLayout role="technician" title={`Orden ${numLabel}`}>
@@ -72,13 +92,13 @@ export default function TechServiceOrderDetailPage() {
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-bold text-gray-900">{numLabel}</h2>
               <Badge variant={STATUS_BADGE[order.status] || 'default'}>{SERVICE_ORDER_STATUS_LABELS[order.status]}</Badge>
+              {isLead && <Badge variant="success">Sos el técnico principal</Badge>}
             </div>
           </div>
           <div className="flex gap-2">
-            {order.status === 'assigned' && <Button onClick={() => handleAction(() => startOrder(id!))} disabled={actionLoading}><Play size={16} className="mr-2" /> Comenzar trabajo</Button>}
-            {isChangesRequested && <Button onClick={() => handleAction(() => startOrder(id!))} disabled={actionLoading}><Play size={16} className="mr-2" /> Retomar trabajo</Button>}
-            {['in_progress', 'visited'].includes(order.status) && <Button onClick={() => setShowProgressModal(true)}>Registrar Avance</Button>}
-            {['in_progress', 'visited'].includes(order.status) && <Button onClick={() => { setCompletionSummary((order as any).completion_summary || progress[progress.length - 1]?.note || ''); setShowCompleteModal(true); }}><CheckCircle size={16} className="mr-2" /> Completar</Button>}
+            {canStart && <Button onClick={() => handleAction(() => startOrder(id!))} disabled={actionLoading}><Play size={16} className="mr-2" /> {isChangesRequested ? 'Retomar' : 'Comenzar'} trabajo</Button>}
+            {canProgress && <Button onClick={() => setShowProgressModal(true)}>Registrar Avance</Button>}
+            {canComplete && <Button onClick={() => { setCompletionSummary(order.completion_summary || progress[progress.length - 1]?.note || ''); setShowCompleteModal(true); }}><CheckCircle size={16} className="mr-2" /> Completar</Button>}
             {isCompleted && <Button onClick={() => navigate('/tecnico/ordenes')}>Volver a Mis Órdenes</Button>}
           </div>
         </div>
@@ -89,18 +109,18 @@ export default function TechServiceOrderDetailPage() {
               <AlertCircle size={18} className="text-red-600" />
               <h3 className="font-bold text-red-700">Correcciones solicitadas</h3>
             </div>
-            {(order as any).reviewer_notes ? (
-              <p className="text-red-600 text-sm">{(order as any).reviewer_notes}</p>
+            {order.reviewer_notes ? (
+              <p className="text-red-600 text-sm">{order.reviewer_notes}</p>
             ) : (
               <p className="text-red-500 text-sm italic">No se informó una observación.</p>
             )}
-            {(order as any).reviewed_at && (
-              <p className="text-red-400 text-xs mt-2">Solicitado el {new Date((order as any).reviewed_at).toLocaleString('es-AR')}</p>
+            {order.reviewed_at && (
+              <p className="text-red-400 text-xs mt-2">Solicitado el {new Date(order.reviewed_at).toLocaleString('es-AR')}</p>
             )}
           </div>
         )}
 
-        {error && <div className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
+        {error && <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
@@ -118,7 +138,7 @@ export default function TechServiceOrderDetailPage() {
                 <div className="space-y-2">{progress.map((p) => (
                   <div key={p.id} className="p-3 border rounded text-sm">
                     <p className="font-medium">{p.note}</p>
-                    <p className="text-xs text-gray-500 mt-1">{(p.tech as any)?.full_name || 'Técnico'} — {new Date(p.created_at).toLocaleString('es-AR')}</p>
+                    <p className="text-xs text-gray-500 mt-1">{p.tech?.full_name || 'Técnico'} — {new Date(p.created_at).toLocaleString('es-AR')}</p>
                   </div>
                 ))}</div>
               </CardContent></Card>
@@ -132,7 +152,7 @@ export default function TechServiceOrderDetailPage() {
                     <div>
                       <p className="text-gray-900">{EVENT_LABELS[e.event_type] || e.event_type}</p>
                       {e.performer?.full_name && <p className="text-gray-500 text-xs">{e.performer.full_name}</p>}
-                      {e.details?.notes && <p className="text-gray-500 text-xs italic">"{e.details.notes}"</p>}
+                      {typeof e.details?.notes === 'string' && e.details.notes && <p className="text-gray-500 text-xs italic">"{e.details.notes}"</p>}
                       <p className="text-gray-400 text-xs">{new Date(e.created_at).toLocaleString('es-AR')}</p>
                     </div>
                   </div>
@@ -143,12 +163,12 @@ export default function TechServiceOrderDetailPage() {
 
           <div className="space-y-6">
             <Card><CardHeader><h3 className="font-semibold">Información</h3></CardHeader><CardContent className="space-y-2 text-sm">
-              <div><span className="text-gray-500">Cliente: </span>{(order.client as any)?.name || '-'}</div>
-              <div><span className="text-gray-500">Edificio: </span>{(order.building as any)?.name || '-'}</div>
-              <div><span className="text-gray-500">Ascensor: </span>{(order.elevator as any)?.code || '-'}</div>
+              <div><span className="text-gray-500">Cliente: </span>{order.client?.name || '-'}</div>
+              <div><span className="text-gray-500">Edificio: </span>{order.building?.name || '-'}</div>
+              <div><span className="text-gray-500">Ascensor: </span>{order.elevator?.code || '-'}</div>
               {order.technicians && order.technicians.length > 0 && (
                 <div><span className="text-gray-500">Técnicos:</span>
-                  <ul className="mt-1">{order.technicians.map((t: any, i: number) => <li key={i}>{t.technician?.full_name}{t.is_lead ? ' (Principal)' : ''}</li>)}</ul>
+                  <ul className="mt-1">{order.technicians.map((t, i) => <li key={i}>{t.technician?.full_name}{t.is_lead ? ' (Principal)' : ''}</li>)}</ul>
                 </div>
               )}
             </CardContent></Card>
@@ -174,8 +194,6 @@ export default function TechServiceOrderDetailPage() {
           value={completionSummary}
           onChange={(e) => setCompletionSummary(e.target.value)}
           placeholder="Resumen del trabajo realizado..."
-          minLength={5}
-          maxLength={2000}
         />
         <p className="text-xs text-gray-400 mt-1">{completionSummary.length}/2000</p>
         <div className="flex justify-end gap-2 mt-4">

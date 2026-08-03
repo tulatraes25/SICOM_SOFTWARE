@@ -1,11 +1,64 @@
 import { supabase } from '@/config/supabase';
 import type { ServiceOrder, ServiceOrderType } from '@/types/database';
 
+export interface ServiceOrderWithRelations {
+  id: string;
+  status: string;
+  subject: string;
+  priority: string;
+  scheduled_date: string | null;
+  scheduled_time: string | null;
+  order_type: string;
+  service_case_id: string | null;
+  client_id: string | null;
+  building_id: string | null;
+  elevator_id: string | null;
+  order_date: string | null;
+  work_requested: string | null;
+  completion_summary: string | null;
+  reviewer_notes: string | null;
+  service_case?: { case_number: number; numbering_mode: string; status?: string } | null;
+  client?: { id: string; name: string; code: string; contact_name?: string; contact_phone?: string } | null;
+  building?: { id: string; name: string; code: string; address?: string } | null;
+  elevator?: { id: string; code: string; manufacturer?: string; model?: string } | null;
+  technicians?: Array<{
+    technician?: { id: string; full_name: string; email?: string } | null;
+    is_lead: boolean;
+    assigned_at?: string;
+  }> | null;
+}
+
+export interface ServiceOrderProgress {
+  id: string;
+  service_order_id: string;
+  technician_id: string;
+  note: string;
+  progress_type: string;
+  created_at: string;
+  tech?: { full_name: string } | null;
+}
+
+export interface ServiceOrderEvent {
+  id: string;
+  service_order_id: string;
+  event_type: string;
+  performed_by: string;
+  details: Record<string, unknown>;
+  created_at: string;
+  performer?: { full_name: string } | null;
+}
+
+export interface TechnicianOption {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
 export async function listServiceOrders(filters?: {
   status?: string; priority?: string; order_type?: string;
   client_id?: string; building_id?: string; search?: string;
   limit?: number; offset?: number;
-}): Promise<{ data: ServiceOrder[]; count: number }> {
+}): Promise<{ data: ServiceOrderWithRelations[]; count: number }> {
   let query = supabase.from('service_orders').select(`
     *, service_case:service_cases(case_number, numbering_mode),
     client:clients(name, code), building:buildings(name, code),
@@ -25,6 +78,39 @@ export async function listServiceOrders(filters?: {
   const { data, count, error } = await query;
   if (error) throw error;
   return { data: data || [], count: count || 0 };
+}
+
+export async function listMyServiceOrders(userId: string): Promise<ServiceOrderWithRelations[]> {
+  // Step 1: Get order IDs where user is assigned
+  const { data: assignments, error: assignError } = await supabase
+    .from('service_order_technicians')
+    .select('service_order_id')
+    .eq('technician_id', userId);
+
+  if (assignError) throw assignError;
+  if (!assignments || assignments.length === 0) return [];
+
+  const orderIds = assignments.map(a => a.service_order_id);
+
+  // Step 2: Fetch those orders with relations
+  const { data, error } = await supabase
+    .from('service_orders')
+    .select(`
+      id, status, subject, priority, scheduled_date, scheduled_time, order_type,
+      service_case:service_cases(case_number, numbering_mode),
+      client:clients(name, code),
+      building:buildings(name, code),
+      elevator:elevators(code),
+      technicians:service_order_technicians(
+        technician:profiles!service_order_technicians_technician_id_fkey(id, full_name),
+        is_lead, assigned_at
+      )
+    `)
+    .in('id', orderIds)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as unknown as ServiceOrderWithRelations[];
 }
 
 export async function getServiceOrder(id: string): Promise<ServiceOrder | null> {

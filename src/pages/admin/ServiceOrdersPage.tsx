@@ -8,7 +8,7 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { listServiceOrders } from '@/services/serviceOrders.service';
 import { SERVICE_ORDER_STATUS_LABELS, SERVICE_ORDER_TYPE_LABELS, CLAIM_PRIORITY_LABELS } from '@/types/database';
-import type { ServiceOrder } from '@/types/database';
+import type { ServiceOrderWithRelations } from '@/services/serviceOrders.service';
 import { Plus, Search, Eye, Wrench } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
@@ -17,7 +17,7 @@ const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' 
 const STATUS_OPTIONS = [{ value: '', label: 'Todos' }, ...Object.entries(SERVICE_ORDER_STATUS_LABELS).map(([v, l]) => ({ value: v, label: l }))];
 
 export default function ServiceOrdersPage() {
-  const [orders, setOrders] = useState<ServiceOrder[]>([]);
+  const [orders, setOrders] = useState<ServiceOrderWithRelations[]>([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -59,12 +59,12 @@ export default function ServiceOrdersPage() {
             <th className="text-left px-4 py-3 text-sm font-medium text-gray-600"></th>
           </tr></thead><tbody>
             {orders.map((o) => <tr key={o.id} className="border-b border-gray-100 hover:bg-gray-50">
-              <td className="px-4 py-3 font-mono font-semibold text-gray-900">{o.service_case ? `${(o.service_case as any).numbering_mode === 'test' ? 'PRUEBA ' : ''}N.º ${(o.service_case as any).case_number}` : '-'}</td>
-              <td className="px-4 py-3 text-sm text-gray-600">{new Date(o.order_date).toLocaleDateString('es-AR')}</td>
-              <td className="px-4 py-3 text-sm text-gray-600">{(o.client as any)?.name || '-'}</td>
-              <td className="px-4 py-3 text-sm text-gray-600">{SERVICE_ORDER_TYPE_LABELS[o.order_type]}</td>
+              <td className="px-4 py-3 font-mono font-semibold text-gray-900">{o.service_case ? `${o.service_case.numbering_mode === 'test' ? 'PRUEBA ' : ''}N.º ${o.service_case.case_number}` : '-'}</td>
+              <td className="px-4 py-3 text-sm text-gray-600">{o.order_date ? new Date(o.order_date).toLocaleDateString('es-AR') : '-'}</td>
+              <td className="px-4 py-3 text-sm text-gray-600">{o.client?.name || '-'}</td>
+              <td className="px-4 py-3 text-sm text-gray-600">{SERVICE_ORDER_TYPE_LABELS[o.order_type as keyof typeof SERVICE_ORDER_TYPE_LABELS]}</td>
               <td className="px-4 py-3 text-sm text-gray-600">{CLAIM_PRIORITY_LABELS[o.priority as keyof typeof CLAIM_PRIORITY_LABELS]}</td>
-              <td className="px-4 py-3"><Badge variant={STATUS_BADGE[o.status]}>{SERVICE_ORDER_STATUS_LABELS[o.status]}</Badge></td>
+              <td className="px-4 py-3"><Badge variant={STATUS_BADGE[o.status]}>{SERVICE_ORDER_STATUS_LABELS[o.status as keyof typeof SERVICE_ORDER_STATUS_LABELS]}</Badge></td>
               <td className="px-4 py-3"><Link to={`/admin/ordenes-servicio/${o.id}`}><Button variant="ghost" size="sm"><Eye size={14} /></Button></Link></td>
             </tr>)}
           </tbody></table></div>}

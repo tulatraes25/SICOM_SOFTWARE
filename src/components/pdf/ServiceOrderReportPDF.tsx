@@ -122,6 +122,12 @@ export default function ServiceOrderReportPDF({ order, progress, events, isTest,
             <Text style={s.desc}>{order.work_requested || 'No informado'}</Text>
           </View>
 
+          {/* Work completed */}
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Trabajo Realizado y Resultado</Text>
+            <Text style={s.desc}>{order.completion_summary || 'No informado'}</Text>
+          </View>
+
           {/* Reviewer notes */}
           {(order as any).reviewer_notes && (
             <View style={s.section}>

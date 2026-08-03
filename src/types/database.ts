@@ -694,6 +694,13 @@ export interface ServiceOrder {
   completed_by?: string;
   completion_summary?: string;
   cancellation_reason?: string;
+  reviewer_notes?: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  final_pdf_path?: string;
+  final_pdf_version?: number;
+  final_pdf_generated_at?: string;
+  final_pdf_generated_by?: string;
   created_at: string;
   updated_at: string;
   // Relations
@@ -701,7 +708,9 @@ export interface ServiceOrder {
   client?: Client;
   building?: Building;
   elevator?: Elevator;
-  technicians?: Array<{ technician: Profile; is_lead: boolean }>;
+  technicians?: Array<{ technician: Profile; is_lead: boolean; assigned_at?: string }>;
+  created_user?: Profile | null;
+  approved_user?: Profile | null;
 }
 
 export const SERVICE_ORDER_TYPE_LABELS: Record<ServiceOrderType, string> = {
