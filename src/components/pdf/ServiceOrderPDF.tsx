@@ -81,9 +81,9 @@ export default function ServiceOrderPDF({ order, isTest, signerName }: ServiceOr
 
           {techs.length > 0 && (
             <View style={s.infoCard}>
-              <Text style={s.cardTitle}>Técnicos Asignados</Text>
+              <Text style={s.cardTitle}>Técnico Asignado</Text>
               {techs.map((t: any, i: number) => (
-                <Text key={i} style={s.value}>{t.technician?.full_name || 'N/D'}{t.is_lead ? ' (Principal)' : ''}</Text>
+                <Text key={i} style={s.value}>{t.technician?.full_name || 'N/D'}</Text>
               ))}
             </View>
           )}

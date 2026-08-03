@@ -60,7 +60,7 @@ interface ServiceOrderReportPDFProps {
 }
 
 const EVENT_LABELS: Record<string, string> = {
-  order_created: 'Orden creada', marked_ready: 'Marcada como lista',
+  order_created: 'Orden creada', marked_ready: 'Preparada para asignación',
   technician_assigned: 'Técnico asignado', order_started: 'Trabajo iniciado',
   visit_registered: 'Visita registrada', progress_added: 'Avance registrado',
   order_completed: 'Trabajo completado', corrections_requested: 'Correcciones solicitadas',

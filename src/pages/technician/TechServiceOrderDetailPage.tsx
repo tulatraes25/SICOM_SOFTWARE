@@ -17,7 +17,7 @@ const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' 
 };
 
 const EVENT_LABELS: Record<string, string> = {
-  order_created: 'Orden creada', marked_ready: 'Marcada como lista',
+  order_created: 'Orden creada', marked_ready: 'Preparada para asignación',
   technician_assigned: 'Técnico asignado', order_started: 'Trabajo iniciado',
   visit_registered: 'Visita registrada', progress_added: 'Avance registrado',
   order_completed: 'Trabajo completado', corrections_requested: 'Correcciones solicitadas',
@@ -164,10 +164,10 @@ export default function TechServiceOrderDetailPage() {
               <div><span className="text-gray-500">Cliente: </span>{order.client?.name || '-'}</div>
               <div><span className="text-gray-500">Edificio: </span>{order.building?.name || '-'}</div>
               <div><span className="text-gray-500">Ascensor: </span>{order.elevator?.code || '-'}</div>
-              {order.technicians && order.technicians.length > 0 && (
-                <div><span className="text-gray-500">Técnicos:</span>
-                  <ul className="mt-1">{order.technicians.map((t, i) => <li key={i}>{t.technician?.full_name}{t.is_lead ? ' (Principal)' : ''}</li>)}</ul>
-                </div>
+              {order.technicians && order.technicians.length > 0 ? (
+                <div><span className="text-gray-500">Técnico asignado: </span>{order.technicians[0]?.technician?.full_name || '-'}</div>
+              ) : (
+                <div><span className="text-gray-500">Técnico asignado: </span><span className="text-gray-400 italic">Sin asignar</span></div>
               )}
             </CardContent></Card>
           </div>
