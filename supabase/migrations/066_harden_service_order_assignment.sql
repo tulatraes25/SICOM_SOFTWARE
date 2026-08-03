@@ -18,11 +18,9 @@ DECLARE
   v_user_id UUID;
   v_role TEXT;
   v_order RECORD;
-  v_lead UUID;
   v_tid UUID;
   v_seen UUID[];
   v_elevator_active BOOLEAN;
-  v_lead_in_array BOOLEAN := FALSE;
 BEGIN
   v_user_id := auth.uid();
 
@@ -64,7 +62,7 @@ BEGIN
   FROM public.elevators
   WHERE id = v_order.elevator_id;
 
-  IF v_elevator_active IS NULL OR v_elevator_active !== true THEN
+  IF v_elevator_active IS DISTINCT FROM TRUE THEN
     RETURN jsonb_build_object('error', 'La orden debe tener un ascensor activo.');
   END IF;
 

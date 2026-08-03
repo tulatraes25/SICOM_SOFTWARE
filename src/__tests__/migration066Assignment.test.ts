@@ -38,4 +38,21 @@ describe('Migration 066 — assign_service_order_technicians contract', () => {
   it('REVOKE PUBLIC', () => { expect(migration).toContain('REVOKE ALL ON FUNCTION public.assign_service_order_technicians(UUID, UUID[], UUID) FROM PUBLIC'); });
   it('REVOKE anon', () => { expect(migration).toContain('REVOKE ALL ON FUNCTION public.assign_service_order_technicians(UUID, UUID[], UUID) FROM anon'); });
   it('GRANT authenticated', () => { expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.assign_service_order_technicians(UUID, UUID[], UUID) TO authenticated'); });
+
+  it('no contiene !==', () => { expect(fn).not.toContain('!=='); });
+  it('contiene IS DISTINCT FROM TRUE para ascensor', () => { expect(fn).toContain('v_elevator_active IS DISTINCT FROM TRUE'); });
+  it('validación del ascensor aparece antes del DELETE', () => {
+    const elevatorIdx = fn.indexOf('IS DISTINCT FROM TRUE');
+    const deleteIdx = fn.indexOf('DELETE FROM');
+    expect(elevatorIdx).toBeGreaterThan(-1);
+    expect(elevatorIdx).toBeLessThan(deleteIdx);
+  });
+  it('conserva LANGUAGE plpgsql SECURITY DEFINER SET search_path', () => {
+    expect(fn).toContain('LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp');
+  });
+  it('conserva REVOKE y GRANT exactos', () => {
+    expect(migration).toContain('REVOKE ALL ON FUNCTION public.assign_service_order_technicians(UUID, UUID[], UUID) FROM PUBLIC');
+    expect(migration).toContain('REVOKE ALL ON FUNCTION public.assign_service_order_technicians(UUID, UUID[], UUID) FROM anon');
+    expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.assign_service_order_technicians(UUID, UUID[], UUID) TO authenticated');
+  });
 });
