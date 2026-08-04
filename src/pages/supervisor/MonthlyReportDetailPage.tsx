@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
 import { supabase } from '@/config/supabase';
-import { getMonthlyReportPeriodData, updateMonthlyReport, approveMonthlyReport } from '@/services/monthlyReportEnhanced.service';
+import { getMonthlyReportPeriodData, updateMonthlyReport } from '@/services/monthlyReportEnhanced.service';
 import MonthlyReportPDF from '@/components/pdf/MonthlyReportPDF';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
@@ -25,20 +25,21 @@ const MONTH_NAMES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
 export default function MonthlyReportDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [report, setReport] = useState<any>(null);
-  const [periodData, setPeriodData] = useState<any>(null);
+  const [report, setReport] = useState<Record<string, unknown> | null>(null);
+  const [periodData, setPeriodData] = useState<Record<string, unknown> | null>(null);
   const [recipients, setRecipients] = useState<Array<{ id: string; name: string; email: string; role_label?: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [approving, setApproving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [generalStatus, setGeneralStatus] = useState('operativo');
   const [generalNotes, setGeneralNotes] = useState('');
   const [showApproveModal, setShowApproveModal] = useState(false);
-  const [approveNotes, setApproveNotes] = useState('');
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
   const [emailResult, setEmailResult] = useState('');
+  const approveRef = useRef(false);
 
   useEffect(() => { if (id) loadReport(); }, [id]);
 
@@ -47,7 +48,6 @@ export default function MonthlyReportDetailPage() {
     try {
       const { data: r } = await supabase.from('monthly_reports').select('*').eq('id', id).single();
       if (r) {
-        // Load approver profile separately
         let approvedByProfile = null;
         if (r.approved_by) {
           const { data: profile } = await supabase.from('profiles').select('full_name, email').eq('id', r.approved_by).single();
@@ -55,7 +55,6 @@ export default function MonthlyReportDetailPage() {
         }
         r.approved_by_profile = approvedByProfile;
 
-        // Load related entities separately
         let elevator = null;
         if (r.elevator_id) {
           const { data: e } = await supabase.from('elevators').select('id, code, building:buildings(id, name, address, client:clients(name))').eq('id', r.elevator_id).single();
@@ -66,12 +65,10 @@ export default function MonthlyReportDetailPage() {
         setReport(r);
         setGeneralStatus(r.general_status || 'operativo');
         setGeneralNotes(r.general_notes || '');
-        // Load period data
         if (r.elevator_id && r.report_month && r.report_year) {
           const pd = await getMonthlyReportPeriodData(r.elevator_id, r.report_year, r.report_month);
           setPeriodData(pd);
         }
-        // Load recipients from building_recipients
         if (r.building_id) {
           const { data: recs } = await supabase
             .from('building_recipients')
@@ -80,44 +77,52 @@ export default function MonthlyReportDetailPage() {
             .eq('active', true)
             .eq('receives_monthly_reports', true)
             .or(`elevator_id.is.null,elevator_id.eq.${r.elevator_id}`);
-          setRecipients((recs || []).map((c: any) => ({ id: c.id, name: c.full_name, email: c.email, role_label: c.role_label })));
+          setRecipients((recs || []).map((c: Record<string, unknown>) => ({ id: c.id as string, name: c.full_name as string, email: c.email as string, role_label: c.role_label as string | undefined })));
         }
       }
-    } catch (err: any) { setError(err?.message || 'Error'); } finally { setLoading(false); }
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error'); } finally { setLoading(false); }
   };
 
   const handleGeneratePDF = async () => {
     if (!report) return;
     setGenerating(true); setError(''); setSuccess('');
     try {
-      await updateMonthlyReport(report.id, { general_status: generalStatus, general_notes: generalNotes });
-      const nextVersion = (report.pdf_version || 0) + 1;
-      const sigData = await getUserSignatureForPDF(report.created_by, 'administrator');
-      const approverName = (report as any).approved_by_profile?.full_name;
-      const reportWithVersion = { ...report, pdf_version: nextVersion };
+      await updateMonthlyReport(report.id as string, { general_status: generalStatus, general_notes: generalNotes });
+      const nextVersion = ((report.pdf_version as number) || 0) + 1;
+      const sigData = await getUserSignatureForPDF(report.created_by as string, 'administrator');
+      const reportWithCurrent = {
+        ...report,
+        general_status: generalStatus,
+        general_notes: generalNotes,
+        pdf_version: nextVersion,
+      };
 
-      // Determine if this is a test document
-      const hasTestRecords = (periodData?.serviceOrders || []).some((o: any) => o.service_case?.numbering_mode === 'test' || (o.service_case?.case_number >= 1900 && o.service_case?.case_number <= 1999))
-        || (periodData?.claims || []).some((cl: any) => cl.service_case?.numbering_mode === 'test' || (cl.service_case?.case_number >= 1900 && cl.service_case?.case_number <= 1999));
+      const hasTestRecords = (periodData?.serviceOrders as Array<Record<string, unknown>> || []).some((o) => {
+        const sc = o.service_case as Record<string, unknown> | undefined;
+        return sc?.numbering_mode === 'test' || ((sc?.case_number as number) >= 1900 && (sc?.case_number as number) <= 1999);
+      }) || (periodData?.claims as Array<Record<string, unknown>> || []).some((cl) => {
+        const sc = cl.service_case as Record<string, unknown> | undefined;
+        return sc?.numbering_mode === 'test' || ((sc?.case_number as number) >= 1900 && (sc?.case_number as number) <= 1999);
+      });
       const isTestDoc = hasTestRecords || report.numbering_mode === 'test';
 
       const blob = await pdf(
         <MonthlyReportPDF
-          report={reportWithVersion}
-          maintenances={periodData?.maintenances || []}
-          serviceOrders={periodData?.serviceOrders || []}
-          claims={periodData?.claims || []}
-          summary={periodData?.summary || { preventiveCount: 0, correctiveCount: 0, serviceOrderCount: 0, claimCount: 0, totalApproved: 0, totalWithCorrections: 0, firstDate: null, lastDate: null }}
+          report={reportWithCurrent}
+          maintenances={(periodData?.maintenances as Array<Record<string, unknown>>) || []}
+          serviceOrders={(periodData?.serviceOrders as Array<Record<string, unknown>>) || []}
+          claims={(periodData?.claims as Array<Record<string, unknown>>) || []}
+          summary={(periodData?.summary as Record<string, unknown>) || { preventiveCount: 0, correctiveCount: 0, serviceOrderCount: 0, claimCount: 0, totalApproved: 0, totalWithCorrections: 0, firstDate: null, lastDate: null }}
           signatureUrl={sigData?.signedUrl || undefined}
-          signerName={approverName || undefined}
+          signerName={(report.created_user as Record<string, unknown>)?.full_name as string || undefined}
           isTestDocument={isTestDoc}
+          documentStatus="preliminary"
         />
       ).toBlob();
 
-      // Upload to storage
       const arrayBuffer = await blob.arrayBuffer();
       const pdfBase64 = btoa(new Uint8Array(arrayBuffer).reduce((d, b) => d + String.fromCharCode(b), ''));
-      const version = (report.pdf_version || 0) + 1;
+      const version = (report.pdf_version as number || 0) + 1;
       const storagePath = `monthly-reports/${report.report_year}/${report.report_month}/${report.elevator_id}/informe-${report.report_year}-${String(report.report_month).padStart(2, '0')}-v${version}.pdf`;
 
       const { error: uploadError } = await supabase.storage
@@ -126,7 +131,6 @@ export default function MonthlyReportDetailPage() {
 
       if (uploadError) throw uploadError;
 
-      // Update report
       await supabase.from('monthly_reports').update({
         pdf_url: storagePath, pdf_storage_path: storagePath,
         pdf_version: version, pdf_generated_at: new Date().toISOString(),
@@ -135,27 +139,27 @@ export default function MonthlyReportDetailPage() {
 
       setSuccess(`PDF versión ${version} generado correctamente`);
       await loadReport();
-    } catch (err: any) { setError('Error al generar PDF: ' + (err?.message || '')); }
+    } catch (err: unknown) { setError('Error al generar PDF: ' + (err instanceof Error ? err.message : '')); }
     finally { setGenerating(false); }
   };
 
   const handleViewPDF = async () => {
     if (!report?.pdf_url) return;
-    const { data } = await supabase.storage.from('service-order-reports').createSignedUrl(report.pdf_url, 3600);
+    const { data } = await supabase.storage.from('service-order-reports').createSignedUrl(report.pdf_url as string, 3600);
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   };
 
   const handleDownloadPDF = async () => {
     if (!report?.pdf_url) return;
-    const { data } = await supabase.storage.from('service-order-reports').createSignedUrl(report.pdf_url, 3600);
+    const { data } = await supabase.storage.from('service-order-reports').createSignedUrl(report.pdf_url as string, 3600);
     if (!data?.signedUrl) return;
     const response = await fetch(data.signedUrl);
     const blob = await response.blob();
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = blobUrl;
-    const elevCode = (report.elevator as any)?.code || 'ascensor';
-    a.download = `informe-mensual-${elevCode.toLowerCase()}-${report.report_year}-${String(report.report_month).padStart(2, '0')}-v${report.pdf_version || 1}.pdf`;
+    const elevCode = (report.elevator as Record<string, unknown>)?.code as string || 'ascensor';
+    a.download = `informe-mensual-${elevCode.toLowerCase()}-${report.report_year}-${String(report.report_month).padStart(2, '0')}-v${(report.pdf_version as number) || 1}.pdf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -163,13 +167,89 @@ export default function MonthlyReportDetailPage() {
   };
 
   const handleApprove = async () => {
-    if (!report) return;
+    if (!report || approveRef.current) return;
+    approveRef.current = true;
+    setApproving(true); setError('');
     try {
-      await approveMonthlyReport(report.id);
+      const { data: sigData } = await supabase.auth.getUser();
+      const userId = sigData?.user?.id;
+      if (!userId) throw new Error('No se pudo identificar el usuario');
+
+      const { data: profileData } = await supabase.from('profiles').select('full_name, email').eq('id', userId).single();
+      const approverName = (profileData as Record<string, unknown>)?.full_name as string || 'Usuario aprobador no disponible';
+      const sigResult = await getUserSignatureForPDF(userId, 'administrator');
+
+      const version = ((report.pdf_version as number) || 0) + 1;
+      const reportWithApproval = {
+        ...report,
+        general_status: generalStatus,
+        general_notes: generalNotes,
+        pdf_version: version,
+      };
+
+      const hasTestRecords = (periodData?.serviceOrders as Array<Record<string, unknown>> || []).some((o) => {
+        const sc = o.service_case as Record<string, unknown> | undefined;
+        return sc?.numbering_mode === 'test' || ((sc?.case_number as number) >= 1900 && (sc?.case_number as number) <= 1999);
+      }) || (periodData?.claims as Array<Record<string, unknown>> || []).some((cl) => {
+        const sc = cl.service_case as Record<string, unknown> | undefined;
+        return sc?.numbering_mode === 'test' || ((sc?.case_number as number) >= 1900 && (sc?.case_number as number) <= 1999);
+      });
+      const isTestDoc = hasTestRecords || report.numbering_mode === 'test';
+
+      const blob = await pdf(
+        <MonthlyReportPDF
+          report={reportWithApproval}
+          maintenances={(periodData?.maintenances as Array<Record<string, unknown>>) || []}
+          serviceOrders={(periodData?.serviceOrders as Array<Record<string, unknown>>) || []}
+          claims={(periodData?.claims as Array<Record<string, unknown>>) || []}
+          summary={(periodData?.summary as Record<string, unknown>) || { preventiveCount: 0, correctiveCount: 0, serviceOrderCount: 0, claimCount: 0, totalApproved: 0, totalWithCorrections: 0, firstDate: null, lastDate: null }}
+          signatureUrl={sigResult?.signedUrl || undefined}
+          signerName={approverName}
+          isTestDocument={isTestDoc}
+          documentStatus="approved"
+          approvedAt={new Date().toLocaleDateString('es-AR')}
+        />
+      ).toBlob();
+
+      const arrayBuffer = await blob.arrayBuffer();
+      const pdfBase64 = btoa(new Uint8Array(arrayBuffer).reduce((d, b) => d + String.fromCharCode(b), ''));
+      const storagePath = `monthly-reports/${report.report_year}/${report.report_month}/${report.elevator_id}/informe-${report.report_year}-${String(report.report_month).padStart(2, '0')}-v${version}.pdf`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('service-order-reports')
+        .upload(storagePath, new Blob([Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0))], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Update with status guard
+      const { error: updateError } = await supabase.from('monthly_reports').update({
+        status: 'approved',
+        approved_by: userId,
+        approved_at: new Date().toISOString(),
+        pdf_url: storagePath,
+        pdf_storage_path: storagePath,
+        pdf_version: version,
+        pdf_generated_at: new Date().toISOString(),
+        general_status: generalStatus,
+        general_notes: generalNotes,
+        updated_at: new Date().toISOString(),
+      }).eq('id', report.id).eq('status', 'generated');
+
+      if (updateError) {
+        // Rollback: remove uploaded file
+        await supabase.storage.from('service-order-reports').remove([storagePath]).catch(() => {});
+        throw updateError;
+      }
+
       setShowApproveModal(false);
       setSuccess('Informe aprobado correctamente');
       await loadReport();
-    } catch (err: any) { setError(err?.message || 'Error al aprobar'); }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al aprobar');
+    } finally {
+      approveRef.current = false;
+      setApproving(false);
+    }
   };
 
   const handleSendEmail = async () => {
@@ -192,8 +272,8 @@ export default function MonthlyReportDetailPage() {
         body: {
           monthly_report_id: report.id,
           recipients: recipients.map(r => ({ email: r.email, name: r.name })),
-          subject: `SICOM Patagonia — Informe mensual ${elevator?.code || ''} — ${MONTH_NAMES[report.report_month || 0]} ${report.report_year}`,
-          body: `Adjuntamos el informe mensual correspondiente a ${elevator?.code || ''} del período ${MONTH_NAMES[report.report_month || 0]} ${report.report_year}.`,
+          subject: `SICOM Patagonia — Informe mensual ${elevator?.code || ''} — ${MONTH_NAMES[(report.report_month as number) || 0]} ${report.report_year}`,
+          body: `Adjuntamos el informe mensual correspondiente a ${elevator?.code || ''} del período ${MONTH_NAMES[(report.report_month as number) || 0]} ${report.report_year}.`,
         },
       });
 
@@ -237,45 +317,50 @@ export default function MonthlyReportDetailPage() {
   if (loading) return <DashboardLayout role="admin" title="Informe Mensual"><div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
   if (!report) return <DashboardLayout role="admin" title="Informe Mensual"><div className="text-center py-8"><p className="text-gray-500">Informe no encontrado</p></div></DashboardLayout>;
 
-  const elevator = report.elevator as any;
-  const monthLabel = MONTH_NAMES[report.report_month || 0] + ' ' + report.report_year;
+  const elevator = report.elevator as Record<string, unknown>;
+  const monthLabel = MONTH_NAMES[(report.report_month as number) || 0] + ' ' + report.report_year;
+  const reportStatus = report.status as string;
+  const isEditable = reportStatus === 'draft' || reportStatus === 'generated';
+  const canRegenerate = isEditable;
+  const canApprove = reportStatus === 'generated';
+  const canEmail = reportStatus === 'approved' && Boolean(report.pdf_url);
 
   return (
     <DashboardLayout role="admin" title={`Informe ${monthLabel}`}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <button onClick={() => navigate('/admin/informes-mensuales')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900"><ArrowLeft size={18} /> Volver</button>
-          <Badge variant={STATUS_BADGE[report.status]}>{STATUS_LABELS[report.status]}</Badge>
+          <Badge variant={STATUS_BADGE[reportStatus]}>{STATUS_LABELS[reportStatus]}</Badge>
         </div>
 
-        {error && <div className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
-        {success && <div className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm flex items-center gap-2"><Check size={16} /> {success}</div>}
+        {error && <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
+        {success && <div role="status" className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm flex items-center gap-2"><Check size={16} /> {success}</div>}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <Card><CardHeader><h3 className="font-semibold">Datos del Informe</h3></CardHeader><CardContent className="space-y-2 text-sm">
               <div><span className="text-gray-500">Período: </span>{monthLabel}</div>
-              <div><span className="text-gray-500">Ascensor: </span>{elevator?.code || '-'}</div>
-              <div><span className="text-gray-500">Edificio: </span>{elevator?.building?.name || '-'}</div>
-              <div><span className="text-gray-500">Cliente: </span>{elevator?.building?.client?.name || '-'}</div>
+              <div><span className="text-gray-500">Ascensor: </span>{(elevator?.code as string) || '-'}</div>
+              <div><span className="text-gray-500">Edificio: </span>{(elevator?.building as Record<string, unknown>)?.name as string || '-'}</div>
+              <div><span className="text-gray-500">Cliente: </span>{((elevator?.building as Record<string, unknown>)?.client as Record<string, unknown>)?.name as string || '-'}</div>
             </CardContent></Card>
 
             {periodData && (
               <Card><CardHeader><h3 className="font-semibold">Resumen del Período</h3></CardHeader><CardContent>
                 <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{periodData.summary.preventiveCount}</p><p className="text-xs text-gray-500">Preventivos</p></div>
-                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{periodData.summary.correctiveCount}</p><p className="text-xs text-gray-500">Correctivos</p></div>
-                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{periodData.summary.serviceOrderCount}</p><p className="text-xs text-gray-500">Órdenes</p></div>
-                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{periodData.summary.claimCount}</p><p className="text-xs text-gray-500">Reclamos</p></div>
-                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{periodData.summary.totalApproved}</p><p className="text-xs text-gray-500">Aprobados</p></div>
-                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{periodData.summary.totalWithCorrections}</p><p className="text-xs text-gray-500">Con correcciones</p></div>
+                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{(periodData.summary as Record<string, unknown>)?.preventiveCount as number}</p><p className="text-xs text-gray-500">Preventivos</p></div>
+                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{(periodData.summary as Record<string, unknown>)?.correctiveCount as number}</p><p className="text-xs text-gray-500">Correctivos</p></div>
+                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{(periodData.summary as Record<string, unknown>)?.serviceOrderCount as number}</p><p className="text-xs text-gray-500">Órdenes</p></div>
+                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{(periodData.summary as Record<string, unknown>)?.claimCount as number}</p><p className="text-xs text-gray-500">Reclamos</p></div>
+                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{(periodData.summary as Record<string, unknown>)?.totalApproved as number}</p><p className="text-xs text-gray-500">Aprobados</p></div>
+                  <div className="p-2 bg-gray-50 rounded"><p className="text-xl font-bold">{(periodData.summary as Record<string, unknown>)?.totalWithCorrections as number}</p><p className="text-xs text-gray-500">Con correcciones</p></div>
                 </div>
               </CardContent></Card>
             )}
 
             <Card><CardHeader><h3 className="font-semibold">Estado General</h3></CardHeader><CardContent className="space-y-3">
-              <Select label="Estado del mes" options={[{ value: 'operativo', label: 'Operativo' }, { value: 'operativo_con_observaciones', label: 'Operativo con observaciones' }, { value: 'requiere_seguimiento', label: 'Requiere seguimiento' }, { value: 'fuera_de_servicio', label: 'Fuera de servicio' }]} value={generalStatus} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setGeneralStatus(e.target.value)} />
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Observación general</label><textarea className="w-full border rounded px-3 py-2 text-sm resize-none" rows={3} value={generalNotes} onChange={(e) => setGeneralNotes(e.target.value)} placeholder="Observaciones del período..." /></div>
+              <Select label="Estado del mes" options={[{ value: 'operativo', label: 'Operativo' }, { value: 'operativo_con_observaciones', label: 'Operativo con observaciones' }, { value: 'requiere_seguimiento', label: 'Requiere seguimiento' }, { value: 'fuera_de_servicio', label: 'Fuera de servicio' }]} value={generalStatus} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => isEditable && setGeneralStatus(e.target.value)} disabled={!isEditable} />
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Observación general</label><textarea className="w-full border rounded px-3 py-2 text-sm resize-none" rows={3} value={generalNotes} onChange={(e) => isEditable && setGeneralNotes(e.target.value)} placeholder="Observaciones del período..." disabled={!isEditable} /></div>
             </CardContent></Card>
           </div>
 
@@ -283,24 +368,24 @@ export default function MonthlyReportDetailPage() {
             <Card><CardHeader><h3 className="font-semibold">PDF</h3></CardHeader><CardContent>
               {report.pdf_url ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-success font-medium">PDF v{report.pdf_version} generado</p>
+                  <p className="text-sm text-success font-medium">PDF v{(report.pdf_version as number)} {reportStatus === 'approved' ? 'Aprobado' : 'Generado'}</p>
                   <Button className="w-full" variant="outline" onClick={handleViewPDF}>Ver PDF</Button>
                   <Button className="w-full" variant="outline" onClick={handleDownloadPDF}>Descargar PDF</Button>
-                  <Button className="w-full" onClick={handleGeneratePDF} disabled={generating}>{generating ? 'Regenerando...' : 'Regenerar PDF'}</Button>
+                  {canRegenerate && <Button className="w-full" onClick={handleGeneratePDF} disabled={generating}>{generating ? 'Regenerando...' : 'Regenerar PDF'}</Button>}
                 </div>
               ) : (
                 <Button className="w-full" onClick={handleGeneratePDF} disabled={generating}>{generating ? 'Generando...' : 'Generar y Guardar PDF'}</Button>
               )}
             </CardContent></Card>
 
-            {report.pdf_url && report.status === 'generated' && (
+            {canApprove && (
               <Card><CardHeader><h3 className="font-semibold">Aprobación</h3></CardHeader><CardContent>
                 <p className="text-sm text-gray-600 mb-3">Revisá el informe y aprobalo para habilitar el envío.</p>
-                <Button className="w-full" onClick={() => setShowApproveModal(true)}>Aprobar informe</Button>
+                <Button className="w-full" onClick={() => setShowApproveModal(true)} disabled={approving}>{approving ? 'Aprobando...' : 'Aprobar informe'}</Button>
               </CardContent></Card>
             )}
 
-            {report.pdf_url && report.status === 'approved' && recipients.length > 0 && (
+            {canEmail && (
               <Card><CardHeader><h3 className="font-semibold">Enviar por Correo</h3></CardHeader><CardContent>
                 <p className="text-sm text-gray-600 mb-3">Enviar el informe a {recipients.length} destinatario(s).</p>
                 <Button className="w-full" onClick={() => setShowEmailModal(true)}>Enviar por correo</Button>
@@ -330,10 +415,9 @@ export default function MonthlyReportDetailPage() {
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold mb-2">Aprobar informe mensual</h3>
             <p className="text-sm text-gray-600 mb-3">¿Confirmás que el informe fue revisado y está listo para enviarse?</p>
-            <textarea className="w-full border rounded px-3 py-2 text-sm resize-none mb-3" rows={2} value={approveNotes} onChange={(e) => setApproveNotes(e.target.value)} placeholder="Observaciones (opcional)..." />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowApproveModal(false)}>Cancelar</Button>
-              <Button onClick={handleApprove}>Aprobar</Button>
+              <Button onClick={handleApprove} disabled={approving}>{approving ? 'Aprobando...' : 'Aprobar'}</Button>
             </div>
           </div>
         </div>

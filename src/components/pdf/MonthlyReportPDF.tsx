@@ -86,9 +86,11 @@ interface MonthlyReportPDFProps {
   signatureUrl?: string;
   signerName?: string;
   isTestDocument?: boolean;
+  documentStatus?: 'preliminary' | 'approved';
+  approvedAt?: string;
 }
 
-export default function MonthlyReportPDF({ report, maintenances, serviceOrders, claims, summary, signatureUrl, signerName, isTestDocument: isTestProp }: MonthlyReportPDFProps) {
+export default function MonthlyReportPDF({ report, maintenances, serviceOrders, claims, summary, signatureUrl, signerName, isTestDocument: isTestProp, documentStatus, approvedAt }: MonthlyReportPDFProps) {
   const elevatorCode = report.elevator?.code || 'N/D';
   const buildingName = report.elevator?.building?.name || '';
   const buildingAddress = report.elevator?.building?.address || '';
@@ -250,14 +252,23 @@ export default function MonthlyReportPDF({ report, maintenances, serviceOrders, 
           </View>
 
           {/* Signature */}
-          <View style={s.sigRow}>
-            <View style={s.sigBlock}>
-              {signatureUrl ? <Image src={signatureUrl} style={s.sigImg} /> : <View style={s.sigLine} />}
-              <Text style={s.sigName}>{signerName || 'Administrador'}</Text>
-              <Text style={s.sigRole}>Administrador</Text>
-              <Text style={[s.sigRole, { marginTop: 1 }]}>SICOM Patagonia SRL</Text>
+          {documentStatus === 'approved' ? (
+            <View style={s.sigRow}>
+              <View style={s.sigBlock}>
+                {signatureUrl ? <Image src={signatureUrl} style={s.sigImg} /> : <View style={s.sigLine} />}
+                <Text style={s.sigName}>{signerName || 'Usuario aprobador no disponible'}</Text>
+                <Text style={s.sigRole}>Administrador</Text>
+                <Text style={[s.sigRole, { marginTop: 1 }]}>SICOM Patagonia SRL</Text>
+                {approvedAt && <Text style={[s.sigRole, { marginTop: 2 }]}>{approvedAt}</Text>}
+              </View>
             </View>
-          </View>
+          ) : (
+            <View style={s.conclusion}>
+              <Text style={s.conclusionTitle}>Estado del documento</Text>
+              <Text style={[s.conclusionText, { color: '#D97706', fontWeight: 'bold' }]}>PENDIENTE DE APROBACIÓN</Text>
+              <Text style={s.conclusionText}>Este informe aún no ha sido aprobado por un administrador.</Text>
+            </View>
+          )}
         </View>
 
         {/* Footer */}
