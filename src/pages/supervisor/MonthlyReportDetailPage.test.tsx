@@ -61,7 +61,9 @@ function makeChain(data: unknown, error: unknown = null) {
   const chain: Record<string, unknown> = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue(result),
+    maybeSingle: vi.fn().mockResolvedValue(result),
     or: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
     then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) => {
@@ -238,7 +240,8 @@ describe('MonthlyReportDetailPage — Generación de PDF', () => {
     renderPage();
     await waitFor(() => { expect(screen.getByText('Generar y Guardar PDF')).toBeInTheDocument(); });
     mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
-    mocks.mockSupabaseFrom.mockReturnValue(makeChain(null));
+    const updateChain = makeChain({ id: 'r1', status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    mocks.mockSupabaseFrom.mockReturnValue(updateChain);
     fireEvent.click(screen.getByText('Generar y Guardar PDF'));
     await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
   });
@@ -298,7 +301,8 @@ describe('MonthlyReportDetailPage — Aprobación', () => {
     renderPage();
     await waitFor(() => { expect(screen.getByText('Aprobar informe')).toBeInTheDocument(); });
     mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
-    mocks.mockSupabaseFrom.mockReturnValue(makeChain(null));
+    const updateChain = makeChain({ id: 'r1', status: 'approved', approved_by: 'admin-1', approved_at: new Date().toISOString(), pdf_url: 'path/to.pdf', pdf_version: 2 });
+    mocks.mockSupabaseFrom.mockReturnValue(updateChain);
     fireEvent.click(screen.getByText('Aprobar informe'));
     await waitFor(() => { expect(screen.getByText('Aprobar')).toBeInTheDocument(); });
     const approveBtn = screen.getByText('Aprobar');

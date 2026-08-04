@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
 import { supabase } from '@/config/supabase';
-import { getMonthlyReportPeriodData, updateMonthlyReport } from '@/services/monthlyReportEnhanced.service';
+import { getMonthlyReportPeriodData } from '@/services/monthlyReportEnhanced.service';
 import MonthlyReportPDF from '@/components/pdf/MonthlyReportPDF';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
@@ -40,8 +40,15 @@ export default function MonthlyReportDetailPage() {
   const [emailSending, setEmailSending] = useState(false);
   const [emailResult, setEmailResult] = useState('');
   const approveRef = useRef(false);
+  const generateRef = useRef(false);
 
   useEffect(() => { if (id) loadReport(); }, [id]);
+
+  const removeUploadedPdfSafely = async (storagePath: string) => {
+    try {
+      await supabase.storage.from('service-order-reports').remove([storagePath]);
+    } catch { /* best effort */ }
+  };
 
   const loadReport = async () => {
     if (!id) return;
@@ -84,10 +91,15 @@ export default function MonthlyReportDetailPage() {
   };
 
   const handleGeneratePDF = async () => {
-    if (!report) return;
+    if (!report || generateRef.current) return;
+    const reportStatus = report.status as string;
+    if (reportStatus !== 'draft' && reportStatus !== 'generated') {
+      setError('El informe cambió de estado y ya no puede regenerarse.');
+      return;
+    }
+    generateRef.current = true;
     setGenerating(true); setError(''); setSuccess('');
     try {
-      await updateMonthlyReport(report.id as string, { general_status: generalStatus, general_notes: generalNotes });
       const nextVersion = ((report.pdf_version as number) || 0) + 1;
       const sigData = await getUserSignatureForPDF(report.created_by as string, 'administrator');
       const reportWithCurrent = {
@@ -123,24 +135,49 @@ export default function MonthlyReportDetailPage() {
       const arrayBuffer = await blob.arrayBuffer();
       const pdfBase64 = btoa(new Uint8Array(arrayBuffer).reduce((d, b) => d + String.fromCharCode(b), ''));
       const version = (report.pdf_version as number || 0) + 1;
-      const storagePath = `monthly-reports/${report.report_year}/${report.report_month}/${report.elevator_id}/informe-${report.report_year}-${String(report.report_month).padStart(2, '0')}-v${version}.pdf`;
+      const operationId = crypto.randomUUID();
+      const storagePath = `monthly-reports/${report.report_year}/${report.report_month}/${report.elevator_id}/informe-${report.report_year}-${String(report.report_month).padStart(2, '0')}-v${version}-${operationId}.pdf`;
 
       const { error: uploadError } = await supabase.storage
         .from('service-order-reports')
-        .upload(storagePath, new Blob([Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0))], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: true });
+        .upload(storagePath, new Blob([Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0))], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false });
 
       if (uploadError) throw uploadError;
 
-      await supabase.from('monthly_reports').update({
-        pdf_url: storagePath, pdf_storage_path: storagePath,
-        pdf_version: version, pdf_generated_at: new Date().toISOString(),
-        status: 'generated', updated_at: new Date().toISOString(),
-      }).eq('id', report.id);
+      // Atomic update with status guard
+      const { data: updatedRow, error: updateError } = await supabase
+        .from('monthly_reports')
+        .update({
+          status: 'generated',
+          general_status: generalStatus,
+          general_notes: generalNotes,
+          pdf_url: storagePath,
+          pdf_storage_path: storagePath,
+          pdf_version: version,
+          pdf_generated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', report.id)
+        .in('status', ['draft', 'generated'])
+        .select('id, status, pdf_url, pdf_version')
+        .maybeSingle();
+
+      if (updateError) {
+        await removeUploadedPdfSafely(storagePath);
+        throw updateError;
+      }
+
+      if (!updatedRow) {
+        await removeUploadedPdfSafely(storagePath);
+        setError('El informe cambió de estado durante la generación. Actualizá la página.');
+        await loadReport();
+        return;
+      }
 
       setSuccess(`PDF versión ${version} generado correctamente`);
       await loadReport();
     } catch (err: unknown) { setError('Error al generar PDF: ' + (err instanceof Error ? err.message : '')); }
-    finally { setGenerating(false); }
+    finally { generateRef.current = false; setGenerating(false); }
   };
 
   const handleViewPDF = async () => {
@@ -168,6 +205,11 @@ export default function MonthlyReportDetailPage() {
 
   const handleApprove = async () => {
     if (!report || approveRef.current) return;
+    if ((report.status as string) !== 'generated') {
+      setError('El informe ya fue aprobado o cambió de estado.');
+      setShowApproveModal(false);
+      return;
+    }
     approveRef.current = true;
     setApproving(true); setError('');
     try {
@@ -213,32 +255,46 @@ export default function MonthlyReportDetailPage() {
 
       const arrayBuffer = await blob.arrayBuffer();
       const pdfBase64 = btoa(new Uint8Array(arrayBuffer).reduce((d, b) => d + String.fromCharCode(b), ''));
-      const storagePath = `monthly-reports/${report.report_year}/${report.report_month}/${report.elevator_id}/informe-${report.report_year}-${String(report.report_month).padStart(2, '0')}-v${version}.pdf`;
+      const operationId = crypto.randomUUID();
+      const storagePath = `monthly-reports/${report.report_year}/${report.report_month}/${report.elevator_id}/informe-${report.report_year}-${String(report.report_month).padStart(2, '0')}-v${version}-${operationId}.pdf`;
 
       const { error: uploadError } = await supabase.storage
         .from('service-order-reports')
-        .upload(storagePath, new Blob([Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0))], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: true });
+        .upload(storagePath, new Blob([Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0))], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false });
 
       if (uploadError) throw uploadError;
 
-      // Update with status guard
-      const { error: updateError } = await supabase.from('monthly_reports').update({
-        status: 'approved',
-        approved_by: userId,
-        approved_at: new Date().toISOString(),
-        pdf_url: storagePath,
-        pdf_storage_path: storagePath,
-        pdf_version: version,
-        pdf_generated_at: new Date().toISOString(),
-        general_status: generalStatus,
-        general_notes: generalNotes,
-        updated_at: new Date().toISOString(),
-      }).eq('id', report.id).eq('status', 'generated');
+      // Atomic update with status guard
+      const { data: updatedRow, error: updateError } = await supabase
+        .from('monthly_reports')
+        .update({
+          status: 'approved',
+          approved_by: userId,
+          approved_at: new Date().toISOString(),
+          general_status: generalStatus,
+          general_notes: generalNotes,
+          pdf_url: storagePath,
+          pdf_storage_path: storagePath,
+          pdf_version: version,
+          pdf_generated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', report.id)
+        .eq('status', 'generated')
+        .select('id, status, approved_by, approved_at, pdf_url, pdf_version')
+        .maybeSingle();
 
       if (updateError) {
-        // Rollback: remove uploaded file
-        await supabase.storage.from('service-order-reports').remove([storagePath]).catch(() => {});
+        await removeUploadedPdfSafely(storagePath);
         throw updateError;
+      }
+
+      if (!updatedRow) {
+        await removeUploadedPdfSafely(storagePath);
+        setError('El informe ya fue aprobado o cambió de estado.');
+        setShowApproveModal(false);
+        await loadReport();
+        return;
       }
 
       setShowApproveModal(false);
