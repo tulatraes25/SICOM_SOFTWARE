@@ -63,7 +63,7 @@ describe('PublicElevatorView', () => {
     renderView();
     const introBtn = await screen.findByRole('button', { name: /ver estado del ascensor/i });
     await userEvent.click(introBtn);
-    expect(screen.getByText(/14 de julio de 2026/)).toBeDefined();
+    expect(screen.getByText(/15 de julio de 2026/)).toBeDefined();
   });
 
   it('muestra mensaje sin mantenimiento cuando last_service_date es null', async () => {

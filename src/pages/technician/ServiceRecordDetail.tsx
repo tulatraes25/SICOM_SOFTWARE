@@ -12,6 +12,7 @@ import { SERVICE_STATUS_LABELS } from '@/config/constants';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import type { ServiceRecord } from '@/types/database';
 import { Building2, Calendar, ArrowLeft, Edit, Send, AlertCircle } from 'lucide-react';
+import { formatDateOnlyEsAR } from '@/lib/dateUtils';
 
 const STATUS_BADGE_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default',
@@ -199,7 +200,7 @@ export default function ServiceRecordDetail() {
                 <p className="text-sm text-gray-500 flex items-center gap-2">
                   <Calendar size={14} /> Fecha
                 </p>
-                <p className="font-medium">{new Date(record.service_date).toLocaleDateString('es-AR')}</p>
+                <p className="font-medium">{formatDateOnlyEsAR(record.service_date)}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Tipo</p>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { getElevatorById } from '@/services/elevators.service';
+import { getLocalDateInputValue } from '@/lib/dateUtils';
 import {
   getServiceRecordById,
   createServiceRecord,
@@ -48,7 +49,7 @@ export default function ServiceRecordForm() {
     observations: string;
     technical_report: string;
   }>({
-    service_date: new Date().toISOString().split('T')[0],
+    service_date: getLocalDateInputValue(),
     service_type: 'preventivo',
     operational_status_at_service: '',
     conservation_status_at_service: '',

@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { SERVICE_STATUS_LABELS } from '@/config/constants';
 import { FileText, Clock, CheckCircle, XCircle, Eye } from 'lucide-react';
+import { formatDateOnlyEsAR } from '@/lib/dateUtils';
 import type { ServiceRecord } from '@/types/database';
 
 export default function SupervisorDashboard() {
@@ -114,7 +115,7 @@ export default function SupervisorDashboard() {
                             {elevator?.building?.name} - {technician?.full_name || 'Técnico'}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {new Date(record.service_date).toLocaleDateString('es-AR')} - {record.service_type}
+                            {formatDateOnlyEsAR(record.service_date)} - {record.service_type}
                           </p>
                         </div>
                         <Button size="sm">

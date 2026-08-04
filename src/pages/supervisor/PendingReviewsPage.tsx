@@ -8,6 +8,7 @@ import Badge from '@/components/ui/Badge';
 import Select from '@/components/ui/Select';
 import { SERVICE_STATUS_LABELS } from '@/config/constants';
 import { Eye, Clock, CheckCircle } from 'lucide-react';
+import { formatDateOnlyEsAR } from '@/lib/dateUtils';
 import type { ServiceRecord } from '@/types/database';
 
 type TabType = 'pending' | 'approved';
@@ -125,7 +126,7 @@ export default function PendingReviewsPage() {
                           <td className="py-3 px-4 text-gray-600">{client?.name || '-'}</td>
                           <td className="py-3 px-4 text-gray-600">{technician?.full_name || '-'}</td>
                           <td className="py-3 px-4 text-gray-600">
-                            {new Date(record.service_date).toLocaleDateString('es-AR')}
+                            {formatDateOnlyEsAR(record.service_date)}
                           </td>
                           <td className="py-3 px-4 text-gray-600 capitalize">{record.service_type}</td>
                           <td className="py-3 px-4">

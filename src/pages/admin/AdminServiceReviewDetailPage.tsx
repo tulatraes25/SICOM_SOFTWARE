@@ -15,6 +15,7 @@ import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import type { ServiceRecord } from '@/types/database';
 import { ArrowLeft, CheckCircle, XCircle, AlertCircle, Download, Loader2, Sparkles, Save, Mail, Check, X, Image, Calendar, Clock } from 'lucide-react';
+import { formatDateOnlyEsAR } from '@/lib/dateUtils';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   draft: 'default', submitted: 'info', in_review: 'warning', approved: 'success', rejected: 'danger',
@@ -178,7 +179,7 @@ export default function AdminServiceReviewDetailPage() {
       const technician = (record as any).technician;
       const checklist = (record as any).checklist || [];
       const pdfBlob = await pdf(
-        <ServiceRecordPDF record={{ ...record, final_report_text: finalReport || record.final_report_text }} elevator={elevator} technician={technician} approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Administrador' } : undefined} checklist={checklist} />
+        <ServiceRecordPDF record={{ ...record, final_report_text: finalReport || record.final_report_text }} elevator={elevator} technician={technician} approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Usuario aprobador no disponible' } : undefined} checklist={checklist} />
       ).toBlob();
       const arrayBuffer = await pdfBlob.arrayBuffer();
       const base64 = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
@@ -248,7 +249,7 @@ export default function AdminServiceReviewDetailPage() {
               </div>
               <div className="text-right text-sm text-gray-500">
                 <p>Servicio: <span className="font-medium text-gray-900 capitalize">{record.service_type}</span></p>
-                <p>Fecha: <span className="font-medium text-gray-900">{new Date(record.service_date).toLocaleDateString('es-AR')}</span></p>
+                <p>Fecha: <span className="font-medium text-gray-900">{formatDateOnlyEsAR(record.service_date)}</span></p>
               </div>
             </div>
           </CardContent>
@@ -432,7 +433,7 @@ export default function AdminServiceReviewDetailPage() {
                             record={{ ...record, final_report_text: finalReport || record.final_report_text }}
                             elevator={elevator}
                             technician={technician}
-                            approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Administrador' } : undefined}
+                            approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Usuario aprobador no disponible' } : undefined}
                             checklist={checklist}
                             selectedPhotos={processedPhotos}
                           />

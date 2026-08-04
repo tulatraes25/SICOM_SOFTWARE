@@ -23,6 +23,7 @@ import {
   ArrowLeft, Clock, FileText, CheckCircle, XCircle,
   Sparkles, Save, Building2, User, Calendar
 } from 'lucide-react';
+import { formatDateOnlyEsAR } from '@/lib/dateUtils';
 
 export default function ServiceReviewPage() {
   const { id } = useParams<{ id: string }>();
@@ -219,7 +220,7 @@ export default function ServiceReviewPage() {
                     <p className="text-sm text-gray-500 flex items-center gap-1">
                       <Calendar size={14} /> Fecha
                     </p>
-                    <p className="font-medium">{new Date(record.service_date).toLocaleDateString('es-AR')}</p>
+                    <p className="font-medium">{formatDateOnlyEsAR(record.service_date)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Tipo</p>

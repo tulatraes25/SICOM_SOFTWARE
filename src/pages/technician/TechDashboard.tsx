@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { SERVICE_STATUS_LABELS } from '@/config/constants';
 import { Search, FileText, Clock, CheckCircle, Plus } from 'lucide-react';
+import { formatDateOnlyEsAR } from '@/lib/dateUtils';
 import type { ServiceRecord } from '@/types/database';
 
 const STATUS_BADGE_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
@@ -120,7 +121,7 @@ export default function TechDashboard() {
                         <div>
                           <p className="font-mono font-medium">{elevator?.code || '-'}</p>
                           <p className="text-sm text-gray-600">
-                            {new Date(record.service_date).toLocaleDateString('es-AR')} - {record.service_type}
+                            {formatDateOnlyEsAR(record.service_date)} - {record.service_type}
                           </p>
                         </div>
                         <Badge variant={STATUS_BADGE_VARIANT[record.status] || 'default'}>

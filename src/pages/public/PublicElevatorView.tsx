@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { getPublicElevatorByToken, logQRScan } from '@/services/publicElevator.service';
+import { formatDateOnlyLongEsAR } from '@/lib/dateUtils';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import { COMPANY_NAME, COMPANY_SLOGAN, COMPANY_WEBSITE, COMPANY_PHONE, COMPANY_EMAIL, COMPANY_ADDRESS } from '@/config/constants';
 import { ArrowRight, ExternalLink, CheckCircle, XCircle, Wrench, MapPin, Clock, Phone, Mail, AlertCircle, FileText } from 'lucide-react';
@@ -191,7 +192,7 @@ export default function PublicElevatorView() {
               <p className="text-sm text-gray-500">Último mantenimiento</p>
               <p className="font-medium text-gray-900">
                 {elevator.last_service_date
-                  ? new Date(elevator.last_service_date).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })
+                  ? formatDateOnlyLongEsAR(elevator.last_service_date)
                   : 'Sin mantenimientos aprobados registrados para este equipo.'}
               </p>
             </div>

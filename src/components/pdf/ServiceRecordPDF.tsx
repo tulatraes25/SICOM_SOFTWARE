@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { COMPANY_NAME, COMPANY_SLOGAN, COMPANY_WEBSITE } from '@/config/constants';
 import logoSicom from '@/assets/logo-sicom.png';
+import { formatDateOnlyEsAR, formatTimestampDateEsAR } from '@/lib/dateUtils';
 
 interface ServiceRecordPDFProps {
   record: {
@@ -98,16 +99,12 @@ function getStatusStyle(status: string) {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return 'N/D';
-  try {
-    // Parseo manual para evitar desplazamiento por timezone
-    const [year, month, day] = dateStr.split('-');
-    if (year && month && day) {
-      return `${parseInt(day)}/${parseInt(month)}/${year}`;
-    }
-    return dateStr;
-  } catch {
-    return dateStr;
-  }
+  return formatDateOnlyEsAR(dateStr);
+}
+
+function formatTimestamp(dateStr: string): string {
+  if (!dateStr) return 'N/D';
+  return formatTimestampDateEsAR(dateStr);
 }
 
 function getMainReportText(record: any): string {
@@ -204,7 +201,7 @@ export default function ServiceRecordPDF({
         {/* Footer */}
         <View style={{ marginTop: 30, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#8DB600', fontSize: 8, color: '#666', textAlign: 'center' }}>
           <Text>Estado: APROBADO</Text>
-          {record.approved_at && <Text>Fecha de aprobación: {formatDate(record.approved_at)}</Text>}
+          {record.approved_at && <Text>Fecha de aprobación: {formatTimestamp(record.approved_at)}</Text>}
           {approvedBy?.full_name && <Text>Aprobado por: {approvedBy.full_name}</Text>}
           <Text style={{ marginTop: 10 }}>Documento generado por el Sistema QR de Trazabilidad y Mantenimiento de Ascensores</Text>
           <Text style={{ color: '#8DB600', marginTop: 5 }}>{COMPANY_NAME} - {COMPANY_WEBSITE}</Text>
