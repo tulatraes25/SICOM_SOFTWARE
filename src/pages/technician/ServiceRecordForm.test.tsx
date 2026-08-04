@@ -234,12 +234,13 @@ describe('ServiceRecordForm — Modo creación: carga', () => {
 
 describe('ServiceRecordForm — Modo creación: fecha', () => {
   it('usa getLocalDateInputValue (fecha inicial es YYYY-MM-DD)', async () => {
+    const expectedDate = new Date().toISOString().split('T')[0];
     renderCreationForm();
     await waitFor(() => {
       expect(screen.getByText('ASC-0001')).toBeInTheDocument();
     });
     const dateInput = screen.getByLabelText(/Fecha del servicio/i);
-    expect(dateInput).toHaveValue('2026-08-03');
+    expect(dateInput).toHaveValue(expectedDate);
   });
 
   it('no desplaza la fecha al día UTC siguiente', async () => {

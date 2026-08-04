@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { listPendingServiceRecords, listApprovedServiceRecords } from '@/services/supervisor.service';
 import { listServiceOrders } from '@/services/serviceOrders.service';
@@ -8,7 +8,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { SERVICE_STATUS_LABELS } from '@/config/constants';
 import { SERVICE_ORDER_STATUS_LABELS } from '@/types/database';
-import { Eye, Clock, CheckCircle } from 'lucide-react';
+import { Eye, Clock, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 
 type TabType = 'pending' | 'approved';
 
@@ -17,39 +17,55 @@ const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' 
   completed: 'info', changes_requested: 'warning',
 };
 
+interface ReviewItem {
+  id: string;
+  status: string;
+  _origin: 'maintenance' | 'service_order';
+  client?: { name?: string } | null;
+  building?: { name?: string } | null;
+  elevator?: { code?: string; building?: { name?: string; client?: { name?: string } | null } | null } | null;
+  service_case?: { case_number?: number; numbering_mode?: string } | null;
+}
+
 export default function AdminServiceReviewPage() {
   const [activeTab, setActiveTab] = useState<TabType>('pending');
-  const [records, setRecords] = useState<any[]>([]);
+  const [records, setRecords] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => { loadData(); }, [activeTab]);
 
   const loadData = async () => {
+    const reqId = ++requestIdRef.current;
     setLoading(true);
+    setError(null);
     try {
       if (activeTab === 'pending') {
-        // Get pending maintenance records + completed service orders
         const [maintenance, orders] = await Promise.all([
           listPendingServiceRecords(),
           listServiceOrders({ status: 'completed' }),
         ]);
-        const maintenanceItems = (maintenance || []).map((r: any) => ({ ...r, _origin: 'maintenance' }));
-        const orderItems = (orders.data || []).map((o: any) => ({ ...o, _origin: 'service_order' }));
+        if (reqId !== requestIdRef.current) return;
+        const maintenanceItems = (maintenance || []).map((r) => ({ ...r, _origin: 'maintenance' as const }));
+        const orderItems = (orders.data || []).map((o) => ({ ...o, _origin: 'service_order' as const }));
         setRecords([...maintenanceItems, ...orderItems]);
       } else {
-        // Get approved maintenance records + approved service orders
         const [maintenance, orders] = await Promise.all([
           listApprovedServiceRecords(),
           listServiceOrders({ status: 'approved' }),
         ]);
-        const maintenanceItems = (maintenance || []).map((r: any) => ({ ...r, _origin: 'maintenance' }));
-        const orderItems = (orders.data || []).map((o: any) => ({ ...o, _origin: 'service_order' }));
+        if (reqId !== requestIdRef.current) return;
+        const maintenanceItems = (maintenance || []).map((r) => ({ ...r, _origin: 'maintenance' as const }));
+        const orderItems = (orders.data || []).map((o) => ({ ...o, _origin: 'service_order' as const }));
         setRecords([...maintenanceItems, ...orderItems]);
       }
-    } catch (err) {
-      console.error('Error:', err);
+    } catch {
+      if (reqId !== requestIdRef.current) return;
+      setRecords([]);
+      setError('No se pudo cargar la revisión de servicios.');
     } finally {
-      setLoading(false);
+      if (reqId === requestIdRef.current) setLoading(false);
     }
   };
 
@@ -72,6 +88,13 @@ export default function AdminServiceReviewPage() {
             Aprobados
           </Button>
         </div>
+
+        {error && (
+          <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center justify-between">
+            <span className="flex items-center gap-2"><AlertCircle size={16} /> {error}</span>
+            <Button size="sm" variant="outline" onClick={loadData}><RefreshCw size={14} className="mr-1" /> Reintentar</Button>
+          </div>
+        )}
 
         <Card>
           <CardContent className="p-0">
@@ -101,12 +124,10 @@ export default function AdminServiceReviewPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {records.map((r: any) => {
+                    {records.map((r) => {
                       const isOrder = r._origin === 'service_order';
-                      const caseNum = isOrder
-                        ? (r.service_case as any)?.case_number
-                        : (r.elevator as any)?.building?.client?.name ? undefined : undefined;
-                      const caseMode = isOrder ? (r.service_case as any)?.numbering_mode : undefined;
+                      const caseNum = isOrder ? r.service_case?.case_number : undefined;
+                      const caseMode = isOrder ? r.service_case?.numbering_mode : undefined;
                       const numLabel = isOrder
                         ? (caseMode === 'test' ? `PRUEBA N.º ${caseNum}` : `N.º ${caseNum}`)
                         : (r.elevator?.code || '-');
@@ -121,13 +142,13 @@ export default function AdminServiceReviewPage() {
                           </td>
                           <td className="px-4 py-3 font-mono font-semibold text-gray-900">{numLabel}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">
-                            {isOrder ? (r.client as any)?.name : (r.elevator?.building?.client?.name || '-')}
+                            {isOrder ? r.client?.name : r.elevator?.building?.client?.name || '-'}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">
-                            {isOrder ? (r.building as any)?.name : (r.elevator?.building?.name || '-')}
+                            {isOrder ? r.building?.name : r.elevator?.building?.name || '-'}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">
-                            {isOrder ? (r.elevator as any)?.code : (r.elevator?.code || '-')}
+                            {isOrder ? r.elevator?.code : r.elevator?.code || '-'}
                           </td>
                           <td className="px-4 py-3">
                             <Badge variant={STATUS_BADGE[r.status]}>{status}</Badge>
