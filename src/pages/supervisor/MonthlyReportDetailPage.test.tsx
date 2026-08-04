@@ -80,7 +80,27 @@ function makeErrorResultChain(errorMessage: string) {
   const chain: Record<string, unknown> = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue(result),
+    maybeSingle: vi.fn().mockResolvedValue(result),
+    or: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    then: (resolve: (v: unknown) => void) => {
+      resolve(result);
+      return { catch: () => ({}) };
+    },
+  };
+  return chain;
+}
+
+function makeConflictChain() {
+  const result = { data: null, error: null };
+  const chain: Record<string, unknown> = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue(result),
+    maybeSingle: vi.fn().mockResolvedValue(result),
     or: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
     then: (resolve: (v: unknown) => void) => {
@@ -376,5 +396,266 @@ describe('MonthlyReportDetailPage — Correo no invocado', () => {
     renderPage();
     await waitFor(() => { expect(screen.getByText('Borrador')).toBeInTheDocument(); });
     expect(mocks.mockSupabaseFunctionsInvoke).not.toHaveBeenCalled();
+  });
+});
+
+describe('MonthlyReportDetailPage — Generación atómica', () => {
+  it('guard interno rechaza estado approved', async () => {
+    setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Aprobado')).toBeInTheDocument(); });
+    expect(screen.queryByText('Generar y Guardar PDF')).not.toBeInTheDocument();
+    expect(screen.queryByText('Regenerar PDF')).not.toBeInTheDocument();
+  });
+
+  it('guard interno rechaza estado sent', async () => {
+    setupMocks({ status: 'sent', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Enviado')).toBeInTheDocument(); });
+    expect(screen.queryByText('Generar y Guardar PDF')).not.toBeInTheDocument();
+  });
+
+  it('upload utiliza upsert false', async () => {
+    setupMocks({ status: 'draft' });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Generar y Guardar PDF')).toBeInTheDocument(); });
+    const uploadFn = vi.fn().mockResolvedValue({ error: null });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: uploadFn });
+    const updateChain = makeChain({ id: 'r1', status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    mocks.mockSupabaseFrom.mockReturnValue(updateChain);
+    fireEvent.click(screen.getByText('Generar y Guardar PDF'));
+    await waitFor(() => { expect(uploadFn).toHaveBeenCalled(); });
+    expect(uploadFn.mock.calls[0][2]).toEqual({ contentType: 'application/pdf', upsert: false });
+  });
+
+  it('ruta contiene UUID devuelto por crypto.randomUUID', async () => {
+    setupMocks({ status: 'draft' });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Generar y Guardar PDF')).toBeInTheDocument(); });
+    const uploadFn = vi.fn().mockResolvedValue({ error: null });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: uploadFn });
+    const updateChain = makeChain({ id: 'r1', status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    mocks.mockSupabaseFrom.mockReturnValue(updateChain);
+    fireEvent.click(screen.getByText('Generar y Guardar PDF'));
+    await waitFor(() => { expect(uploadFn).toHaveBeenCalled(); });
+    const path = uploadFn.mock.calls[0][0] as string;
+    expect(path).toMatch(/informe-2026-07-v1-[a-f0-9-]+\.pdf/i);
+  });
+
+  it('UPDATE usa eq por id y in con statuses', async () => {
+    setupMocks({ status: 'draft' });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Generar y Guardar PDF')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const updateChain = makeChain({ id: 'r1', status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    mocks.mockSupabaseFrom.mockReturnValue(updateChain);
+    fireEvent.click(screen.getByText('Generar y Guardar PDF'));
+    await waitFor(() => { expect(updateChain.eq).toHaveBeenCalled(); });
+    expect(updateChain.in).toHaveBeenCalled();
+    expect(updateChain.maybeSingle).toHaveBeenCalled();
+  });
+
+  it('conflicto data null + error null muestra error', async () => {
+    setupMocks({ status: 'draft' });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Generar y Guardar PDF')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const conflictChain = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), in: vi.fn().mockReturnThis(), update: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) };
+    mocks.mockSupabaseFrom.mockReturnValue(conflictChain);
+    fireEvent.click(screen.getByText('Generar y Guardar PDF'));
+    await waitFor(() => { expect(screen.getByRole('alert')).toBeInTheDocument(); });
+  });
+
+  it('conflicto elimina exactamente la ruta recién subida', async () => {
+    setupMocks({ status: 'draft' });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Generar y Guardar PDF')).toBeInTheDocument(); });
+    const removeFn = vi.fn().mockResolvedValue({ error: null });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }), remove: removeFn });
+    const conflictChain = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), in: vi.fn().mockReturnThis(), update: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) };
+    mocks.mockSupabaseFrom.mockReturnValue(conflictChain);
+    fireEvent.click(screen.getByText('Generar y Guardar PDF'));
+    await waitFor(() => { expect(removeFn).toHaveBeenCalled(); });
+  });
+
+  it('conflicto no muestra mensaje de éxito', async () => {
+    setupMocks({ status: 'draft' });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Generar y Guardar PDF')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const conflictChain = makeConflictChain();
+    mocks.mockSupabaseFrom.mockReturnValue(conflictChain);
+    fireEvent.click(screen.getByText('Generar y Guardar PDF'));
+    await waitFor(() => { expect(screen.getByRole('alert')).toBeInTheDocument(); });
+    expect(screen.queryByText(/correctamente/)).not.toBeInTheDocument();
+  });
+
+  it('conflicto vuelve a cargar el informe', async () => {
+    setupMocks({ status: 'draft' });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Generar y Guardar PDF')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const conflictChain = makeConflictChain();
+    mocks.mockSupabaseFrom.mockReturnValue(conflictChain);
+    const callsBefore = mocks.mockSupabaseFrom.mock.calls.length;
+    fireEvent.click(screen.getByText('Generar y Guardar PDF'));
+    await waitFor(() => { expect(mocks.mockSupabaseFrom.mock.calls.length).toBeGreaterThan(callsBefore); });
+  });
+
+  it('doble clic genera un solo PDF', async () => {
+    setupMocks({ status: 'draft' });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Generar y Guardar PDF')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const updateChain = makeChain({ id: 'r1', status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    mocks.mockSupabaseFrom.mockReturnValue(updateChain);
+    const btn = screen.getByText('Generar y Guardar PDF');
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    await waitFor(() => { expect(mockedPdf).toHaveBeenCalledTimes(1); });
+  });
+
+  it('pdf_version se incrementa exactamente una vez', async () => {
+    setupMocks({ pdf_version: 0 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Generar y Guardar PDF')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const updateChain = makeChain({ id: 'r1', status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    mocks.mockSupabaseFrom.mockReturnValue(updateChain);
+    fireEvent.click(screen.getByText('Generar y Guardar PDF'));
+    await waitFor(() => { expect(screen.getByRole('status')).toBeInTheDocument(); });
+    expect(screen.getByText(/v1/)).toBeInTheDocument();
+  });
+});
+
+describe('MonthlyReportDetailPage — Aprobación atómica', () => {
+  it('guard interno rechaza draft', async () => {
+    setupMocks({ status: 'draft' });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Borrador')).toBeInTheDocument(); });
+    expect(screen.queryByText('Aprobar informe')).not.toBeInTheDocument();
+  });
+
+  it('guard interno rechaza sent', async () => {
+    setupMocks({ status: 'sent', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Enviado')).toBeInTheDocument(); });
+    expect(screen.queryByText('Aprobar informe')).not.toBeInTheDocument();
+  });
+
+  it('upload usa upsert false', async () => {
+    setupMocks({ status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Aprobar informe')).toBeInTheDocument(); });
+    const uploadFn = vi.fn().mockResolvedValue({ error: null });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: uploadFn });
+    const updateChain = makeChain({ id: 'r1', status: 'approved', approved_by: 'admin-1', pdf_url: 'path/to.pdf', pdf_version: 2 });
+    mocks.mockSupabaseFrom.mockReturnValue(updateChain);
+    fireEvent.click(screen.getByText('Aprobar informe'));
+    await waitFor(() => { expect(screen.getByText('Aprobar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Aprobar'));
+    await waitFor(() => { expect(uploadFn).toHaveBeenCalled(); });
+    expect(uploadFn.mock.calls[0][2]).toEqual({ contentType: 'application/pdf', upsert: false });
+  });
+
+  it('UPDATE usa eq por id y eq status generated', async () => {
+    setupMocks({ status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Aprobar informe')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const updateChain = makeChain({ id: 'r1', status: 'approved', approved_by: 'admin-1', pdf_url: 'path/to.pdf', pdf_version: 2 });
+    mocks.mockSupabaseFrom.mockReturnValue(updateChain);
+    fireEvent.click(screen.getByText('Aprobar informe'));
+    await waitFor(() => { expect(screen.getByText('Aprobar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Aprobar'));
+    await waitFor(() => { expect(updateChain.eq).toHaveBeenCalled(); });
+    expect(updateChain.maybeSingle).toHaveBeenCalled();
+  });
+
+  it('conflicto data null + error null muestra error específico', async () => {
+    setupMocks({ status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Aprobar informe')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const conflictChain = makeConflictChain();
+    mocks.mockSupabaseFrom.mockReturnValue(conflictChain);
+    fireEvent.click(screen.getByText('Aprobar informe'));
+    await waitFor(() => { expect(screen.getByText('Aprobar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Aprobar'));
+    await waitFor(() => { expect(screen.getByRole('alert')).toBeInTheDocument(); });
+    expect(screen.getByText(/ya fue aprobado o cambió de estado/)).toBeInTheDocument();
+  });
+
+  it('conflicto no muestra Informe aprobado correctamente', async () => {
+    setupMocks({ status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Aprobar informe')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const conflictChain = makeConflictChain();
+    mocks.mockSupabaseFrom.mockReturnValue(conflictChain);
+    fireEvent.click(screen.getByText('Aprobar informe'));
+    await waitFor(() => { expect(screen.getByText('Aprobar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Aprobar'));
+    await waitFor(() => { expect(screen.getByRole('alert')).toBeInTheDocument(); });
+    expect(screen.queryByText('Informe aprobado correctamente')).not.toBeInTheDocument();
+  });
+
+  it('conflicto cierra el modal', async () => {
+    setupMocks({ status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Aprobar informe')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const conflictChain = makeConflictChain();
+    mocks.mockSupabaseFrom.mockReturnValue(conflictChain);
+    fireEvent.click(screen.getByText('Aprobar informe'));
+    await waitFor(() => { expect(screen.getByText('Aprobar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Aprobar'));
+    await waitFor(() => {
+      expect(screen.queryByText('Aprobar informe mensual')).not.toBeInTheDocument();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+  });
+
+  it('error real del UPDATE elimina el archivo recién subido', async () => {
+    setupMocks({ status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Aprobar informe')).toBeInTheDocument(); });
+    const removeFn = vi.fn().mockResolvedValue({ error: null });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }), remove: removeFn });
+    const errorChain = makeErrorResultChain('DB update failed');
+    mocks.mockSupabaseFrom.mockReturnValue(errorChain);
+    fireEvent.click(screen.getByText('Aprobar informe'));
+    await waitFor(() => { expect(screen.getByText('Aprobar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Aprobar'));
+    await waitFor(() => { expect(removeFn).toHaveBeenCalled(); });
+  });
+
+  it('doble clic realiza una sola generación final', async () => {
+    setupMocks({ status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Aprobar informe')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const updateChain = makeChain({ id: 'r1', status: 'approved', approved_by: 'admin-1', pdf_url: 'path/to.pdf', pdf_version: 2 });
+    mocks.mockSupabaseFrom.mockReturnValue(updateChain);
+    fireEvent.click(screen.getByText('Aprobar informe'));
+    await waitFor(() => { expect(screen.getByText('Aprobar')).toBeInTheDocument(); });
+    const approveButtons = screen.getAllByText('Aprobar');
+    const confirmBtn = approveButtons[approveButtons.length - 1];
+    fireEvent.click(confirmBtn);
+    fireEvent.click(confirmBtn);
+    await waitFor(() => { expect(mockedPdf).toHaveBeenCalledTimes(1); });
+  });
+
+  it('pdf_version final se incrementa exactamente una vez', async () => {
+    setupMocks({ status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Aprobar informe')).toBeInTheDocument(); });
+    mocks.mockSupabaseStorage.mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://url' } }), upload: vi.fn().mockResolvedValue({ error: null }) });
+    const updateChain = makeChain({ id: 'r1', status: 'approved', approved_by: 'admin-1', pdf_url: 'path/to.pdf', pdf_version: 2 });
+    mocks.mockSupabaseFrom.mockReturnValue(updateChain);
+    fireEvent.click(screen.getByText('Aprobar informe'));
+    await waitFor(() => { expect(screen.getByText('Aprobar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Aprobar'));
+    await waitFor(() => { expect(screen.getByText(/v2/)).toBeInTheDocument(); });
   });
 });
