@@ -445,7 +445,7 @@ export default function MonthlyReportDetailPage() {
             <Card><CardHeader><h3 className="font-semibold">PDF</h3></CardHeader><CardContent>
               {report.pdf_url ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-success font-medium">PDF v{(report.pdf_version as number)} {reportStatus === 'approved' ? 'Aprobado' : 'Generado'}</p>
+                  <p className="text-sm text-success font-medium">PDF v{(report.pdf_version as number)} {reportStatus === 'sent' ? 'Enviado' : reportStatus === 'approved' ? 'Aprobado' : 'Generado'}</p>
                   <Button className="w-full" variant="outline" onClick={handleViewPDF}>Ver PDF</Button>
                   <Button className="w-full" variant="outline" onClick={handleDownloadPDF}>Descargar PDF</Button>
                   {canRegenerate && <Button className="w-full" onClick={handleGeneratePDF} disabled={generating}>{generating ? 'Regenerando...' : 'Regenerar PDF'}</Button>}

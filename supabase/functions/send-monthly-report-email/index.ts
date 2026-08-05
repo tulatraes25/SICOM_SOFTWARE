@@ -67,6 +67,23 @@ serve(async (req) => {
         continue;
       }
 
+      // Insert pending audit record before attempting send
+      const { data: pendingRow, error: insertError } = await supabase
+        .from("monthly_report_email_deliveries")
+        .insert({
+          monthly_report_id, pdf_version: report.pdf_version || 1,
+          recipients: [{ email, name: r.name }], subject,
+          sent_by: user.id, status: "pending",
+        })
+        .select("id")
+        .maybeSingle();
+
+      if (insertError || !pendingRow) {
+        results.push({ email, status: "failed", error: "No se pudo registrar auditoría" });
+        failedCount++;
+        continue;
+      }
+
       try {
         const html = body || `<p>Adjuntamos el informe mensual correspondiente.</p>`;
         const emailResponse = await fetch("https://api.resend.com/emails", {
@@ -82,22 +99,26 @@ serve(async (req) => {
         const emailData = await emailResponse.json();
         if (!emailResponse.ok) throw new Error(emailData.message || "Error al enviar");
 
-        await supabase.from("monthly_report_email_deliveries").insert({
-          monthly_report_id, pdf_version: report.pdf_version || 1,
-          recipients: [{ email, name: r.name }], subject,
-          sent_by: user.id, status: "sent", sent_at: new Date().toISOString(),
-          provider_message_id: emailData.id,
-        });
+        // Update pending → sent
+        const { error: updateSentError } = await supabase
+          .from("monthly_report_email_deliveries")
+          .update({ status: "sent", sent_at: new Date().toISOString(), provider_message_id: emailData.id, updated_at: new Date().toISOString() })
+          .eq("id", pendingRow.id);
 
-        results.push({ email, status: "sent" });
-        successCount++;
+        if (updateSentError) {
+          results.push({ email, status: "sent", error: "audit_update_failed" });
+          successCount++;
+        } else {
+          results.push({ email, status: "sent" });
+          successCount++;
+        }
       } catch (error) {
+        // Update pending → failed
         try {
-          await supabase.from("monthly_report_email_deliveries").insert({
-            monthly_report_id, pdf_version: report.pdf_version || 1,
-            recipients: [{ email, name: r.name }], subject,
-            sent_by: user.id, status: "failed", error_message: error.message,
-          });
+          await supabase
+            .from("monthly_report_email_deliveries")
+            .update({ status: "failed", error_message: error.message, updated_at: new Date().toISOString() })
+            .eq("id", pendingRow.id);
         } catch {}
         results.push({ email, status: "failed", error: error.message });
         failedCount++;

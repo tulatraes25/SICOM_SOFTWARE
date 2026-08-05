@@ -409,7 +409,7 @@ describe('MonthlyReportDetailPage — Envío de correo', () => {
     setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
     renderPage();
     await waitFor(() => { expect(screen.getByText('Enviar por correo')).toBeInTheDocument(); });
-    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 0, mock: 1, results: [{ email: 'a@a.com', status: 'mock' }], report_status: 'approved' }, error: null });
+    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 0, failed: 0, mock: 1, results: [{ email: 'a@a.com', status: 'mock' }], report_status: 'approved', status_update_failed: false }, error: null });
     const approvedChain = makeChain({ id: 'r1', status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
     mocks.mockSupabaseFrom.mockReturnValue(approvedChain);
     fireEvent.click(screen.getByText('Enviar por correo'));
@@ -422,7 +422,7 @@ describe('MonthlyReportDetailPage — Envío de correo', () => {
     setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
     renderPage();
     await waitFor(() => { expect(screen.getByText('Enviar por correo')).toBeInTheDocument(); });
-    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 0, mock: 0, results: [{ email: 'a@a.com', status: 'sent' }], report_status: 'sent' }, error: null });
+    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 0, mock: 0, results: [{ email: 'a@a.com', status: 'sent' }], report_status: 'sent', status_update_failed: false }, error: null });
     mocks.mockSupabaseFrom.mockReturnValue(makeChain({ id: 'r1', status: 'sent', pdf_url: 'path/to.pdf', pdf_version: 1 }));
     fireEvent.click(screen.getByText('Enviar por correo'));
     await waitFor(() => { expect(screen.getByText('Enviar')).toBeInTheDocument(); });
@@ -446,7 +446,7 @@ describe('MonthlyReportDetailPage — Envío de correo', () => {
     setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
     renderPage();
     await waitFor(() => { expect(screen.getByText('Enviar por correo')).toBeInTheDocument(); });
-    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 1, mock: 0, results: [{ email: 'a@a.com', status: 'sent' }, { email: 'b@b.com', status: 'failed' }], report_status: 'approved' }, error: null });
+    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 1, mock: 0, results: [{ email: 'a@a.com', status: 'sent' }, { email: 'b@b.com', status: 'failed' }], report_status: 'approved', status_update_failed: false }, error: null });
     mocks.mockSupabaseFrom.mockReturnValue(makeChain({ id: 'r1', status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 }));
     fireEvent.click(screen.getByText('Enviar por correo'));
     await waitFor(() => { expect(screen.getByText('Enviar')).toBeInTheDocument(); });
@@ -458,7 +458,7 @@ describe('MonthlyReportDetailPage — Envío de correo', () => {
     setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
     renderPage();
     await waitFor(() => { expect(screen.getByText('Enviar por correo')).toBeInTheDocument(); });
-    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 0, failed: 2, mock: 0, results: [], report_status: 'approved' }, error: null });
+    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 0, failed: 2, mock: 0, results: [], report_status: 'approved', status_update_failed: false }, error: null });
     mocks.mockSupabaseFrom.mockReturnValue(makeChain({ id: 'r1', status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 }));
     fireEvent.click(screen.getByText('Enviar por correo'));
     await waitFor(() => { expect(screen.getByText('Enviar')).toBeInTheDocument(); });
@@ -482,7 +482,7 @@ describe('MonthlyReportDetailPage — Envío de correo', () => {
     setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
     renderPage();
     await waitFor(() => { expect(screen.getByText('Enviar por correo')).toBeInTheDocument(); });
-    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 0, mock: 0, results: [{ email: 'a@a.com', status: 'sent' }], report_status: 'sent' }, error: null });
+    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 0, mock: 0, results: [{ email: 'a@a.com', status: 'sent' }], report_status: 'sent', status_update_failed: false }, error: null });
     mocks.mockSupabaseFrom.mockReturnValue(makeChain({ id: 'r1', status: 'sent', pdf_url: 'path/to.pdf', pdf_version: 1 }));
     fireEvent.click(screen.getByText('Enviar por correo'));
     await waitFor(() => { expect(screen.getByText('Enviar')).toBeInTheDocument(); });
@@ -490,6 +490,36 @@ describe('MonthlyReportDetailPage — Envío de correo', () => {
     await waitFor(() => { expect(mocks.mockSupabaseFunctionsInvoke).toHaveBeenCalledTimes(1); });
     const body = mocks.mockSupabaseFunctionsInvoke.mock.calls[0][1]?.body as Record<string, unknown>;
     expect(body.monthly_report_id).toBe('r1');
+  });
+
+  it('status_update_failed muestra mensaje de no repetir', async () => {
+    setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Enviar por correo')).toBeInTheDocument(); });
+    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 2, failed: 0, mock: 0, results: [{ email: 'a@a.com', status: 'sent' }, { email: 'b@b.com', status: 'sent' }], report_status: 'approved', status_update_failed: true }, error: null });
+    mocks.mockSupabaseFrom.mockReturnValue(makeChain({ id: 'r1', status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 }));
+    fireEvent.click(screen.getByText('Enviar por correo'));
+    await waitFor(() => { expect(screen.getByText('Enviar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Enviar'));
+    await waitFor(() => { expect(screen.getByText(/No repitas el envío/)).toBeInTheDocument(); });
+  });
+
+  it('sent muestra PDF v13 Enviado', async () => {
+    setupMocks({ status: 'sent', pdf_url: 'path/to.pdf', pdf_version: 13 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText(/PDF v13 Enviado/)).toBeInTheDocument(); });
+  });
+
+  it('approved muestra PDF v13 Aprobado', async () => {
+    setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 13 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText(/PDF v13 Aprobado/)).toBeInTheDocument(); });
+  });
+
+  it('generated muestra PDF v13 Generado', async () => {
+    setupMocks({ status: 'generated', pdf_url: 'path/to.pdf', pdf_version: 13 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText(/PDF v13 Generado/)).toBeInTheDocument(); });
   });
 });
 
