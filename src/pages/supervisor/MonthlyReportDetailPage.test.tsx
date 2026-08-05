@@ -434,7 +434,7 @@ describe('MonthlyReportDetailPage — Envío de correo', () => {
     setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
     renderPage();
     await waitFor(() => { expect(screen.getByText('Enviar por correo')).toBeInTheDocument(); });
-    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 0, mock: 1, results: [{ email: 'a@a.com', status: 'mock' }], report_status: 'approved' }, error: null });
+    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 0, failed: 0, mock: 1, results: [{ email: 'a@a.com', status: 'mock' }], report_status: 'approved', status_update_failed: false }, error: null });
     mocks.mockSupabaseFrom.mockReturnValue(makeChain({ id: 'r1', status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 }));
     fireEvent.click(screen.getByText('Enviar por correo'));
     await waitFor(() => { expect(screen.getByText('Enviar')).toBeInTheDocument(); });

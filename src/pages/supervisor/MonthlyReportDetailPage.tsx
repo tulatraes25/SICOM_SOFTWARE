@@ -352,7 +352,7 @@ export default function MonthlyReportDetailPage() {
       const reportStatus = typeof data.report_status === 'string' ? data.report_status : 'approved';
       const statusUpdateFailed = data.status_update_failed === true;
 
-      if (mockCount > 0 && success > 0 && failed === 0 && reportStatus === 'approved') {
+      if (mockCount > 0 && success === 0 && failed === 0 && reportStatus === 'approved' && !statusUpdateFailed) {
         setEmailResult('El proveedor de correo no está configurado. No se envió ningún correo y el informe continúa aprobado.');
         await loadReport();
         return;
