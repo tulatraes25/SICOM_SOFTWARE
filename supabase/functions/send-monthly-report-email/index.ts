@@ -51,6 +51,7 @@ serve(async (req) => {
     const results: Array<{ email: string; status: string; error?: string }> = [];
     let successCount = 0;
     let failedCount = 0;
+    let mockCount = 0;
 
     for (const r of recipients) {
       const email = r.email?.trim().toLowerCase();
@@ -62,7 +63,7 @@ serve(async (req) => {
 
       if (isMock) {
         results.push({ email, status: "mock" });
-        successCount++;
+        mockCount++;
         continue;
       }
 
@@ -105,18 +106,32 @@ serve(async (req) => {
 
     // Only transition to sent if ALL recipients were sent successfully
     const allSent = successCount > 0 && failedCount === 0 && results.every(r => r.status === "sent");
+    let reportStatus: string = allSent ? "sent" : "approved";
+    let statusUpdateFailed = false;
+
     if (allSent) {
-      await supabase.from("monthly_reports").update({
-        status: "sent", sent_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      }).eq("id", monthly_report_id).eq("status", "approved")
-        .select("id, status").single();
+      const { data: updatedRow, error: updateError } = await supabase
+        .from("monthly_reports").update({
+          status: "sent", sent_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        }).eq("id", monthly_report_id).eq("status", "approved")
+        .select("id, status, sent_at, pdf_version")
+        .maybeSingle();
+
+      if (updateError) {
+        statusUpdateFailed = true;
+      } else if (!updatedRow) {
+        statusUpdateFailed = true;
+      } else {
+        reportStatus = updatedRow.status as string;
+      }
     }
 
     return new Response(JSON.stringify({
       success: successCount, failed: failedCount,
-      mock: isMock ? successCount : 0,
+      mock: mockCount,
       results,
-      report_status: allSent ? "sent" : "approved",
+      report_status: reportStatus,
+      status_update_failed: statusUpdateFailed,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -234,7 +234,8 @@ describe('ServiceRecordForm — Modo creación: carga', () => {
 
 describe('ServiceRecordForm — Modo creación: fecha', () => {
   it('usa getLocalDateInputValue (fecha inicial es YYYY-MM-DD)', async () => {
-    const expectedDate = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const expectedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     renderCreationForm();
     await waitFor(() => {
       expect(screen.getByText('ASC-0001')).toBeInTheDocument();

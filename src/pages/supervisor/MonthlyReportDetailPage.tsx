@@ -349,15 +349,29 @@ export default function MonthlyReportDetailPage() {
       const success = data.success as number;
       const failed = data.failed as number;
       const mockCount = typeof data.mock === 'number' ? (data.mock as number) : 0;
+      const reportStatus = typeof data.report_status === 'string' ? data.report_status : 'approved';
+      const statusUpdateFailed = data.status_update_failed === true;
 
-      if (mockCount > 0 && success > 0 && failed === 0) {
+      if (mockCount > 0 && success > 0 && failed === 0 && reportStatus === 'approved') {
         setEmailResult('El proveedor de correo no está configurado. No se envió ningún correo y el informe continúa aprobado.');
         await loadReport();
         return;
       }
 
-      if (success === 0) {
-        setEmailResult(`No se pudo enviar el informe${failed > 0 ? `. ${failed} destinatario(s) fallaron` : ''}. El informe continúa aprobado.`);
+      if (success > 0 && failed === 0 && mockCount === 0 && reportStatus === 'sent' && !statusUpdateFailed) {
+        setEmailResult('Informe enviado correctamente');
+        await loadReport();
+        return;
+      }
+
+      if (statusUpdateFailed) {
+        setEmailResult('Los correos fueron enviados, pero no se pudo actualizar el estado del informe. No repitas el envío.');
+        await loadReport();
+        return;
+      }
+
+      if (success === 0 && failed > 0) {
+        setEmailResult(`No se pudo enviar el informe. ${failed} destinatario(s) fallaron. El informe continúa aprobado.`);
         return;
       }
 
@@ -367,8 +381,7 @@ export default function MonthlyReportDetailPage() {
         return;
       }
 
-      setEmailResult('Informe enviado correctamente');
-      await loadReport();
+      setEmailResult('La respuesta del servicio de correo no es válida.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setEmailResult(`Error al enviar: ${msg}`);
