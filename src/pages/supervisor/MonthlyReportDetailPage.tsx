@@ -41,6 +41,7 @@ export default function MonthlyReportDetailPage() {
   const [emailResult, setEmailResult] = useState('');
   const approveRef = useRef(false);
   const generateRef = useRef(false);
+  const emailRef = useRef(false);
 
   useEffect(() => { if (id) loadReport(); }, [id]);
 
@@ -309,19 +310,20 @@ export default function MonthlyReportDetailPage() {
   };
 
   const handleSendEmail = async () => {
-    if (!report) return;
-    if (recipients.length === 0) {
-      setEmailResult('No hay destinatarios para enviar.');
-      return;
-    }
+    if (!report || emailRef.current) return;
     if (report.status !== 'approved') {
       setEmailResult('El informe debe estar aprobado para enviarse.');
+      return;
+    }
+    if (recipients.length === 0) {
+      setEmailResult('No hay destinatarios para enviar.');
       return;
     }
     if (!report.pdf_url) {
       setEmailResult('Primero generá el PDF del informe.');
       return;
     }
+    emailRef.current = true;
     setEmailSending(true); setEmailResult('');
     try {
       const { data, error } = await supabase.functions.invoke('send-monthly-report-email', {
@@ -346,28 +348,34 @@ export default function MonthlyReportDetailPage() {
 
       const success = data.success as number;
       const failed = data.failed as number;
-      const results = data.results as Array<{ email: string; status: string }>;
+      const mockCount = typeof data.mock === 'number' ? (data.mock as number) : 0;
 
-      if (success === 0) {
-        setEmailResult(`No se pudo enviar el informe${failed > 0 ? `. ${failed} destinatario(s) fallaron` : ''}`);
+      if (mockCount > 0 && success > 0 && failed === 0) {
+        setEmailResult('El proveedor de correo no está configurado. No se envió ningún correo y el informe continúa aprobado.');
+        await loadReport();
         return;
       }
 
-      const hasRealSend = results.some(r => r.status === 'sent');
-
-      if (failed === 0) {
-        setEmailResult(hasRealSend
-          ? 'Informe enviado correctamente'
-          : 'Envío de prueba registrado. El proveedor de correo no está configurado.');
-      } else {
-        setEmailResult(`Informe enviado a ${success} destinatario(s). Fallaron ${failed}.`);
+      if (success === 0) {
+        setEmailResult(`No se pudo enviar el informe${failed > 0 ? `. ${failed} destinatario(s) fallaron` : ''}. El informe continúa aprobado.`);
+        return;
       }
 
+      if (failed > 0) {
+        setEmailResult(`Se enviaron ${success} correos y fallaron ${failed}. El informe continúa aprobado.`);
+        await loadReport();
+        return;
+      }
+
+      setEmailResult('Informe enviado correctamente');
       await loadReport();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setEmailResult(`Error al enviar: ${msg}`);
-    } finally { setEmailSending(false); }
+    } finally {
+      emailRef.current = false;
+      setEmailSending(false);
+    }
   };
 
   if (loading) return <DashboardLayout role="admin" title="Informe Mensual"><div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;

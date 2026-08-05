@@ -60,19 +60,13 @@ serve(async (req) => {
         continue;
       }
 
-      try {
-        if (isMock) {
-          await supabase.from("monthly_report_email_deliveries").insert({
-            monthly_report_id, pdf_version: report.pdf_version || 1,
-            recipients: [{ email, name: r.name }], subject,
-            sent_by: user.id, status: "sent", sent_at: new Date().toISOString(),
-            provider_message_id: `mock-${Date.now()}`,
-          });
-          results.push({ email, status: "mock" });
-          successCount++;
-          continue;
-        }
+      if (isMock) {
+        results.push({ email, status: "mock" });
+        successCount++;
+        continue;
+      }
 
+      try {
         const html = body || `<p>Adjuntamos el informe mensual correspondiente.</p>`;
         const emailResponse = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -109,14 +103,21 @@ serve(async (req) => {
       }
     }
 
-    // Update status if any sent
-    if (successCount > 0) {
+    // Only transition to sent if ALL recipients were sent successfully
+    const allSent = successCount > 0 && failedCount === 0 && results.every(r => r.status === "sent");
+    if (allSent) {
       await supabase.from("monthly_reports").update({
         status: "sent", sent_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      }).eq("id", monthly_report_id);
+      }).eq("id", monthly_report_id).eq("status", "approved")
+        .select("id, status").single();
     }
 
-    return new Response(JSON.stringify({ success: successCount, failed: failedCount, results }), {
+    return new Response(JSON.stringify({
+      success: successCount, failed: failedCount,
+      mock: isMock ? successCount : 0,
+      results,
+      report_status: allSent ? "sent" : "approved",
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
