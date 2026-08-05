@@ -351,6 +351,13 @@ export default function MonthlyReportDetailPage() {
       const mockCount = typeof data.mock === 'number' ? (data.mock as number) : 0;
       const reportStatus = typeof data.report_status === 'string' ? data.report_status : 'approved';
       const statusUpdateFailed = data.status_update_failed === true;
+      const auditFailed = data.audit_failed === true;
+
+      if (auditFailed) {
+        setEmailResult('El correo fue enviado, pero no se pudo completar su registro de auditoría. No repitas el envío.');
+        await loadReport();
+        return;
+      }
 
       if (mockCount > 0 && success === 0 && failed === 0 && reportStatus === 'approved' && !statusUpdateFailed) {
         setEmailResult('El proveedor de correo no está configurado. No se envió ningún correo y el informe continúa aprobado.');
@@ -358,7 +365,7 @@ export default function MonthlyReportDetailPage() {
         return;
       }
 
-      if (success > 0 && failed === 0 && mockCount === 0 && reportStatus === 'sent' && !statusUpdateFailed) {
+      if (success > 0 && failed === 0 && mockCount === 0 && reportStatus === 'sent' && !statusUpdateFailed && !auditFailed) {
         setEmailResult('Informe enviado correctamente');
         await loadReport();
         return;

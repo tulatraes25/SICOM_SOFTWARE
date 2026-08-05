@@ -521,6 +521,57 @@ describe('MonthlyReportDetailPage — Envío de correo', () => {
     renderPage();
     await waitFor(() => { expect(screen.getByText(/PDF v13 Generado/)).toBeInTheDocument(); });
   });
+
+  it('audit_failed muestra mensaje de auditoría', async () => {
+    setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Enviar por correo')).toBeInTheDocument(); });
+    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 0, mock: 0, results: [{ email: 'a@a.com', status: 'sent', error: 'audit_update_failed' }], report_status: 'sent', status_update_failed: false, audit_failed: true }, error: null });
+    mocks.mockSupabaseFrom.mockReturnValue(makeChain({ id: 'r1', status: 'sent', pdf_url: 'path/to.pdf', pdf_version: 1 }));
+    fireEvent.click(screen.getByText('Enviar por correo'));
+    await waitFor(() => { expect(screen.getByText('Enviar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Enviar'));
+    await waitFor(() => { expect(screen.getByText(/no se pudo completar su registro de auditoría/)).toBeInTheDocument(); });
+  });
+
+  it('audit_failed no muestra éxito normal', async () => {
+    setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Enviar por correo')).toBeInTheDocument(); });
+    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 0, mock: 0, results: [{ email: 'a@a.com', status: 'sent', error: 'audit_update_failed' }], report_status: 'sent', status_update_failed: false, audit_failed: true }, error: null });
+    mocks.mockSupabaseFrom.mockReturnValue(makeChain({ id: 'r1', status: 'sent', pdf_url: 'path/to.pdf', pdf_version: 1 }));
+    fireEvent.click(screen.getByText('Enviar por correo'));
+    await waitFor(() => { expect(screen.getByText('Enviar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Enviar'));
+    await waitFor(() => { expect(screen.getByText(/no se pudo completar su registro de auditoría/)).toBeInTheDocument(); });
+    expect(screen.queryByText('Informe enviado correctamente')).not.toBeInTheDocument();
+  });
+
+  it('éxito normal exige audit_failed false', async () => {
+    setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Enviar por correo')).toBeInTheDocument(); });
+    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 0, mock: 0, results: [{ email: 'a@a.com', status: 'sent' }], report_status: 'sent', status_update_failed: false, audit_failed: false }, error: null });
+    mocks.mockSupabaseFrom.mockReturnValue(makeChain({ id: 'r1', status: 'sent', pdf_url: 'path/to.pdf', pdf_version: 1 }));
+    fireEvent.click(screen.getByText('Enviar por correo'));
+    await waitFor(() => { expect(screen.getByText('Enviar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Enviar'));
+    await waitFor(() => { expect(screen.getByText('Informe enviado correctamente')).toBeInTheDocument(); });
+  });
+
+  it('audit_failed no realiza un segundo envío', async () => {
+    setupMocks({ status: 'approved', pdf_url: 'path/to.pdf', pdf_version: 1 });
+    renderPage();
+    await waitFor(() => { expect(screen.getByText('Enviar por correo')).toBeInTheDocument(); });
+    mocks.mockSupabaseFunctionsInvoke.mockResolvedValue({ data: { success: 1, failed: 0, mock: 0, results: [{ email: 'a@a.com', status: 'sent', error: 'audit_update_failed' }], report_status: 'sent', status_update_failed: false, audit_failed: true }, error: null });
+    mocks.mockSupabaseFrom.mockReturnValue(makeChain({ id: 'r1', status: 'sent', pdf_url: 'path/to.pdf', pdf_version: 1 }));
+    fireEvent.click(screen.getByText('Enviar por correo'));
+    await waitFor(() => { expect(screen.getByText('Enviar')).toBeInTheDocument(); });
+    fireEvent.click(screen.getByText('Enviar'));
+    await waitFor(() => { expect(screen.getByText(/no se pudo completar su registro de auditoría/)).toBeInTheDocument(); });
+    await waitFor(() => { expect(mocks.mockSupabaseFunctionsInvoke).toHaveBeenCalledTimes(1); });
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument();
+  });
 });
 
 describe('MonthlyReportDetailPage — Generación atómica', () => {

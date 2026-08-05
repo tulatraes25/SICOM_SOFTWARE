@@ -52,6 +52,7 @@ serve(async (req) => {
     let successCount = 0;
     let failedCount = 0;
     let mockCount = 0;
+    let auditFailed = false;
 
     for (const r of recipients) {
       const email = r.email?.trim().toLowerCase();
@@ -99,27 +100,35 @@ serve(async (req) => {
         const emailData = await emailResponse.json();
         if (!emailResponse.ok) throw new Error(emailData.message || "Error al enviar");
 
-        // Update pending → sent
-        const { error: updateSentError } = await supabase
+        // Update pending → sent, inspecting the audited row
+        const { data: updatedAuditRow, error: updateAuditError } = await supabase
           .from("monthly_report_email_deliveries")
           .update({ status: "sent", sent_at: new Date().toISOString(), provider_message_id: emailData.id, updated_at: new Date().toISOString() })
-          .eq("id", pendingRow.id);
+          .eq("id", pendingRow.id)
+          .select("id, status, provider_message_id")
+          .maybeSingle();
 
-        if (updateSentError) {
+        if (updateAuditError || !updatedAuditRow || updatedAuditRow.status !== "sent") {
+          // The email was accepted by Resend but the audit trail could not be marked sent.
+          auditFailed = true;
           results.push({ email, status: "sent", error: "audit_update_failed" });
           successCount++;
-        } else {
-          results.push({ email, status: "sent" });
-          successCount++;
+          continue;
         }
+        results.push({ email, status: "sent" });
+        successCount++;
       } catch (error) {
-        // Update pending → failed
-        try {
-          await supabase
-            .from("monthly_report_email_deliveries")
-            .update({ status: "failed", error_message: error.message, updated_at: new Date().toISOString() })
-            .eq("id", pendingRow.id);
-        } catch {}
+        // Update pending → failed, inspecting the audited row
+        const { data: failedAuditRow, error: failedAuditError } = await supabase
+          .from("monthly_report_email_deliveries")
+          .update({ status: "failed", error_message: error.message, updated_at: new Date().toISOString() })
+          .eq("id", pendingRow.id)
+          .select("id, status, error_message")
+          .maybeSingle();
+
+        if (failedAuditError || !failedAuditRow || failedAuditRow.status !== "failed") {
+          auditFailed = true;
+        }
         results.push({ email, status: "failed", error: error.message });
         failedCount++;
       }
@@ -153,6 +162,7 @@ serve(async (req) => {
       results,
       report_status: reportStatus,
       status_update_failed: statusUpdateFailed,
+      audit_failed: auditFailed,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

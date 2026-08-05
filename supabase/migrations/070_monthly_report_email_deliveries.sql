@@ -21,13 +21,14 @@ CREATE INDEX IF NOT EXISTS idx_mred_status ON public.monthly_report_email_delive
 CREATE INDEX IF NOT EXISTS idx_mred_created_at ON public.monthly_report_email_deliveries(created_at);
 CREATE INDEX IF NOT EXISTS idx_mred_provider_message_id ON public.monthly_report_email_deliveries(provider_message_id) WHERE provider_message_id IS NOT NULL;
 
--- RLS: service_role bypasses RLS, authenticated can read own deliveries
+-- RLS: service_role bypasses RLS, authenticated can only read their own deliveries.
+-- No INSERT/UPDATE/DELETE policies for authenticated or anon: the Edge Function
+-- uses service_role (which bypasses RLS), so no extra grants are required.
 ALTER TABLE public.monthly_report_email_deliveries ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "service_role_full_access" ON public.monthly_report_email_deliveries
-  FOR ALL USING (true) WITH CHECK (true);
-
 CREATE POLICY "authenticated_read_own" ON public.monthly_report_email_deliveries
-  FOR SELECT USING (sent_by = auth.uid());
+  FOR SELECT
+  TO authenticated
+  USING (sent_by = auth.uid());
 
 COMMENT ON TABLE public.monthly_report_email_deliveries IS 'Audit trail for monthly report email delivery attempts.';
