@@ -113,23 +113,23 @@ export default function TechClaimsPage() {
 
   return (
     <DashboardLayout role="technician" title="Mis Reclamos">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         {/* Summary cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-blue-700">{assigned.length}</p>
+            <p className="text-xl 2xl:text-2xl font-bold text-blue-700">{assigned.length}</p>
             <p className="text-xs text-blue-600">Nuevos</p>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-yellow-700">{inProgress.length}</p>
+            <p className="text-xl 2xl:text-2xl font-bold text-yellow-700">{inProgress.length}</p>
             <p className="text-xs text-yellow-600">En atención</p>
           </div>
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-red-700">{urgentHigh.length}</p>
+            <p className="text-xl 2xl:text-2xl font-bold text-red-700">{urgentHigh.length}</p>
             <p className="text-xs text-red-600">Urgentes / Alta</p>
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-gray-700">{pending}</p>
+            <p className="text-xl 2xl:text-2xl font-bold text-gray-700">{pending}</p>
             <p className="text-xs text-gray-600">Pendientes</p>
           </div>
         </div>
@@ -143,7 +143,7 @@ export default function TechClaimsPage() {
             <p className="text-sm text-gray-500">Las nuevas asignaciones aparecerán aquí.</p>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4 2xl:space-y-6">
             {assigned.length > 0 && (
               <div>
                 <h3 className="text-sm font-bold text-blue-700 uppercase tracking-wide mb-3">Nuevos Reclamos ({assigned.length})</h3>

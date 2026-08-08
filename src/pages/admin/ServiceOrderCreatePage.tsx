@@ -103,12 +103,12 @@ export default function ServiceOrderCreatePage() {
             {error && <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
             {loadError && <div role="alert" className="p-3 bg-warning/10 border border-warning/30 rounded text-warning text-sm flex items-center gap-2"><AlertCircle size={16} /> {loadError}</div>}
             {success && <div role="status" className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm flex items-center gap-2"><Check size={16} /> {success}</div>}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 2xl:gap-4">
               <Select label="Cliente *" options={[{ value: '', label: 'Seleccionar' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} value={clientId} onChange={(e) => setClientId(e.target.value)} />
               <Select label="Edificio *" options={[{ value: '', label: 'Seleccionar' }, ...buildings.map(b => ({ value: b.id, label: b.name }))]} value={buildingId} onChange={(e) => setBuildingId(e.target.value)} disabled={!clientId} />
               <Select label="Ascensor *" options={[{ value: '', label: 'Seleccionar' }, ...elevators.map(el => ({ value: el.id, label: el.code }))]} value={elevatorId} onChange={(e) => setElevatorId(e.target.value)} disabled={!buildingId} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 2xl:gap-4">
               <Select label="Tipo" options={TYPE_OPTS} value={orderType} onChange={(e) => setOrderType(e.target.value)} />
               <Select label="Prioridad" options={PRIORITY_OPTS} value={priority} onChange={(e) => setPriority(e.target.value)} />
             </div>

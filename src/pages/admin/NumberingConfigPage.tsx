@@ -60,7 +60,7 @@ export default function NumberingConfigPage() {
 
   return (
     <DashboardLayout role="admin" title="Configuración de Numeración">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-4 2xl:space-y-6">
         <div className="flex items-center gap-3">
           <Settings size={24} className="text-gray-600" />
           <div>

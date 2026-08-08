@@ -72,3 +72,28 @@ body {
 .shadow-sicom-lg {
   box-shadow: 0 10px 40px rgba(6, 23, 46, 0.2);
 }
+
+/* =====================================================================
+   Modo compacto notebook (1024px - 1535px)
+   Aplica densidad reducida SOLO en el rango de escritorio/notebook
+   reducido. En 2xl (>=1536px) y en móvil se conserva el diseño previo.
+   ===================================================================== */
+
+/* Tablas: reducir padding vertical de celdas para mostrar más filas en 768px */
+@media (min-width: 1024px) and (max-width: 1535px) {
+  .app-content th,
+  .app-content td {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+}
+
+/* Modales: asegurar que quepan verticalmente en 768px de alto.
+   El panel del modal es bg-white.rounded-xl SIN shadow-sm (las Cards sí lo tienen),
+   lo que permite diferenciar el panel modal de las Cards anidadas. */
+@media (max-width: 1535px) {
+  .app-content .fixed.inset-0 .bg-white.rounded-xl:not(.shadow-sm) {
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+}

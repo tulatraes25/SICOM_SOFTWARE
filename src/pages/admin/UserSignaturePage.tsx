@@ -92,9 +92,9 @@ export default function UserSignaturePage() {
 
   return (
     <DashboardLayout role="admin" title="Mi Firma">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-4 2xl:space-y-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Firma para Documentos</h2>
+          <h2 className="text-xl 2xl:text-2xl font-bold text-gray-900">Firma para Documentos</h2>
           <p className="text-gray-500 mt-1">
             Esta firma será utilizada en los documentos que apruebes o firmes.
           </p>

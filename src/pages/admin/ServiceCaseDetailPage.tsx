@@ -114,7 +114,7 @@ export default function ServiceCaseDetailPage() {
 
   return (
     <DashboardLayout role="admin" title={`Expediente ${formatCaseNumber(serviceCase.case_number, serviceCase.numbering_mode)}`}>
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -151,7 +151,7 @@ export default function ServiceCaseDetailPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 2xl:gap-6">
           {/* Main info */}
           <div className="lg:col-span-2 space-y-6">
             <Card>
@@ -226,7 +226,7 @@ export default function ServiceCaseDetailPage() {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-4 2xl:space-y-6">
             {/* Related entities */}
             <Card>
               <CardHeader>

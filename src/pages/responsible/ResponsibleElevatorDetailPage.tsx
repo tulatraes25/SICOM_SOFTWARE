@@ -107,7 +107,7 @@ export default function ResponsibleElevatorDetailPage() {
 
   return (
     <DashboardLayout role="responsible" title={elevator.code}>
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <button onClick={() => navigate('/responsable/ascensores')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900"><ArrowLeft size={18} /> Volver</button>
         <div className="flex items-center gap-3"><h2 className="text-xl font-bold text-gray-900">{elevator.code}</h2><Badge className={elevator.operational_status ? STATUS_COLORS[elevator.operational_status] || '' : ''}>{elevator.operational_status ? OPERATIONAL_STATUS_LABELS[elevator.operational_status as keyof typeof OPERATIONAL_STATUS_LABELS] || '-' : '-'}</Badge></div>
 
@@ -124,7 +124,7 @@ export default function ResponsibleElevatorDetailPage() {
           <div><p className="text-gray-500">Próximo servicio</p><p className="font-medium">{formatDateOnly(elevator.next_service_date)}</p></div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 2xl:gap-6">
           <Card><CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Wrench size={16} /> Mantenimientos ({records.length})</h3></CardHeader><CardContent className="space-y-3">
             {records.length === 0 ? <p className="text-gray-500">No hay mantenimientos</p> : records.map((r) => {
               const recordChecklist = checklistByRecord.get(r.id) || [];

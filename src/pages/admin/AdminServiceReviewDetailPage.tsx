@@ -224,7 +224,7 @@ export default function AdminServiceReviewDetailPage() {
 
   return (
     <DashboardLayout role="admin" title="Revisión de Mantenimiento">
-      <div className="space-y-6 max-w-5xl mx-auto">
+      <div className="space-y-4 2xl:space-y-6 max-w-5xl mx-auto">
         {/* Back button */}
         <button onClick={() => navigate('/admin/mantenimientos')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
           <ArrowLeft size={18} /> Volver al listado
@@ -270,9 +270,9 @@ export default function AdminServiceReviewDetailPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 2xl:gap-6">
           {/* Left column */}
-          <div className="space-y-6">
+          <div className="space-y-4 2xl:space-y-6">
             {/* Service data */}
             <Card>
               <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Calendar size={18} /> Datos del Servicio</h3></CardHeader>
@@ -384,7 +384,7 @@ export default function AdminServiceReviewDetailPage() {
           </div>
 
           {/* Right column */}
-          <div className="space-y-6">
+          <div className="space-y-4 2xl:space-y-6">
             {/* AI Report */}
             <Card>
               <CardHeader>

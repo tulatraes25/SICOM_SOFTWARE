@@ -58,7 +58,7 @@ export default function ResponsibleBuildingDetailPage() {
 
   return (
     <DashboardLayout role="responsible" title={building.name}>
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <div className="flex items-center justify-between">
           <button onClick={() => navigate('/responsable/edificios')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900"><ArrowLeft size={18} /> Volver</button>
           <Link to={`/responsable/libro-visitas?buildingId=${building.id}`}><Button variant="outline"><FileDown size={14} className="mr-1" /> Libro consolidado</Button></Link>
@@ -70,7 +70,7 @@ export default function ResponsibleBuildingDetailPage() {
           <div><p className="text-gray-500">Localidad</p><p className="font-medium">{building.locality}</p></div>
           <div><p className="text-gray-500">Cliente</p><p className="font-medium">{client?.name || '-'}</p></div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 2xl:gap-6">
           <Card><CardHeader><h3 className="font-semibold text-gray-900">Ascensores ({elevators.length})</h3></CardHeader><CardContent className="space-y-3">
             {elevators.length === 0 ? <p className="text-gray-500">No hay ascensores</p> : elevators.map((e) => (
               <Link key={e.id} to={`/responsable/ascensores/${e.id}`} className="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100">

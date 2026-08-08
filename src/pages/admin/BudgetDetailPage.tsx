@@ -238,7 +238,7 @@ SICOM Patagonia SRL`);
 
   return (
     <DashboardLayout role="admin" title={`Presupuesto ${caseMode === 'test' ? 'PRUEBA ' : ''}N.º ${caseNum}`}>
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <button onClick={() => navigate('/admin/presupuestos')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-2"><ArrowLeft size={18} /> Volver</button>
@@ -264,7 +264,7 @@ SICOM Patagonia SRL`);
         {error && <div className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
         {success && <div className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm">{success}</div>}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 2xl:gap-6">
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader><h3 className="font-semibold">Ítems</h3></CardHeader>
@@ -316,7 +316,7 @@ SICOM Patagonia SRL`);
             </Card>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 2xl:space-y-6">
             <Card>
               <CardHeader><h3 className="font-semibold">Totales</h3></CardHeader>
               <CardContent className="space-y-2 text-sm">

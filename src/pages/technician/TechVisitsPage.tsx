@@ -40,18 +40,18 @@ export default function TechVisitsPage() {
 
   return (
     <DashboardLayout role="technician" title="Mis Visitas">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-blue-700">{assigned.length}</p>
+            <p className="text-xl 2xl:text-2xl font-bold text-blue-700">{assigned.length}</p>
             <p className="text-xs text-blue-600">Pendientes</p>
           </div>
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-green-700">{approved.length}</p>
+            <p className="text-xl 2xl:text-2xl font-bold text-green-700">{approved.length}</p>
             <p className="text-xs text-green-600">Aprobadas</p>
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-gray-700">{entries.length}</p>
+            <p className="text-xl 2xl:text-2xl font-bold text-gray-700">{entries.length}</p>
             <p className="text-xs text-gray-600">Total</p>
           </div>
         </div>

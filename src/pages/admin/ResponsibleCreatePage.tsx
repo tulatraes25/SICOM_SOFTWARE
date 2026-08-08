@@ -218,7 +218,7 @@ export default function ResponsibleCreatePage() {
 
   return (
     <DashboardLayout role="admin" title="Nuevo responsable">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-4 2xl:space-y-6">
         <button
           type="button"
           onClick={() => { if (!isBusy) navigate('/admin/usuarios?tab=responsables'); }}
@@ -234,7 +234,7 @@ export default function ResponsibleCreatePage() {
           <p className="text-gray-500 text-sm">Creá el acceso y asigná los ascensores que podrá consultar.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6" aria-busy={isFormBusy}>
+        <form onSubmit={handleSubmit} className="space-y-4 2xl:space-y-6" aria-busy={isFormBusy}>
           {error && <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
           {success && <div role="status" className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm flex items-center gap-2"><Check size={16} /> {success}</div>}
 

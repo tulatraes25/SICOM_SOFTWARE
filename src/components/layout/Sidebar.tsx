@@ -103,11 +103,11 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
         className={cn(
           'fixed left-0 top-0 z-50 h-full bg-white border-r border-gray-200 transition-all duration-300',
           'lg:relative lg:translate-x-0',
-          collapsed ? '-translate-x-full lg:w-20' : 'translate-x-0 lg:w-64'
+          collapsed ? '-translate-x-full lg:w-20' : 'translate-x-0 lg:w-56 2xl:w-64'
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
+        <div className="flex items-center justify-between h-14 2xl:h-16 px-3 2xl:px-4 border-b border-gray-200">
           {!collapsed && (
             <Link to={menuItems[role]?.[0]?.path || ROUTES.ADMIN_DASHBOARD} className="flex items-center gap-2">
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
@@ -125,7 +125,7 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
         </div>
 
         {/* Navigation */}
-        <nav className="p-4 space-y-1">
+        <nav className="p-3 2xl:p-4 space-y-0.5 2xl:space-y-1">
           {items.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
@@ -135,7 +135,7 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
             if (item.badgeKey === 'claims' && showClaimAlert && !collapsed) {
               return (
                 <Link key={item.path} to="/tecnico/reclamos"
-                  className="claim-alarm flex items-center gap-3 px-3 py-2.5 rounded-lg text-white font-bold border border-red-800 shadow-lg shadow-red-500/50"
+                  className="claim-alarm flex items-center gap-3 px-3 py-2 2xl:py-2.5 rounded-lg text-white font-bold border border-red-800 shadow-lg shadow-red-500/50"
                   onClick={() => setCollapsed(true)}
                   title={`Tenés ${claimAlerts.newCount} reclamo(s) nuevo(s) que requiere(n) atención`}
                   aria-label={`Tenés ${claimAlerts.newCount} reclamo(s) nuevo(s) que requiere(n) atención`}
@@ -154,7 +154,7 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
             if (item.badgeKey === 'claims' && showClaimAlert && collapsed) {
               return (
                 <Link key={item.path} to="/tecnico/reclamos"
-                  className="claim-alarm flex items-center justify-center px-3 py-2.5 rounded-lg text-white border border-red-800 shadow-lg shadow-red-500/50"
+                  className="claim-alarm flex items-center justify-center px-3 py-2 2xl:py-2.5 rounded-lg text-white border border-red-800 shadow-lg shadow-red-500/50"
                   onClick={() => setCollapsed(true)}
                   title={`Tenés ${claimAlerts.newCount} reclamo(s) nuevo(s)`}
                   aria-label={`Tenés ${claimAlerts.newCount} reclamo(s) nuevo(s)`}
@@ -171,7 +171,7 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
             if (item.badgeKey === 'orders' && showOrderAlert && !collapsed) {
               return (
                 <Link key={item.path} to="/tecnico/ordenes"
-                  className="claim-alarm flex items-center gap-3 px-3 py-2.5 rounded-lg text-white font-bold border border-red-800 shadow-lg shadow-red-500/50"
+                  className="claim-alarm flex items-center gap-3 px-3 py-2 2xl:py-2.5 rounded-lg text-white font-bold border border-red-800 shadow-lg shadow-red-500/50"
                   onClick={() => setCollapsed(true)}
                   title={`Tenés ${orderAlerts.newCount} orden(es) nueva(s)`}
                   aria-label={`Tenés ${orderAlerts.newCount} orden(es) nueva(s)`}
@@ -189,7 +189,7 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
             if (item.badgeKey === 'orders' && showOrderAlert && collapsed) {
               return (
                 <Link key={item.path} to="/tecnico/ordenes"
-                  className="claim-alarm flex items-center justify-center px-3 py-2.5 rounded-lg text-white border border-red-800 shadow-lg shadow-red-500/50"
+                  className="claim-alarm flex items-center justify-center px-3 py-2 2xl:py-2.5 rounded-lg text-white border border-red-800 shadow-lg shadow-red-500/50"
                   onClick={() => setCollapsed(true)}
                   title={`Tenés ${orderAlerts.newCount} orden(es) nueva(s)`}
                   aria-label={`Tenés ${orderAlerts.newCount} orden(es) nueva(s)`}
@@ -204,7 +204,7 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
 
             if (item.disabled) {
               return (
-                <div key={item.path} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 cursor-not-allowed">
+                <div key={item.path} className="flex items-center gap-3 px-3 py-2 2xl:py-2.5 rounded-lg text-gray-400 cursor-not-allowed">
                   <Icon size={20} />
                   {!collapsed && (
                     <>
@@ -218,7 +218,7 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
 
             return (
               <Link key={item.path} to={item.path}
-                className={cn('flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors', isActive ? 'bg-primary/10 text-primary font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')}
+                className={cn('flex items-center gap-3 px-3 py-2 2xl:py-2.5 rounded-lg transition-colors', isActive ? 'bg-primary/10 text-primary font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')}
                 onClick={() => setCollapsed(true)}
               >
                 <Icon size={20} />
@@ -234,13 +234,13 @@ export default function Sidebar({ role, onLogout, badgeCounts = {} }: SidebarPro
         </nav>
 
         {/* Footer */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+        <div className="absolute bottom-0 left-0 right-0 p-3 2xl:p-4 border-t border-gray-200">
           {!collapsed && (
             <p className="text-xs text-gray-400 text-center mb-2">SICOM Patagonia SRL v1.0.0</p>
           )}
           <button
             onClick={onLogout}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors w-full"
+            className="flex items-center gap-3 px-3 py-2 2xl:py-2.5 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors w-full"
           >
             <LogOut size={20} />
             {!collapsed && <span>Cerrar Sesión</span>}

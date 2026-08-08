@@ -63,7 +63,7 @@ export default function DocumentSettingsPage() {
 
   return (
     <DashboardLayout role="admin" title="Configuración Documental">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-4 2xl:space-y-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Configuración de Documentos</h2>
           <p className="text-gray-500 mt-1">

@@ -80,16 +80,16 @@ export default function ClaimCreatePage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && <div className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
             {success && <div className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm flex items-center gap-2"><Check size={16} /> {success}</div>}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 2xl:gap-4">
               <Select label="Cliente *" options={[{ value: '', label: 'Seleccionar' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} value={clientId} onChange={(e) => setClientId(e.target.value)} />
               <Select label="Edificio *" options={[{ value: '', label: 'Seleccionar' }, ...buildings.map(b => ({ value: b.id, label: b.name }))]} value={buildingId} onChange={(e) => setBuildingId(e.target.value)} />
               <Select label="Ascensor" options={[{ value: '', label: 'Sin ascensor' }, ...elevators.map(el => ({ value: el.id, label: el.code }))]} value={elevatorId} onChange={(e) => setElevatorId(e.target.value)} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 2xl:gap-4">
               <Input label="Nombre del reclamante" value={claimantName} onChange={(e) => setClaimantName(e.target.value)} />
               <Input label="Teléfono" value={claimantPhone} onChange={(e) => setClaimantPhone(e.target.value)} />
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 2xl:gap-4">
               <Select label="Canal" options={CHANNEL_OPTS} value={channel} onChange={(e) => setChannel(e.target.value)} />
               <Select label="Categoría" options={CATEGORY_OPTS} value={category} onChange={(e) => setCategory(e.target.value)} />
               <Select label="Prioridad" options={PRIORITY_OPTS} value={priority} onChange={(e) => setPriority(e.target.value)} />

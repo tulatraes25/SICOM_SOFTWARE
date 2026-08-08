@@ -111,24 +111,24 @@ export default function UsersPage() {
 
   const staffHeaders = (
     <tr className="border-b border-gray-200 bg-gray-50">
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Nombre</th>
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Email</th>
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Rol</th>
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Estado</th>
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Contraseña</th>
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Creado</th>
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600"></th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600">Nombre</th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600">Email</th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600">Rol</th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600">Estado</th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600">Contraseña</th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600">Creado</th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600"></th>
     </tr>
   );
 
   const respHeaders = (
     <tr className="border-b border-gray-200 bg-gray-50">
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Nombre</th>
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Email</th>
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Estado</th>
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Contraseña</th>
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Creado</th>
-      <th className="text-left px-4 py-3 text-sm font-medium text-gray-600"></th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600">Nombre</th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600">Email</th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600">Estado</th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600">Contraseña</th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600">Creado</th>
+      <th className="text-left px-3 py-2 2xl:px-4 2xl:py-3 text-sm font-medium text-gray-600"></th>
     </tr>
   );
 
@@ -136,13 +136,13 @@ export default function UsersPage() {
     const ps = passwordStatus(u);
     return (
       <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50">
-        <td className="px-4 py-3 font-medium text-gray-900">{u.full_name || '-'}</td>
-        <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
-        {isStaff && <td className="px-4 py-3"><Badge variant={ROLE_BADGE[u.role]}>{ROLE_LABELS[u.role]}</Badge></td>}
-        <td className="px-4 py-3"><Badge variant={u.active ? 'success' : 'danger'}>{u.active ? 'Activo' : 'Inactivo'}</Badge></td>
-        <td className="px-4 py-3"><Badge variant={ps.variant}>{ps.label}</Badge></td>
-        <td className="px-4 py-3 text-sm text-gray-500">{formatDate(u.created_at)}</td>
-        <td className="px-4 py-3">
+        <td className="px-3 py-2 2xl:px-4 2xl:py-3 font-medium text-gray-900">{u.full_name || '-'}</td>
+        <td className="px-3 py-2 2xl:px-4 2xl:py-3 text-sm text-gray-600">{u.email}</td>
+        {isStaff && <td className="px-3 py-2 2xl:px-4 2xl:py-3"><Badge variant={ROLE_BADGE[u.role]}>{ROLE_LABELS[u.role]}</Badge></td>}
+        <td className="px-3 py-2 2xl:px-4 2xl:py-3"><Badge variant={u.active ? 'success' : 'danger'}>{u.active ? 'Activo' : 'Inactivo'}</Badge></td>
+        <td className="px-3 py-2 2xl:px-4 2xl:py-3"><Badge variant={ps.variant}>{ps.label}</Badge></td>
+        <td className="px-3 py-2 2xl:px-4 2xl:py-3 text-sm text-gray-500">{formatDate(u.created_at)}</td>
+        <td className="px-3 py-2 2xl:px-4 2xl:py-3">
           <Link to={`/admin/usuarios/${u.id}`} aria-label={`Ver usuario ${userLabel(u)}`}>
             <Button variant="ghost" size="sm"><Eye size={14} /></Button>
           </Link>
@@ -153,9 +153,9 @@ export default function UsersPage() {
 
   return (
     <DashboardLayout role="admin" title="Usuarios">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Usuarios</h2>
+          <h2 className="text-xl 2xl:text-2xl font-bold text-gray-900">Usuarios</h2>
           <p className="text-gray-500">Gestión de personal interno y responsables de edificios</p>
         </div>
 

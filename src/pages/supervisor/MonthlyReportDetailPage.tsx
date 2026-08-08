@@ -411,7 +411,7 @@ export default function MonthlyReportDetailPage() {
 
   return (
     <DashboardLayout role="admin" title={`Informe ${monthLabel}`}>
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <div className="flex items-center justify-between">
           <button onClick={() => navigate('/admin/informes-mensuales')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900"><ArrowLeft size={18} /> Volver</button>
           <Badge variant={STATUS_BADGE[reportStatus]}>{STATUS_LABELS[reportStatus]}</Badge>
@@ -420,7 +420,7 @@ export default function MonthlyReportDetailPage() {
         {error && <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
         {success && <div role="status" className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm flex items-center gap-2"><Check size={16} /> {success}</div>}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 2xl:gap-6">
           <div className="lg:col-span-2 space-y-6">
             <Card><CardHeader><h3 className="font-semibold">Datos del Informe</h3></CardHeader><CardContent className="space-y-2 text-sm">
               <div><span className="text-gray-500">Período: </span>{monthLabel}</div>
@@ -448,7 +448,7 @@ export default function MonthlyReportDetailPage() {
             </CardContent></Card>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 2xl:space-y-6">
             <Card><CardHeader><h3 className="font-semibold">PDF</h3></CardHeader><CardContent>
               {report.pdf_url ? (
                 <div className="space-y-2">

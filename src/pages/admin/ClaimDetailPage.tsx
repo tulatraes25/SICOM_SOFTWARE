@@ -76,7 +76,7 @@ export default function ClaimDetailPage() {
 
   return (
     <DashboardLayout role="admin" title={`Reclamo ${caseMode === 'test' ? 'PRUEBA ' : ''}N.º ${caseNum}`}>
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <button onClick={() => navigate('/admin/reclamos')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-2"><ArrowLeft size={18} /> Volver</button>
@@ -97,7 +97,7 @@ export default function ClaimDetailPage() {
           )}
         </div>
         {error && <div className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 2xl:gap-6">
           <div className="lg:col-span-2 space-y-6">
             <Card><CardHeader><h3 className="font-semibold">Detalle del Reclamo</h3></CardHeader><CardContent className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-4">
@@ -111,7 +111,7 @@ export default function ClaimDetailPage() {
               {claim.resolution_summary && <div className="p-3 bg-success/5 border border-success/20 rounded"><span className="text-gray-500">Resolución:</span><p className="mt-1">{claim.resolution_summary}</p></div>}
             </CardContent></Card>
           </div>
-          <div className="space-y-6">
+          <div className="space-y-4 2xl:space-y-6">
             <Card><CardHeader><h3 className="font-semibold">Información</h3></CardHeader><CardContent className="space-y-2 text-sm">
               <div><span className="text-gray-500">Cliente: </span>{(claim.client as any)?.name || '-'}</div>
               <div><span className="text-gray-500">Edificio: </span>{(claim.building as any)?.name || '-'}</div>

@@ -71,7 +71,7 @@ export default function AdminServiceReviewPage() {
 
   return (
     <DashboardLayout role="admin" title="Revisión de Servicios">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <div className="flex gap-2">
           <Button
             variant={activeTab === 'pending' ? 'primary' : 'outline'}

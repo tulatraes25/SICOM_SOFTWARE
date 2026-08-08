@@ -140,10 +140,10 @@ export default function ElevatorsPage() {
 
   return (
     <DashboardLayout role="admin" title="Ascensores">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         {/* Search and filters */}
-        <div className="flex flex-col sm:flex-row justify-between gap-4">
-          <div className="flex-1 flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 2xl:gap-4">
+          <div className="flex-1 flex flex-col gap-3 2xl:gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input

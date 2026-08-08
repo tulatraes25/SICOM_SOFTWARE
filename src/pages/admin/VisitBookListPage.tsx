@@ -142,10 +142,10 @@ export default function VisitBookListPage() {
 
   return (
     <DashboardLayout role="admin" title="Libro de Visitas">
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="space-y-4 2xl:space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 2xl:gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <h2 className="text-xl 2xl:text-2xl font-bold text-gray-900 flex items-center gap-2">
               <BookOpen size={24} />
               Libro Digital de Visitas
             </h2>

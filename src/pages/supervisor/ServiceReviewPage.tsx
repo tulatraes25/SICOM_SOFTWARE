@@ -171,7 +171,7 @@ export default function ServiceReviewPage() {
 
   return (
     <DashboardLayout role="supervisor" title="Revisión de Mantenimiento">
-      <div className="space-y-6 max-w-5xl mx-auto">
+      <div className="space-y-4 2xl:space-y-6 max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <button
@@ -193,7 +193,7 @@ export default function ServiceReviewPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 2xl:gap-6">
           {/* Left column - Service data */}
           <div className="lg:col-span-2 space-y-6">
             {/* Elevator info */}
@@ -296,7 +296,7 @@ export default function ServiceReviewPage() {
           </div>
 
           {/* Right column - Report editor */}
-          <div className="space-y-6">
+          <div className="space-y-4 2xl:space-y-6">
             {/* Actions */}
             <Card>
               <CardContent>

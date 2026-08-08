@@ -99,7 +99,7 @@ export default function ResponsibleVisitBookPage() {
 
   return (
     <DashboardLayout role="responsible" title="Libro de Visitas">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><BookOpen size={24} /> Libro Digital de Visitas</h2>
         <Card><CardContent className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

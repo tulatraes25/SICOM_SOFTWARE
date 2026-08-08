@@ -217,7 +217,7 @@ export default function ServiceRecordForm() {
 
   return (
     <DashboardLayout role="technician" title={isEditing ? 'Editar Mantenimiento' : 'Cargar Mantenimiento'}>
-      <div className="space-y-6 max-w-3xl mx-auto">
+      <div className="space-y-4 2xl:space-y-6 max-w-3xl mx-auto">
         {/* Elevator info */}
         {elevator && (
           <Card>

@@ -82,7 +82,7 @@ export default function TechVisitDetailPage() {
 
   return (
     <DashboardLayout role="technician" title={`Asiento N.º ${entry.entry_number}`}>
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <button onClick={() => navigate('/tecnico/visitas')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-2">
@@ -104,7 +104,7 @@ export default function TechVisitDetailPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 2xl:gap-6">
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
@@ -179,7 +179,7 @@ export default function TechVisitDetailPage() {
             </Card>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 2xl:space-y-6">
             <Card>
               <CardHeader>
                 <h3 className="font-semibold text-gray-900">Información</h3>

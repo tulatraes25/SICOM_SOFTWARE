@@ -83,18 +83,18 @@ export default function TechServiceOrdersPage() {
 
   return (
     <DashboardLayout role="technician" title="Mis Órdenes">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-blue-700">{assigned.length}</p>
+            <p className="text-xl 2xl:text-2xl font-bold text-blue-700">{assigned.length}</p>
             <p className="text-xs text-blue-600">Nuevas</p>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-yellow-700">{inProgress.length}</p>
+            <p className="text-xl 2xl:text-2xl font-bold text-yellow-700">{inProgress.length}</p>
             <p className="text-xs text-yellow-600">En ejecución</p>
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-gray-700">{pending}</p>
+            <p className="text-xl 2xl:text-2xl font-bold text-gray-700">{pending}</p>
             <p className="text-xs text-gray-600">Pendientes</p>
           </div>
         </div>
@@ -103,7 +103,7 @@ export default function TechServiceOrdersPage() {
 
         {loading ? <div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" /></div>
         : pending === 0 && !error ? <div className="text-center py-12"><CheckCircle size={48} className="mx-auto text-success mb-4" /><p className="text-lg font-medium text-gray-900">No tenés órdenes pendientes</p><p className="text-sm text-gray-500">Las nuevas asignaciones aparecerán aquí.</p></div>
-        : <div className="space-y-6">
+        : <div className="space-y-4 2xl:space-y-6">
             {changesRequested.length > 0 && <div><h3 className="text-sm font-bold text-red-700 uppercase tracking-wide mb-3">Correcciones Solicitadas ({changesRequested.length})</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-3">{changesRequested.map(renderCard)}</div></div>}
             {assigned.length > 0 && <div><h3 className="text-sm font-bold text-blue-700 uppercase tracking-wide mb-3">Nuevas Órdenes ({assigned.length})</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-3">{assigned.map(renderCard)}</div></div>}
             {inProgress.length > 0 && <div><h3 className="text-sm font-bold text-yellow-700 uppercase tracking-wide mb-3">En Ejecución ({inProgress.length})</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-3">{inProgress.map(renderCard)}</div></div>}

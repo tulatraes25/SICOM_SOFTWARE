@@ -43,7 +43,7 @@ export default function PendingReviewsPage() {
 
   return (
     <DashboardLayout role="supervisor" title="Revisiones">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         {/* Tabs */}
         <div className="flex gap-2 border-b border-gray-200 pb-2">
           <button

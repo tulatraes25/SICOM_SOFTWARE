@@ -48,8 +48,8 @@ export default function AdminDashboard() {
 
   return (
     <DashboardLayout role="admin" title="Panel de Control">
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="space-y-4 2xl:space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 2xl:gap-4">
           {statCards.map((stat) => {
             const Icon = stat.icon;
             return (
@@ -58,7 +58,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">{stat.label}</p>
-                      <p className="text-3xl font-bold text-gray-900">
+                      <p className="text-2xl 2xl:text-3xl font-bold text-gray-900">
                         {loading ? '-' : stat.value}
                       </p>
                     </div>

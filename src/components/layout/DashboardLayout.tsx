@@ -25,7 +25,7 @@ export default function DashboardLayout({
           userEmail={profile?.email}
           userRole={profile?.role}
         />
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="app-content flex-1 overflow-y-auto p-4 2xl:p-6">
           {children}
         </main>
       </div>

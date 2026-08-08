@@ -167,12 +167,12 @@ export default function ServiceOrderDetailPage() {
 
   return (
     <DashboardLayout role="admin" title={`Orden ${numLabel}`}>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="space-y-4 2xl:space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 2xl:gap-4">
           <div>
             <button onClick={() => navigate('/admin/ordenes-servicio')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-2"><ArrowLeft size={18} /> Volver</button>
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold text-gray-900">{numLabel}</h2>
+              <h2 className="text-xl 2xl:text-2xl font-bold text-gray-900">{numLabel}</h2>
               <Badge variant={STATUS_BADGE[order.status]}>{statusLabel}</Badge>
             </div>
           </div>
@@ -199,10 +199,10 @@ export default function ServiceOrderDetailPage() {
         {error && <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
         {success && <div role="status" className="p-3 bg-success/10 border border-success/30 rounded text-success text-sm">{success}</div>}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 2xl:gap-6">
+          <div className="lg:col-span-2 space-y-4 2xl:space-y-6">
             <Card><CardHeader><h3 className="font-semibold">Detalle</h3></CardHeader><CardContent className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 2xl:gap-4">
                 <div><span className="text-gray-500">Trabajo solicitado:</span><p className="mt-1">{order.work_requested || 'No informado'}</p></div>
                 <div><span className="text-gray-500">Tipo: </span>{SERVICE_ORDER_TYPE_LABELS[order.order_type]}</div>
                 <div><span className="text-gray-500">Prioridad: </span>{CLAIM_PRIORITY_LABELS[order.priority as keyof typeof CLAIM_PRIORITY_LABELS]}</div>

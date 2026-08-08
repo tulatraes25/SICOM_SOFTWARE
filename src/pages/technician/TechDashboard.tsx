@@ -54,7 +54,7 @@ export default function TechDashboard() {
 
   return (
     <DashboardLayout role="technician" title="Panel del Técnico">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         {/* Quick actions */}
         <div className="flex flex-col sm:flex-row gap-3">
           <Link to="/tecnico/ascensores">
@@ -66,7 +66,7 @@ export default function TechDashboard() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 2xl:gap-4">
           {stats.map((stat) => {
             const Icon = stat.icon;
             return (
@@ -75,7 +75,7 @@ export default function TechDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">{stat.label}</p>
-                      <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+                      <p className="text-2xl 2xl:text-3xl font-bold text-gray-900">{stat.value}</p>
                     </div>
                     <div className={`p-3 rounded-lg bg-gray-100 ${stat.color}`}>
                       <Icon size={24} />

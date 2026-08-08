@@ -78,7 +78,7 @@ export default function BudgetCreatePage() {
 
   return (
     <DashboardLayout role="admin" title="Nuevo Presupuesto">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-4 2xl:space-y-6">
         <button onClick={() => navigate('/admin/presupuestos')} className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
           <ArrowLeft size={18} /> Volver
         </button>

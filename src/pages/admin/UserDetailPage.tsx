@@ -190,7 +190,7 @@ export default function UserDetailPage() {
   if (!id) {
     return (
       <DashboardLayout role="admin" title="Usuario">
-        <div className="max-w-2xl mx-auto space-y-6">
+        <div className="max-w-2xl mx-auto space-y-4 2xl:space-y-6">
           <div role="alert" className="p-3 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2">
             <AlertCircle size={16} /> No se indicó el usuario
           </div>
@@ -205,7 +205,7 @@ export default function UserDetailPage() {
   if (error && !user && operation !== 'loading') {
     return (
       <DashboardLayout role="admin" title="Detalle de Usuario">
-        <div className="max-w-2xl mx-auto space-y-6">
+        <div className="max-w-2xl mx-auto space-y-4 2xl:space-y-6">
           <button onClick={() => { if (!isBusy) navigate('/admin/usuarios'); }} disabled={isBusy} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 disabled:opacity-50" aria-label="Volver a usuarios">
             <ArrowLeft size={18} /> Volver
           </button>
@@ -220,7 +220,7 @@ export default function UserDetailPage() {
 
   return (
     <DashboardLayout role="admin" title="Detalle de Usuario">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-4 2xl:space-y-6">
         <button onClick={() => { if (!isBusy) navigate('/admin/usuarios'); }} disabled={isBusy} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 disabled:opacity-50" aria-label="Volver a usuarios">
           <ArrowLeft size={18} /> Volver
         </button>

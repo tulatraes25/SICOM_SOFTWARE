@@ -35,9 +35,9 @@ export default function ServiceOrdersPage() {
 
   return (
     <DashboardLayout role="admin" title="Órdenes de Servicio">
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div><h2 className="text-2xl font-bold text-gray-900">Órdenes de Servicio</h2><p className="text-gray-500">{count} orden(es)</p></div>
+      <div className="space-y-4 2xl:space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 2xl:gap-4">
+          <div><h2 className="text-xl 2xl:text-2xl font-bold text-gray-900">Órdenes de Servicio</h2><p className="text-gray-500">{count} orden(es)</p></div>
           <Link to="/admin/ordenes-servicio/nueva"><Button><Plus size={16} className="mr-2" /> Nueva Orden</Button></Link>
         </div>
         <Card><CardContent className="p-4">

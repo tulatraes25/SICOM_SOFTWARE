@@ -63,7 +63,7 @@ export default function VisitEntryCreatePage() {
 
   return (
     <DashboardLayout role="admin" title="Nuevo Asiento del Libro">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-4 2xl:space-y-6">
         <button onClick={() => navigate(`/admin/ascensores/${elevatorId}/libro`)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
           <ArrowLeft size={18} /> Volver al libro
         </button>

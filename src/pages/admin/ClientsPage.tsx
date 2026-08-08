@@ -71,7 +71,7 @@ export default function ClientsPage() {
 
   return (
     <DashboardLayout role="admin" title="Clientes">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between gap-4">
           <div className="flex-1 relative">

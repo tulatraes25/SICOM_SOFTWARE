@@ -151,18 +151,18 @@ export default function MonthlyReportsPage() {
 
   return (
     <DashboardLayout role="admin" title="Informes Mensuales">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Informes Mensuales</h2>
+            <h2 className="text-xl 2xl:text-2xl font-bold text-gray-900">Informes Mensuales</h2>
             <p className="text-gray-500">{stats.total} informe(s)</p>
           </div>
           <Button onClick={openCreate}><Plus size={16} className="mr-2" /> Nuevo informe mensual</Button>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 2xl:gap-4">
           {[{ label: 'Total', value: stats.total, bg: 'bg-gray-100' }, { label: 'Pendientes', value: stats.pending, bg: 'bg-warning/10' }, { label: 'Con PDF', value: stats.generated, bg: 'bg-info/10' }, { label: 'Enviados', value: stats.sent, bg: 'bg-success/10' }].map((s) => (
-            <Card key={s.label}><CardContent><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600">{s.label}</p><p className="text-3xl font-bold text-gray-900">{s.value}</p></div></div></CardContent></Card>
+            <Card key={s.label}><CardContent><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600">{s.label}</p><p className="text-2xl 2xl:text-3xl font-bold text-gray-900">{s.value}</p></div></div></CardContent></Card>
           ))}
         </div>
 

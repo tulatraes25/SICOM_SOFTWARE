@@ -53,7 +53,7 @@ export default function ResponsibleDashboard() {
 
   return (
     <DashboardLayout role="responsible" title="Portal del Responsable">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900">Bienvenido/a, {profile?.full_name || 'Responsable'}</h2>
           <Button variant="outline" onClick={loadData} disabled={loading}><RefreshCw size={14} className="mr-1" /> Actualizar</Button>

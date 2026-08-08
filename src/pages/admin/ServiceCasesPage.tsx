@@ -79,11 +79,11 @@ export default function ServiceCasesPage() {
 
   return (
     <DashboardLayout role="admin" title="Expedientes">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 2xl:gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Expedientes</h2>
+            <h2 className="text-xl 2xl:text-2xl font-bold text-gray-900">Expedientes</h2>
             <p className="text-gray-500">{count} expediente(s) registrado(s)</p>
           </div>
           <Link to="/admin/expedientes/nuevo">

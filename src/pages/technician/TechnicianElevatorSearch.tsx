@@ -36,7 +36,7 @@ export default function TechnicianElevatorSearch() {
 
   return (
     <DashboardLayout role="technician" title="Buscar Ascensor">
-      <div className="space-y-6">
+      <div className="space-y-4 2xl:space-y-6">
         {/* Search */}
         <Card>
           <CardContent>

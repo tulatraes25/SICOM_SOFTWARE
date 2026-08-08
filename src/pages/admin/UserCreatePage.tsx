@@ -82,7 +82,7 @@ export default function UserCreatePage() {
 
   return (
     <DashboardLayout role="admin" title="Nuevo usuario">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-4 2xl:space-y-6">
         <button
           onClick={() => { if (!isBusy) navigate('/admin/usuarios?tab=usuarios'); }}
           disabled={isBusy}
