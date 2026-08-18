@@ -3,13 +3,14 @@ import {
   listRecipientsByElevator,
   createRecipient,
   updateRecipient,
-  deleteRecipient,
+  deactivateRecipient,
+  activateRecipient,
 } from '@/services/reportRecipients.service';
 import { createAuditLog } from '@/services/audit.service';
 import type { ReportRecipient } from '@/types/database';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { Plus, Edit, Trash2, User } from 'lucide-react';
+import { Plus, Edit, Trash2, RotateCcw, User } from 'lucide-react';
 
 interface RecipientsManagerProps {
   elevatorId: string;
@@ -94,14 +95,26 @@ export default function RecipientsManager({ elevatorId }: RecipientsManagerProps
   };
 
   const handleDelete = async (recipient: ReportRecipient) => {
-    if (!confirm(`¿Eliminar destinatario "${recipient.name}"?`)) return;
+    if (!confirm(`¿Desactivar destinatario "${recipient.name}"?`)) return;
     try {
-      await deleteRecipient(recipient.id);
-      await createAuditLog({ action: 'delete', entity_type: 'report_recipient', entity_id: recipient.id });
+      await deactivateRecipient(recipient.id);
+      await createAuditLog({ action: 'update', entity_type: 'report_recipient', entity_id: recipient.id, new_data: { active: false } });
       await loadRecipients();
     } catch (err: any) {
-      console.error('[RecipientsManager] Delete error:', err);
-      setError(err?.message || 'Error al eliminar');
+      console.error('[RecipientsManager] Deactivate error:', err);
+      setError(err?.message || 'No se pudo desactivar el destinatario');
+    }
+  };
+
+  const handleReactivate = async (recipient: ReportRecipient) => {
+    if (!confirm(`¿Reactivar destinatario "${recipient.name}"?`)) return;
+    try {
+      await activateRecipient(recipient.id);
+      await createAuditLog({ action: 'update', entity_type: 'report_recipient', entity_id: recipient.id, new_data: { active: true } });
+      await loadRecipients();
+    } catch (err: any) {
+      console.error('[RecipientsManager] Reactivate error:', err);
+      setError(err?.message || 'No se pudo reactivar el destinatario');
     }
   };
 
@@ -167,7 +180,11 @@ export default function RecipientsManager({ elevatorId }: RecipientsManagerProps
               </div>
               <div className="flex gap-1">
                 <Button size="sm" variant="ghost" type="button" onClick={() => startEdit(recipient)}><Edit size={14} /></Button>
-                <Button size="sm" variant="ghost" type="button" onClick={() => handleDelete(recipient)} className="text-danger hover:text-danger"><Trash2 size={14} /></Button>
+                {recipient.active ? (
+                  <Button size="sm" variant="ghost" type="button" onClick={() => handleDelete(recipient)} className="text-danger hover:text-danger"><Trash2 size={14} /></Button>
+                ) : (
+                  <Button size="sm" variant="ghost" type="button" onClick={() => handleReactivate(recipient)}><RotateCcw size={14} className="text-success" /></Button>
+                )}
               </div>
             </div>
           ))}

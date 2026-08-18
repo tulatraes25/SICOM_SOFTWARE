@@ -55,6 +55,15 @@ export async function deactivateRecipient(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function activateRecipient(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('report_recipients')
+    .update({ active: true })
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
 export async function deleteRecipient(id: string): Promise<void> {
   const { error } = await supabase
     .from('report_recipients')

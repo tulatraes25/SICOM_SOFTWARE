@@ -2,11 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import RecipientsSection from './RecipientsSection';
 
-const { mockListBuildingRecipients, mockCreateBuildingRecipient, mockUpdateBuildingRecipient, mockDeactivateBuildingRecipient } = vi.hoisted(() => ({
+const { mockListBuildingRecipients, mockCreateBuildingRecipient, mockUpdateBuildingRecipient, mockDeactivateBuildingRecipient, mockActivateBuildingRecipient } = vi.hoisted(() => ({
   mockListBuildingRecipients: vi.fn(),
   mockCreateBuildingRecipient: vi.fn(),
   mockUpdateBuildingRecipient: vi.fn(),
   mockDeactivateBuildingRecipient: vi.fn(),
+  mockActivateBuildingRecipient: vi.fn(),
 }));
 
 vi.mock('@/services/buildingRecipients.service', () => ({
@@ -14,6 +15,7 @@ vi.mock('@/services/buildingRecipients.service', () => ({
   createBuildingRecipient: (...a: unknown[]) => mockCreateBuildingRecipient(...a),
   updateBuildingRecipient: (...a: unknown[]) => mockUpdateBuildingRecipient(...a),
   deactivateBuildingRecipient: (...a: unknown[]) => mockDeactivateBuildingRecipient(...a),
+  activateBuildingRecipient: (...a: unknown[]) => mockActivateBuildingRecipient(...a),
 }));
 
 function renderWithParentForm() {
@@ -139,5 +141,109 @@ describe('RecipientsSection — botones de lista no envían formulario padre', (
     });
 
     expect(handleSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe('RecipientsSection — reactivación de destinatarios', () => {
+  const inactiveRecipient = {
+    id: 'r2', building_id: 'b1', full_name: 'Inactive User', email: 'inactive@test.com',
+    phone: '', role_label: '', elevator_id: null,
+    receives_service_orders: true, receives_monthly_reports: true,
+    active: false, created_at: '', updated_at: '',
+  };
+
+  const activeRecipient = {
+    id: 'r1', building_id: 'b1', full_name: 'Active User', email: 'active@test.com',
+    phone: '', role_label: '', elevator_id: null,
+    receives_service_orders: true, receives_monthly_reports: true,
+    active: true, created_at: '', updated_at: '',
+  };
+
+  it('destinatario activo muestra Desactivar y NO muestra Reactivar', async () => {
+    mockListBuildingRecipients.mockResolvedValue([activeRecipient]);
+
+    renderWithParentForm();
+    await waitFor(() => {
+      expect(screen.getByText('Active User')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Activo')).toBeInTheDocument();
+    const row = screen.getByText('Active User').closest('.border')!;
+    const buttons = within(row as HTMLElement).getAllByRole('button');
+    expect(buttons).toHaveLength(2);
+  });
+
+  it('destinatario inactivo muestra Reactivar y NO muestra Desactivar', async () => {
+    mockListBuildingRecipients.mockResolvedValue([inactiveRecipient]);
+
+    renderWithParentForm();
+    await waitFor(() => {
+      expect(screen.getByText('Inactive User')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Inactivo')).toBeInTheDocument();
+  });
+
+  it('Editar destinatario inactivo NO dispara submit y NO llama activate', async () => {
+    mockListBuildingRecipients.mockResolvedValue([inactiveRecipient]);
+
+    const { handleSubmit } = renderWithParentForm();
+    await waitFor(() => {
+      expect(screen.getByText('Inactive User')).toBeInTheDocument();
+    });
+
+    const row = screen.getByText('Inactive User').closest('.border')!;
+    const editButton = within(row as HTMLElement).getAllByRole('button')[0];
+    fireEvent.click(editButton);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Inactive User')).toBeInTheDocument();
+    });
+
+    expect(handleSubmit).not.toHaveBeenCalled();
+    expect(mockActivateBuildingRecipient).not.toHaveBeenCalled();
+  });
+
+  it('Reactivar destinatario NO envía el form padre y llama activateBuildingRecipient', async () => {
+    mockListBuildingRecipients.mockResolvedValue([inactiveRecipient]);
+    mockActivateBuildingRecipient.mockResolvedValue(undefined);
+
+    const { handleSubmit } = renderWithParentForm();
+    await waitFor(() => {
+      expect(screen.getByText('Inactive User')).toBeInTheDocument();
+    });
+
+    const row = screen.getByText('Inactive User').closest('.border')!;
+    const buttons = within(row as HTMLElement).getAllByRole('button');
+    fireEvent.click(buttons[buttons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockActivateBuildingRecipient).toHaveBeenCalledWith('r2');
+    });
+
+    expect(handleSubmit).not.toHaveBeenCalled();
+  });
+
+  it('tras reactivar recarga lista y muestra mensaje de éxito', async () => {
+    mockListBuildingRecipients
+      .mockResolvedValueOnce([inactiveRecipient])
+      .mockResolvedValueOnce([activeRecipient]);
+    mockActivateBuildingRecipient.mockResolvedValue(undefined);
+
+    renderWithParentForm();
+    await waitFor(() => {
+      expect(screen.getByText('Inactive User')).toBeInTheDocument();
+    });
+
+    const row = screen.getByText('Inactive User').closest('.border')!;
+    const buttons = within(row as HTMLElement).getAllByRole('button');
+    fireEvent.click(buttons[buttons.length - 1]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Destinatario reactivado correctamente')).toBeInTheDocument();
+      expect(screen.getByText('Active User')).toBeInTheDocument();
+    });
+
+    expect(mockListBuildingRecipients).toHaveBeenCalledTimes(2);
   });
 });

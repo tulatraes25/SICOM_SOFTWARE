@@ -4,9 +4,9 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { listBuildingRecipients, createBuildingRecipient, updateBuildingRecipient, deactivateBuildingRecipient } from '@/services/buildingRecipients.service';
+import { listBuildingRecipients, createBuildingRecipient, updateBuildingRecipient, deactivateBuildingRecipient, activateBuildingRecipient } from '@/services/buildingRecipients.service';
 import type { BuildingRecipient } from '@/types/database';
-import { Users, Plus, Edit2, Trash2, AlertCircle, Check } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, RotateCcw, AlertCircle, Check } from 'lucide-react';
 
 interface RecipientsSectionProps {
   buildingId: string;
@@ -55,6 +55,18 @@ export default function RecipientsSection({ buildingId, elevators = [] }: Recipi
     setReceivesOrders(r.receives_service_orders);
     setReceivesReports(r.receives_monthly_reports);
     setShowForm(true);
+  };
+
+  const handleReactivate = async (id: string) => {
+    if (!confirm('¿Reactivar este destinatario?')) return;
+    try {
+      await activateBuildingRecipient(id);
+      setSuccess('Destinatario reactivado correctamente');
+      await loadRecipients();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err?.message || 'No se pudo reactivar el destinatario');
+    }
   };
 
   const handleSave = async () => {
@@ -146,12 +158,16 @@ export default function RecipientsSection({ buildingId, elevators = [] }: Recipi
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" type="button" onClick={() => handleEdit(r)}><Edit2 size={14} /></Button>
-                  <Button variant="ghost" size="sm" type="button" onClick={async () => {
-                    if (confirm('¿Desactivar este destinatario?')) {
-                      await deactivateBuildingRecipient(r.id);
-                      await loadRecipients();
-                    }
-                  }}><Trash2 size={14} className="text-danger" /></Button>
+                  {r.active ? (
+                    <Button variant="ghost" size="sm" type="button" onClick={async () => {
+                      if (confirm('¿Desactivar este destinatario?')) {
+                        await deactivateBuildingRecipient(r.id);
+                        await loadRecipients();
+                      }
+                    }}><Trash2 size={14} className="text-danger" /></Button>
+                  ) : (
+                    <Button variant="ghost" size="sm" type="button" onClick={() => handleReactivate(r.id)}><RotateCcw size={14} className="text-success" /></Button>
+                  )}
                 </div>
               </div>
             ))}

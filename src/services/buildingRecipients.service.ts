@@ -74,3 +74,12 @@ export async function deactivateBuildingRecipient(id: string): Promise<void> {
 
   if (error) throw error;
 }
+
+export async function activateBuildingRecipient(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('building_recipients')
+    .update({ active: true })
+    .eq('id', id);
+
+  if (error) throw error;
+}
