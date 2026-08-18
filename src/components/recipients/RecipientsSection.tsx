@@ -96,7 +96,7 @@ export default function RecipientsSection({ buildingId, elevators = [] }: Recipi
     <Card>
       <CardHeader className="flex flex-row justify-between items-center">
         <h3 className="font-semibold flex items-center gap-2"><Users size={18} /> Destinatarios</h3>
-        {!showForm && <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }}><Plus size={14} className="mr-1" /> Nuevo</Button>}
+        {!showForm && <Button size="sm" type="button" onClick={() => { resetForm(); setShowForm(true); }}><Plus size={14} className="mr-1" /> Nuevo</Button>}
       </CardHeader>
       <CardContent>
         {error && <div className="p-2 bg-danger/10 border border-danger/30 rounded text-danger text-sm flex items-center gap-2 mb-3"><AlertCircle size={14} /> {error}</div>}
@@ -118,8 +118,8 @@ export default function RecipientsSection({ buildingId, elevators = [] }: Recipi
               <label className="flex items-center gap-2"><input type="checkbox" checked={receivesReports} onChange={(e) => setReceivesReports(e.target.checked)} /> Informes mensuales</label>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" onClick={handleSave}>{editingId ? 'Actualizar' : 'Guardar'}</Button>
-              <Button size="sm" variant="outline" onClick={resetForm}>Cancelar</Button>
+              <Button size="sm" type="button" onClick={handleSave}>{editingId ? 'Actualizar' : 'Guardar'}</Button>
+              <Button size="sm" type="button" variant="outline" onClick={resetForm}>Cancelar</Button>
             </div>
           </div>
         )}
@@ -145,8 +145,8 @@ export default function RecipientsSection({ buildingId, elevators = [] }: Recipi
                   </p>
                 </div>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => handleEdit(r)}><Edit2 size={14} /></Button>
-                  <Button variant="ghost" size="sm" onClick={async () => {
+                  <Button variant="ghost" size="sm" type="button" onClick={() => handleEdit(r)}><Edit2 size={14} /></Button>
+                  <Button variant="ghost" size="sm" type="button" onClick={async () => {
                     if (confirm('¿Desactivar este destinatario?')) {
                       await deactivateBuildingRecipient(r.id);
                       await loadRecipients();

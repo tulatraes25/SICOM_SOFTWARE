@@ -123,7 +123,7 @@ export default function RecipientsManager({ elevatorId }: RecipientsManagerProps
       <div className="flex items-center justify-between">
         <h4 className="font-medium text-gray-700">Destinatarios de Informes</h4>
         {!showForm && (
-          <Button size="sm" onClick={() => setShowForm(true)}>
+          <Button size="sm" type="button" onClick={() => setShowForm(true)}>
             <Plus size={14} className="mr-1" /> Agregar
           </Button>
         )}
@@ -166,8 +166,8 @@ export default function RecipientsManager({ elevatorId }: RecipientsManagerProps
                 </div>
               </div>
               <div className="flex gap-1">
-                <Button size="sm" variant="ghost" onClick={() => startEdit(recipient)}><Edit size={14} /></Button>
-                <Button size="sm" variant="ghost" onClick={() => handleDelete(recipient)} className="text-danger hover:text-danger"><Trash2 size={14} /></Button>
+                <Button size="sm" variant="ghost" type="button" onClick={() => startEdit(recipient)}><Edit size={14} /></Button>
+                <Button size="sm" variant="ghost" type="button" onClick={() => handleDelete(recipient)} className="text-danger hover:text-danger"><Trash2 size={14} /></Button>
               </div>
             </div>
           ))}
