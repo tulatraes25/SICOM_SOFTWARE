@@ -1,5 +1,5 @@
 import { supabase } from '@/config/supabase';
-import type { ServiceCase, ServiceCaseEvent, DocumentNumberingSettings, CaseOriginType } from '@/types/database';
+import type { ServiceCase, ServiceCaseEvent, DocumentNumberingSettings, CaseOriginType, CaseStatus } from '@/types/database';
 
 export async function listServiceCases(filters?: {
   status?: string;
@@ -118,6 +118,77 @@ export async function cancelServiceCase(caseId: string, reason: string): Promise
 
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
+}
+
+export async function updateServiceCase(params: {
+  case_id: string;
+  origin_type: CaseOriginType;
+  client_id?: string;
+  building_id?: string;
+  elevator_id?: string;
+  title?: string;
+  description?: string;
+}): Promise<void> {
+  const { data, error } = await supabase.rpc('update_service_case', {
+    p_case_id: params.case_id,
+    p_origin_type: params.origin_type,
+    p_client_id: params.client_id || null,
+    p_building_id: params.building_id || null,
+    p_elevator_id: params.elevator_id || null,
+    p_title: params.title || null,
+    p_description: params.description || null,
+  });
+
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+}
+
+export async function transitionServiceCaseStatus(params: {
+  case_id: string;
+  target_status: CaseStatus;
+  reason?: string;
+  assigned_to?: string;
+}): Promise<void> {
+  const { data, error } = await supabase.rpc('transition_service_case_status', {
+    p_case_id: params.case_id,
+    p_target_status: params.target_status,
+    p_reason: params.reason || null,
+    p_assigned_to: params.assigned_to || null,
+  });
+
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+}
+
+export async function assignServiceCase(caseId: string, assignedTo: string): Promise<void> {
+  return transitionServiceCaseStatus({
+    case_id: caseId,
+    target_status: 'assigned',
+    assigned_to: assignedTo,
+  });
+}
+
+export async function unassignServiceCase(caseId: string): Promise<void> {
+  return transitionServiceCaseStatus({
+    case_id: caseId,
+    target_status: 'open',
+  });
+}
+
+export async function reopenServiceCase(caseId: string, reason: string): Promise<void> {
+  return transitionServiceCaseStatus({
+    case_id: caseId,
+    target_status: 'open',
+    reason,
+  });
+}
+
+export async function reactivateServiceCase(caseId: string, reason: string): Promise<void> {
+  return transitionServiceCaseStatus({
+    case_id: caseId,
+    target_status: 'open',
+    reason,
+  });
 }
 
 export async function getNumberingSettings(): Promise<DocumentNumberingSettings | null> {

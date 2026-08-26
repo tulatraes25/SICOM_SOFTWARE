@@ -122,6 +122,72 @@ describe('Service Cases - RPC calls', () => {
     expect(mockRpc).toHaveBeenCalledWith('activate_production_numbering');
     expect(result).toEqual({ success: true, next_production_number: 2000 });
   });
+
+  it('updateServiceCase llama a la RPC correcta', async () => {
+    mockRpc.mockResolvedValue({ data: { success: true }, error: null });
+    const { updateServiceCase } = await import('@/services/serviceCases.service');
+    await updateServiceCase({
+      case_id: 'case-id-123',
+      origin_type: 'preliminary_report',
+      title: 'Updated title',
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith('update_service_case', expect.objectContaining({
+      p_case_id: 'case-id-123',
+      p_origin_type: 'preliminary_report',
+      p_title: 'Updated title',
+    }));
+  });
+
+  it('transitionServiceCaseStatus llama a la RPC correcta', async () => {
+    mockRpc.mockResolvedValue({ data: { success: true }, error: null });
+    const { transitionServiceCaseStatus } = await import('@/services/serviceCases.service');
+    await transitionServiceCaseStatus({
+      case_id: 'case-id-123',
+      target_status: 'in_progress',
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith('transition_service_case_status', expect.objectContaining({
+      p_case_id: 'case-id-123',
+      p_target_status: 'in_progress',
+    }));
+  });
+
+  it('assignServiceCase llama transition con assigned', async () => {
+    mockRpc.mockResolvedValue({ data: { success: true }, error: null });
+    const { assignServiceCase } = await import('@/services/serviceCases.service');
+    await assignServiceCase('case-id-123', 'tech-id-456');
+
+    expect(mockRpc).toHaveBeenCalledWith('transition_service_case_status', expect.objectContaining({
+      p_case_id: 'case-id-123',
+      p_target_status: 'assigned',
+      p_assigned_to: 'tech-id-456',
+    }));
+  });
+
+  it('reopenServiceCase llama transition con open y motivo', async () => {
+    mockRpc.mockResolvedValue({ data: { success: true }, error: null });
+    const { reopenServiceCase } = await import('@/services/serviceCases.service');
+    await reopenServiceCase('case-id-123', 'Error detectado');
+
+    expect(mockRpc).toHaveBeenCalledWith('transition_service_case_status', expect.objectContaining({
+      p_case_id: 'case-id-123',
+      p_target_status: 'open',
+      p_reason: 'Error detectado',
+    }));
+  });
+
+  it('reactivateServiceCase llama transition con open y motivo', async () => {
+    mockRpc.mockResolvedValue({ data: { success: true }, error: null });
+    const { reactivateServiceCase } = await import('@/services/serviceCases.service');
+    await reactivateServiceCase('case-id-123', 'Anulado por error');
+
+    expect(mockRpc).toHaveBeenCalledWith('transition_service_case_status', expect.objectContaining({
+      p_case_id: 'case-id-123',
+      p_target_status: 'open',
+      p_reason: 'Anulado por error',
+    }));
+  });
 });
 
 describe('Service Cases - listServiceCases', () => {
@@ -160,7 +226,9 @@ describe('Service Cases - constants', () => {
     expect(CASE_ORIGIN_LABELS.budget).toBe('Presupuesto');
     expect(CASE_ORIGIN_LABELS.claim).toBe('Reclamo');
     expect(CASE_ORIGIN_LABELS.direct_report).toBe('Informe directo');
+    expect(CASE_ORIGIN_LABELS.preliminary_report).toBe('Informe técnico preliminar');
     expect(CASE_ORIGIN_LABELS.scheduled_service).toBe('Servicio programado');
+    expect(CASE_ORIGIN_LABELS.service_order).toBe('Orden de servicio');
     expect(CASE_ORIGIN_LABELS.other).toBe('Otro');
   });
 

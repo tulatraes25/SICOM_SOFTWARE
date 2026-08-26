@@ -25,6 +25,7 @@ export const ROUTES = {
   ADMIN_SERVICE_CASES: '/admin/expedientes',
   ADMIN_SERVICE_CASE_NEW: '/admin/expedientes/nuevo',
   ADMIN_SERVICE_CASE_DETAIL: '/admin/expedientes/:id',
+  ADMIN_SERVICE_CASE_EDIT: '/admin/expedientes/:id/editar',
   ADMIN_NUMBERING_CONFIG: '/admin/configuracion/numeracion',
   ADMIN_DOCUMENT_SETTINGS: '/admin/configuracion/documentos',
   ADMIN_USER_SIGNATURE: '/perfil/firma',

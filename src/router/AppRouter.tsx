@@ -19,6 +19,7 @@ import AdminServiceReviewDetailPage from '@/pages/admin/AdminServiceReviewDetail
 import ServiceCasesPage from '@/pages/admin/ServiceCasesPage';
 import ServiceCaseDetailPage from '@/pages/admin/ServiceCaseDetailPage';
 import ServiceCaseCreatePage from '@/pages/admin/ServiceCaseCreatePage';
+import ServiceCaseEditPage from '@/pages/admin/ServiceCaseEditPage';
 import NumberingConfigPage from '@/pages/admin/NumberingConfigPage';
 import ElevatorVisitBookPage from '@/pages/admin/ElevatorVisitBookPage';
 import VisitEntryDetailPage from '@/pages/admin/VisitEntryDetailPage';
@@ -150,6 +151,14 @@ export default function AppRouter() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
               <ServiceCaseDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/expedientes/:id/editar"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'supervisor']}>
+              <ServiceCaseEditPage />
             </ProtectedRoute>
           }
         />

@@ -239,7 +239,7 @@ export interface BudgetEstimate {
 // Service Cases (Expediente Maestro)
 // ============================================================
 
-export type CaseOriginType = 'budget' | 'claim' | 'direct_report' | 'scheduled_service' | 'other';
+export type CaseOriginType = 'budget' | 'claim' | 'direct_report' | 'preliminary_report' | 'scheduled_service' | 'service_order' | 'other';
 export type CaseStatus = 'open' | 'assigned' | 'in_progress' | 'completed' | 'closed' | 'cancelled';
 export type NumberingMode = 'test' | 'production';
 
@@ -272,7 +272,7 @@ export interface ServiceCase {
 export interface ServiceCaseEvent {
   id: string;
   service_case_id: string;
-  event_type: 'case_created' | 'assigned' | 'closed' | 'cancelled' | 'production_numbering_activated';
+  event_type: 'case_created' | 'case_updated' | 'status_changed' | 'assigned' | 'case_unassigned' | 'closed' | 'cancelled' | 'case_reopened' | 'case_reactivated' | 'production_numbering_activated';
   performed_by?: string;
   details: Record<string, unknown>;
   created_at: string;
@@ -290,7 +290,9 @@ export const CASE_ORIGIN_LABELS: Record<CaseOriginType, string> = {
   budget: 'Presupuesto',
   claim: 'Reclamo',
   direct_report: 'Informe directo',
+  preliminary_report: 'Informe técnico preliminar',
   scheduled_service: 'Servicio programado',
+  service_order: 'Orden de servicio',
   other: 'Otro',
 };
 

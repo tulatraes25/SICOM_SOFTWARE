@@ -25,7 +25,9 @@ const ORIGIN_OPTIONS = [
   { value: 'budget', label: 'Presupuesto' },
   { value: 'claim', label: 'Reclamo' },
   { value: 'direct_report', label: 'Informe directo' },
+  { value: 'preliminary_report', label: 'Informe técnico preliminar' },
   { value: 'scheduled_service', label: 'Servicio programado' },
+  { value: 'service_order', label: 'Orden de servicio' },
   { value: 'other', label: 'Otro' },
 ];
 

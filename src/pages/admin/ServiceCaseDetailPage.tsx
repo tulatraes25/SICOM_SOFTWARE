@@ -4,11 +4,13 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { getServiceCase, closeServiceCase, cancelServiceCase, formatCaseNumber, getCaseEvents } from '@/services/serviceCases.service';
+import Select from '@/components/ui/Select';
+import { getServiceCase, cancelServiceCase, transitionServiceCaseStatus, formatCaseNumber, getCaseEvents } from '@/services/serviceCases.service';
 import { CASE_ORIGIN_LABELS, CASE_STATUS_LABELS } from '@/types/database';
-import type { ServiceCase, ServiceCaseEvent } from '@/types/database';
-import { ArrowLeft, X, CheckCircle, User, Building2, Wrench, Calendar, AlertCircle } from 'lucide-react';
+import type { ServiceCase, ServiceCaseEvent, CaseStatus } from '@/types/database';
+import { ArrowLeft, X, CheckCircle, User, Building2, Wrench, Calendar, AlertCircle, Edit2, RotateCcw, RefreshCw, Play } from 'lucide-react';
 import CaseDocumentsSection from '@/components/cases/CaseDocumentsSection';
+import { supabase } from '@/config/supabase';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   open: 'info',
@@ -19,6 +21,19 @@ const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' 
   cancelled: 'danger',
 };
 
+const EVENT_LABELS: Record<string, string> = {
+  case_created: 'Expediente creado',
+  case_updated: 'Expediente actualizado',
+  status_changed: 'Estado cambiado',
+  assigned: 'Técnico asignado',
+  case_unassigned: 'Asignación retirada',
+  closed: 'Expediente cerrado',
+  cancelled: 'Expediente anulado',
+  case_reopened: 'Expediente reabierto',
+  case_reactivated: 'Expediente reactivado',
+  production_numbering_activated: 'Numeración productiva activada',
+};
+
 export default function ServiceCaseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -27,7 +42,14 @@ export default function ServiceCaseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
+  const [showReopenModal, setShowReopenModal] = useState(false);
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
+  const [transitionTarget, setTransitionTarget] = useState<CaseStatus>('open');
+  const [reason, setReason] = useState('');
+  const [selectedTechnician, setSelectedTechnician] = useState('');
+  const [technicians, setTechnicians] = useState<Array<{ id: string; full_name: string }>>([]);
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
@@ -50,32 +72,83 @@ export default function ServiceCaseDetailPage() {
     }
   };
 
-  const handleClose = async () => {
-    if (!id || !confirm('¿Cerrar este expediente?')) return;
+  const loadTechnicians = async () => {
+    const { data } = await supabase.from('profiles').select('id, full_name').eq('active', true).in('role', ['technician', 'supervisor']).order('full_name');
+    setTechnicians(data || []);
+  };
+
+  const handleTransition = async () => {
+    if (!id) return;
     setActionLoading(true);
     try {
-      await closeServiceCase(id);
+      await transitionServiceCaseStatus({
+        case_id: id,
+        target_status: transitionTarget,
+        reason: reason || undefined,
+        assigned_to: selectedTechnician || undefined,
+      });
+      closeAllModals();
       await loadData();
     } catch (err: any) {
-      setError(err?.message || 'Error al cerrar');
+      setError(err?.message || 'Error al cambiar estado');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAssign = async () => {
+    if (!id || !selectedTechnician) return;
+    setActionLoading(true);
+    try {
+      await transitionServiceCaseStatus({
+        case_id: id,
+        target_status: 'assigned',
+        assigned_to: selectedTechnician,
+      });
+      closeAllModals();
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || 'Error al asignar');
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleCancel = async () => {
-    if (!id || !cancelReason.trim()) return;
+    if (!id || !reason.trim()) return;
     setActionLoading(true);
     try {
-      await cancelServiceCase(id, cancelReason);
-      setShowCancelModal(false);
-      setCancelReason('');
+      await cancelServiceCase(id, reason);
+      closeAllModals();
       await loadData();
     } catch (err: any) {
       setError(err?.message || 'Error al anular');
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const closeAllModals = () => {
+    setShowCancelModal(false);
+    setShowReopenModal(false);
+    setShowReactivateModal(false);
+    setShowAssignModal(false);
+    setShowTransitionModal(false);
+    setReason('');
+    setSelectedTechnician('');
+  };
+
+  const openAssignModal = async () => {
+    await loadTechnicians();
+    setShowAssignModal(true);
+  };
+
+  const openTransitionModal = (target: CaseStatus) => {
+    setTransitionTarget(target);
+    if (target === 'assigned') {
+      loadTechnicians();
+    }
+    setShowTransitionModal(true);
   };
 
   if (loading) {
@@ -110,7 +183,42 @@ export default function ServiceCaseDetailPage() {
 
   if (!serviceCase) return null;
 
-  const isActive = !['closed', 'cancelled'].includes(serviceCase.status);
+  const canEdit = ['open', 'assigned', 'in_progress', 'completed'].includes(serviceCase.status);
+
+  const formatEventType = (evt: ServiceCaseEvent): string => {
+    const base = EVENT_LABELS[evt.event_type] || evt.event_type;
+    if (evt.event_type === 'status_changed') {
+      const oldStatus = evt.details?.old_status as CaseStatus | undefined;
+      const newStatus = evt.details?.new_status as CaseStatus | undefined;
+      if (oldStatus && newStatus) {
+        return `${base}: ${CASE_STATUS_LABELS[oldStatus] || oldStatus} → ${CASE_STATUS_LABELS[newStatus] || newStatus}`;
+      }
+    }
+    return base;
+  };
+
+  const formatEventDetails = (evt: ServiceCaseEvent): string | null => {
+    if (evt.event_type === 'cancelled' && evt.details?.reason) {
+      return `Motivo: ${evt.details.reason}`;
+    }
+    if (evt.event_type === 'case_reopened' && evt.details?.reason) {
+      return `Motivo: ${evt.details.reason}`;
+    }
+    if (evt.event_type === 'case_reactivated' && evt.details?.reason) {
+      return `Motivo: ${evt.details.reason}`;
+    }
+    if (evt.event_type === 'case_updated' && evt.details?.changes) {
+      const changes = evt.details.changes as Record<string, { old: unknown; new: unknown }>;
+      const fields = Object.keys(changes);
+      if (fields.length > 0) {
+        return `Campos modificados: ${fields.join(', ')}`;
+      }
+    }
+    if (evt.event_type === 'assigned' && evt.details?.assigned_to) {
+      return 'Ver panel de Asociaciones';
+    }
+    return null;
+  };
 
   return (
     <DashboardLayout role="admin" title={`Expediente ${formatCaseNumber(serviceCase.case_number, serviceCase.numbering_mode)}`}>
@@ -133,16 +241,71 @@ export default function ServiceCaseDetailPage() {
               </Badge>
             </div>
           </div>
-          {isActive && (
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleClose} disabled={actionLoading}>
+          <div className="flex flex-wrap gap-2">
+            {canEdit && (
+              <Button variant="outline" onClick={() => navigate(`/admin/expedientes/${id}/editar`)} disabled={actionLoading}>
+                <Edit2 size={16} className="mr-2" /> Editar
+              </Button>
+            )}
+            {serviceCase.status === 'open' && (
+              <>
+                <Button variant="outline" onClick={openAssignModal} disabled={actionLoading}>
+                  <User size={16} className="mr-2" /> Asignar
+                </Button>
+                <Button variant="outline" onClick={() => openTransitionModal('in_progress')} disabled={actionLoading}>
+                  <Play size={16} className="mr-2" /> Iniciar
+                </Button>
+              </>
+            )}
+            {serviceCase.status === 'assigned' && (
+              <>
+                <Button variant="outline" onClick={openAssignModal} disabled={actionLoading}>
+                  <User size={16} className="mr-2" /> Cambiar asignación
+                </Button>
+                <Button variant="outline" onClick={() => openTransitionModal('open')} disabled={actionLoading}>
+                  <X size={16} className="mr-2" /> Quitar asignación
+                </Button>
+                <Button variant="outline" onClick={() => openTransitionModal('in_progress')} disabled={actionLoading}>
+                  <Play size={16} className="mr-2" /> Iniciar
+                </Button>
+              </>
+            )}
+            {serviceCase.status === 'in_progress' && (
+              <>
+                <Button variant="outline" onClick={openAssignModal} disabled={actionLoading}>
+                  <User size={16} className="mr-2" /> Cambiar asignación
+                </Button>
+                <Button variant="outline" onClick={() => openTransitionModal('completed')} disabled={actionLoading}>
+                  <CheckCircle size={16} className="mr-2" /> Marcar completado
+                </Button>
+              </>
+            )}
+            {serviceCase.status === 'completed' && (
+              <Button variant="outline" onClick={() => openTransitionModal('in_progress')} disabled={actionLoading}>
+                <RefreshCw size={16} className="mr-2" /> Volver a En curso
+              </Button>
+            )}
+            {['open', 'assigned', 'in_progress', 'completed'].includes(serviceCase.status) && (
+              <Button variant="outline" onClick={() => openTransitionModal('closed')} disabled={actionLoading}>
                 <CheckCircle size={16} className="mr-2" /> Cerrar
               </Button>
+            )}
+            {['open', 'assigned', 'in_progress', 'completed'].includes(serviceCase.status) && (
               <Button variant="danger" onClick={() => setShowCancelModal(true)} disabled={actionLoading}>
                 <X size={16} className="mr-2" /> Anular
               </Button>
-            </div>
-          )}
+            )}
+            {serviceCase.status === 'closed' && (
+              <Button variant="outline" onClick={() => setShowReopenModal(true)} disabled={actionLoading}>
+                <RefreshCw size={16} className="mr-2" /> Reabrir
+              </Button>
+            )}
+            {serviceCase.status === 'cancelled' && (
+              <Button variant="outline" onClick={() => setShowReactivateModal(true)} disabled={actionLoading}>
+                <RotateCcw size={16} className="mr-2" /> Reactivar
+              </Button>
+            )}
+          </div>
         </div>
 
         {error && (
@@ -206,15 +369,13 @@ export default function ServiceCaseDetailPage() {
                     {events.map((evt) => (
                       <div key={evt.id} className="flex gap-3 text-sm">
                         <div className="w-2 h-2 rounded-full bg-secondary mt-1.5 shrink-0" />
-                        <div>
-                          <p className="text-gray-900">
-                            {evt.event_type === 'case_created' && 'Expediente creado'}
-                            {evt.event_type === 'closed' && 'Expediente cerrado'}
-                            {evt.event_type === 'cancelled' && `Expediente anulado${evt.details?.reason ? `: ${evt.details.reason}` : ''}`}
-                            {evt.event_type === 'assigned' && 'Técnico asignado'}
-                          </p>
-                          <p className="text-gray-500 text-xs">
-                            {new Date(evt.created_at).toLocaleString('es-AR')}
+                        <div className="flex-1">
+                          <p className="text-gray-900">{formatEventType(evt)}</p>
+                          {formatEventDetails(evt) && (
+                            <p className="text-gray-500 text-xs">{formatEventDetails(evt)}</p>
+                          )}
+                          <p className="text-gray-400 text-xs">
+                            {evt.performer?.full_name || 'Sistema'} — {new Date(evt.created_at).toLocaleString('es-AR')}
                           </p>
                         </div>
                       </div>
@@ -223,6 +384,11 @@ export default function ServiceCaseDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Info note */}
+            <div className="p-3 bg-info/10 border border-info/30 rounded text-info text-sm">
+              Los expedientes numerados no se eliminan físicamente. Si se cargaron por error, pueden corregirse o anularse. La anulación conserva el número y el historial. Un Administrador puede reactivar una anulación accidental.
+            </div>
           </div>
 
           {/* Sidebar */}
@@ -322,25 +488,145 @@ export default function ServiceCaseDetailPage() {
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold mb-4">Anular Expediente</h3>
             <p className="text-sm text-gray-600 mb-4">
-              Ingrese el motivo de la anulación. Esta acción no se puede deshacer.
+              El expediente conservará su número y su historial. Ingrese el motivo de la anulación.
             </p>
             <textarea
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
               className="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none"
               rows={3}
               placeholder="Motivo de anulación..."
             />
             <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => { setShowCancelModal(false); setCancelReason(''); }}>
-                Cancelar
-              </Button>
-              <Button
-                variant="danger"
-                onClick={handleCancel}
-                disabled={!cancelReason.trim() || actionLoading}
-              >
+              <Button variant="outline" onClick={closeAllModals}>Cancelar</Button>
+              <Button variant="danger" onClick={handleCancel} disabled={!reason.trim() || actionLoading}>
                 {actionLoading ? 'Anulando...' : 'Anular Expediente'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reopen modal */}
+      {showReopenModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">Reabrir Expediente</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              ¿Reabrir este expediente cerrado? Indique el motivo.
+            </p>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none"
+              rows={3}
+              placeholder="Motivo de reapertura..."
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={closeAllModals}>Cancelar</Button>
+              <Button onClick={handleTransition} disabled={!reason.trim() || actionLoading}>
+                {actionLoading ? 'Reabriendo...' : 'Reabrir Expediente'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reactivate modal */}
+      {showReactivateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">Reactivar Expediente</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              ¿Reactivar este expediente anulado? Indique el motivo.
+            </p>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none"
+              rows={3}
+              placeholder="Motivo de reactivación..."
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={closeAllModals}>Cancelar</Button>
+              <Button onClick={handleTransition} disabled={!reason.trim() || actionLoading}>
+                {actionLoading ? 'Reactivando...' : 'Reactivar Expediente'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">
+              {serviceCase.status === 'assigned' ? 'Cambiar Asignación' : 'Asignar Técnico'}
+            </h3>
+            <Select
+              label="Técnico"
+              options={[
+                { value: '', label: 'Seleccionar técnico...' },
+                ...technicians.map(t => ({ value: t.id, label: t.full_name })),
+              ]}
+              value={selectedTechnician}
+              onChange={(e) => setSelectedTechnician(e.target.value)}
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={closeAllModals}>Cancelar</Button>
+              <Button onClick={handleAssign} disabled={!selectedTechnician || actionLoading}>
+                {actionLoading ? 'Guardando...' : 'Confirmar'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generic transition modal */}
+      {showTransitionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">
+              {transitionTarget === 'closed' && 'Cerrar Expediente'}
+              {transitionTarget === 'in_progress' && (serviceCase.status === 'completed' ? 'Volver a En curso' : 'Iniciar Expediente')}
+              {transitionTarget === 'completed' && 'Marcar Completado'}
+              {transitionTarget === 'open' && 'Quitar Asignación'}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {transitionTarget === 'closed' && '¿Cerrar este expediente? Permanecerá disponible para consulta.'}
+              {transitionTarget === 'in_progress' && serviceCase.status === 'completed' && 'El expediente volverá a estado En curso.'}
+              {transitionTarget === 'in_progress' && serviceCase.status !== 'completed' && 'El expediente pasará a estado En curso.'}
+              {transitionTarget === 'completed' && 'El expediente será marcado como completado.'}
+              {transitionTarget === 'open' && 'Se retirará la asignación actual.'}
+            </p>
+            {(transitionTarget === 'closed' || (transitionTarget === 'open' && serviceCase.status === 'assigned')) && (
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none mb-4"
+                rows={3}
+                placeholder="Motivo (requerido)..."
+              />
+            )}
+            {transitionTarget === 'assigned' && (
+              <Select
+                label="Técnico"
+                options={[
+                  { value: '', label: 'Seleccionar técnico...' },
+                  ...technicians.map(t => ({ value: t.id, label: t.full_name })),
+                ]}
+                value={selectedTechnician}
+                onChange={(e) => setSelectedTechnician(e.target.value)}
+              />
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={closeAllModals}>Cancelar</Button>
+              <Button
+                onClick={handleTransition}
+                disabled={actionLoading || (transitionTarget === 'closed' && !reason.trim())}
+              >
+                {actionLoading ? 'Procesando...' : 'Confirmar'}
               </Button>
             </div>
           </div>
