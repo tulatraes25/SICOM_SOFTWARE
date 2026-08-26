@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Select from '@/components/ui/Select';
-import { getServiceCase, cancelServiceCase, transitionServiceCaseStatus, formatCaseNumber, getCaseEvents } from '@/services/serviceCases.service';
+import { getServiceCase, transitionServiceCaseStatus, formatCaseNumber, getCaseEvents } from '@/services/serviceCases.service';
 import { CASE_ORIGIN_LABELS, CASE_STATUS_LABELS } from '@/types/database';
 import type { ServiceCase, ServiceCaseEvent, CaseStatus } from '@/types/database';
 import { ArrowLeft, X, CheckCircle, User, Building2, Wrench, Calendar, AlertCircle, Edit2, RotateCcw, RefreshCw, Play } from 'lucide-react';
@@ -118,7 +118,11 @@ export default function ServiceCaseDetailPage() {
     if (!id || !reason.trim()) return;
     setActionLoading(true);
     try {
-      await cancelServiceCase(id, reason);
+      await transitionServiceCaseStatus({
+        case_id: id,
+        target_status: 'cancelled',
+        reason,
+      });
       closeAllModals();
       await loadData();
     } catch (err: any) {

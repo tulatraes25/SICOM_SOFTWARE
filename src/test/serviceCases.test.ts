@@ -188,6 +188,24 @@ describe('Service Cases - RPC calls', () => {
       p_reason: 'Anulado por error',
     }));
   });
+
+  it('cancelServiceCase lanza error si la RPC retorna error', async () => {
+    mockRpc.mockResolvedValue({ data: { error: 'El motivo de anulación es obligatorio' }, error: null });
+    const { cancelServiceCase } = await import('@/services/serviceCases.service');
+
+    await expect(cancelServiceCase('case-id-123', ''))
+      .rejects.toThrow('El motivo de anulación es obligatorio');
+  });
+
+  it('transitionServiceCaseStatus lanza error si la RPC retorna error', async () => {
+    mockRpc.mockResolvedValue({ data: { error: 'Transición no permitida' }, error: null });
+    const { transitionServiceCaseStatus } = await import('@/services/serviceCases.service');
+
+    await expect(transitionServiceCaseStatus({
+      case_id: 'case-id-123',
+      target_status: 'closed',
+    })).rejects.toThrow('Transición no permitida');
+  });
 });
 
 describe('Service Cases - listServiceCases', () => {

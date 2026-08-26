@@ -311,6 +311,13 @@ BEGIN
       RETURN jsonb_build_object('error', 'Estado actual no reconocido');
   END CASE;
 
+  -- Validate reason for cancellation (any source status)
+  IF p_target_status = 'cancelled' THEN
+    IF p_reason IS NULL OR TRIM(p_reason) = '' THEN
+      RETURN jsonb_build_object('error', 'El motivo de anulación es obligatorio');
+    END IF;
+  END IF;
+
   -- Handle assignment
   IF p_target_status = 'assigned' THEN
     IF p_assigned_to IS NULL THEN
