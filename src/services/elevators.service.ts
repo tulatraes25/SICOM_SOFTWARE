@@ -4,17 +4,31 @@ import type { ElevatorTechnicalFields } from '@/types/elevators';
 
 export type ElevatorWithTechnical = Elevator & ElevatorTechnicalFields;
 
-export type CreateElevatorInput = Omit<
+type ElevatorWritable = Omit<
   ElevatorWithTechnical,
-  'id' | 'created_at' | 'updated_at' | 'qr_token' | 'responsible_user_id' | 'building' | 'client' | 'technical_data_updated_at' | 'technical_data_updated_by'
+  | 'id'
+  | 'created_at'
+  | 'updated_at'
+  | 'qr_token'
+  | 'responsible_user_id'
+  | 'building'
+  | 'client'
+  | 'technical_data_updated_at'
+  | 'technical_data_updated_by'
+  | 'equipment_category'
+  | 'motricity_type'
+  | 'start_type'
 > & {
+  equipment_category?: string;
+  motricity_type?: string;
+  start_type?: string;
+};
+
+export type CreateElevatorInput = ElevatorWritable & {
   qr_token?: string;
 };
 
-export type UpdateElevatorInput = Omit<
-  Partial<ElevatorWithTechnical>,
-  'id' | 'created_at' | 'updated_at' | 'qr_token' | 'responsible_user_id' | 'building' | 'client' | 'technical_data_updated_at' | 'technical_data_updated_by'
->;
+export type UpdateElevatorInput = Partial<ElevatorWritable>;
 
 function generateQRToken(length: number = 12): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
