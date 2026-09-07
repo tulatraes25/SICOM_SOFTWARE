@@ -38,11 +38,6 @@ function yesNo(value: boolean | undefined): string | undefined {
   return undefined;
 }
 
-function valueOrUndefined(value: unknown): string | undefined {
-  if (!hasValue(value)) return undefined;
-  return String(value);
-}
-
 function Section({ title, items }: { title: string; items: TechnicalItem[] }) {
   const visible = items.filter(item => hasValue(item.value));
   return (
