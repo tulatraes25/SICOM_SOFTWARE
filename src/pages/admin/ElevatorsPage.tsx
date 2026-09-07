@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { searchElevators, filterElevators, deactivateElevator, reactivateElevator } from '@/services/elevators.service';
+import type { ElevatorWithTechnical } from '@/services/elevators.service';
 import { listClients } from '@/services/clients.service';
 import { createAuditLog } from '@/services/audit.service';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -8,10 +9,11 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Select from '@/components/ui/Select';
 import ElevatorForm from './ElevatorForm';
+import ElevatorTechnicalSheet from '@/components/elevators/ElevatorTechnicalSheet';
 import ModalQR from '@/components/qr/ModalQR';
-import type { Elevator, Client } from '@/types/database';
+import type { Client } from '@/types/database';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS, CONTRACTUAL_STATUS_LABELS, STATUS_COLORS } from '@/types/elevators';
-import { Plus, Search, Edit, PowerOff, RotateCcw, QrCode } from 'lucide-react';
+import { Plus, Search, Edit, PowerOff, RotateCcw, QrCode, FileText, X } from 'lucide-react';
 
 type ActiveFilter = 'active' | 'inactive' | 'all';
 
@@ -23,7 +25,7 @@ function getRelationName(relation: unknown): string {
 }
 
 export default function ElevatorsPage() {
-  const [elevators, setElevators] = useState<Elevator[]>([]);
+  const [elevators, setElevators] = useState<ElevatorWithTechnical[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -33,8 +35,9 @@ export default function ElevatorsPage() {
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('active');
   const [filters, setFilters] = useState({ operational_status: '', conservation_status: '', contractual_status: '', client_id: '' });
   const [showForm, setShowForm] = useState(false);
-  const [editingElevator, setEditingElevator] = useState<Elevator | null>(null);
-  const [qrModal, setQrModal] = useState<Elevator | null>(null);
+  const [editingElevator, setEditingElevator] = useState<ElevatorWithTechnical | null>(null);
+  const [qrModal, setQrModal] = useState<ElevatorWithTechnical | null>(null);
+  const [technicalSheet, setTechnicalSheet] = useState<ElevatorWithTechnical | null>(null);
   const [actionElevatorId, setActionElevatorId] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const actionRef = useRef(false);
@@ -43,14 +46,14 @@ export default function ElevatorsPage() {
     try {
       setLoading(true);
       setLoadError('');
-      let data: Elevator[];
+      let data: ElevatorWithTechnical[];
       if (searchQuery) {
         data = await searchElevators(searchQuery, activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined);
       } else {
         data = await filterElevators({ ...filters, active: activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined });
       }
       setElevators(data);
-    } catch (err) {
+    } catch {
       setLoadError('No se pudieron cargar los ascensores.');
     } finally {
       setLoading(false);
@@ -69,7 +72,8 @@ export default function ElevatorsPage() {
   useEffect(() => { loadClients(); }, []);
   useEffect(() => { loadElevators(); }, [searchQuery, filters, activeFilter]);
 
-  const handleEdit = (elevator: Elevator) => {
+  const handleEdit = (elevator: ElevatorWithTechnical) => {
+    setTechnicalSheet(null);
     setEditingElevator(elevator);
     setShowForm(true);
     setTimeout(() => {
@@ -77,7 +81,7 @@ export default function ElevatorsPage() {
     }, 100);
   };
 
-  const handleDeactivate = async (elevator: Elevator) => {
+  const handleDeactivate = async (elevator: ElevatorWithTechnical) => {
     if (elevator.responsible_user_id) {
       setActionError('Antes de desactivar este ascensor, retiralo del responsable asignado desde Usuarios → Responsables de edificios.');
       return;
@@ -92,7 +96,7 @@ export default function ElevatorsPage() {
       await createAuditLog({ action: 'deactivate', entity_type: 'elevator', entity_id: elevator.id });
       setSuccess(`El ascensor ${elevator.code} fue desactivado correctamente.`);
       loadElevators();
-    } catch (err) {
+    } catch {
       setActionError('No se pudo desactivar el ascensor.');
     } finally {
       actionRef.current = false;
@@ -100,7 +104,7 @@ export default function ElevatorsPage() {
     }
   };
 
-  const handleReactivate = async (elevator: Elevator) => {
+  const handleReactivate = async (elevator: ElevatorWithTechnical) => {
     if (!confirm(`¿Reactivar el ascensor «${elevator.code}»?`)) return;
     if (actionRef.current) return;
     actionRef.current = true;
@@ -111,7 +115,7 @@ export default function ElevatorsPage() {
       await createAuditLog({ action: 'reactivate', entity_type: 'elevator', entity_id: elevator.id });
       setSuccess(`El ascensor ${elevator.code} fue reactivado correctamente.`);
       loadElevators();
-    } catch (err) {
+    } catch {
       setActionError('No se pudo reactivar el ascensor.');
     } finally {
       actionRef.current = false;
@@ -141,7 +145,6 @@ export default function ElevatorsPage() {
   return (
     <DashboardLayout role="admin" title="Ascensores">
       <div className="space-y-4 2xl:space-y-6">
-        {/* Search and filters */}
         <div className="flex flex-col sm:flex-row justify-between gap-3 2xl:gap-4">
           <div className="flex-1 flex flex-col gap-3 2xl:gap-4">
             <div className="flex-1 relative">
@@ -199,7 +202,6 @@ export default function ElevatorsPage() {
           </div>
         )}
 
-        {/* Form */}
         <div ref={formRef}>
           {showForm && (
             <Card>
@@ -211,10 +213,28 @@ export default function ElevatorsPage() {
           )}
         </div>
 
-        {/* QR Modal */}
         {qrModal && <ModalQR elevatorCode={qrModal.code} qrToken={qrModal.qr_token} onClose={() => setQrModal(null)} />}
 
-        {/* List */}
+        {technicalSheet && (
+          <div className="fixed inset-0 z-50 bg-black/50 p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-label={`Ficha técnica ${technicalSheet.code}`}>
+            <div className="max-w-6xl mx-auto bg-gray-50 rounded-xl shadow-xl my-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+              <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">Ficha técnica</h2>
+                  <p className="text-sm text-gray-500">Información interna del equipo</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => handleEdit(technicalSheet)}><Edit size={16} className="mr-2" /> Editar ficha</Button>
+                  <Button type="button" variant="ghost" onClick={() => setTechnicalSheet(null)} title="Cerrar ficha"><X size={18} /></Button>
+                </div>
+              </div>
+              <div className="p-4">
+                <ElevatorTechnicalSheet elevator={technicalSheet} />
+              </div>
+            </div>
+          </div>
+        )}
+
         <Card>
           <CardContent>
             {loading ? (
@@ -246,6 +266,7 @@ export default function ElevatorsPage() {
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex justify-end gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => setTechnicalSheet(elevator)} title="Ficha técnica" type="button"><FileText size={16} /></Button>
                             <Button size="sm" variant="ghost" onClick={() => setQrModal(elevator)} title="Ver QR" type="button"><QrCode size={16} /></Button>
                             <Button size="sm" variant="ghost" onClick={() => handleEdit(elevator)} title="Editar" type="button"><Edit size={16} /></Button>
                             {elevator.active ? (
