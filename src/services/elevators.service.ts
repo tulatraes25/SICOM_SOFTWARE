@@ -1,17 +1,34 @@
 import { supabase } from '@/config/supabase';
 import type { Elevator } from '@/types/database';
+import type { ElevatorTechnicalFields } from '@/types/elevators';
 
-export type CreateElevatorInput = Omit<
-  Elevator,
-  'id' | 'created_at' | 'updated_at' | 'qr_token' | 'responsible_user_id' | 'building' | 'client'
+export type ElevatorWithTechnical = Elevator & ElevatorTechnicalFields;
+
+type ElevatorWritable = Omit<
+  ElevatorWithTechnical,
+  | 'id'
+  | 'created_at'
+  | 'updated_at'
+  | 'qr_token'
+  | 'responsible_user_id'
+  | 'building'
+  | 'client'
+  | 'technical_data_updated_at'
+  | 'technical_data_updated_by'
+  | 'equipment_category'
+  | 'motricity_type'
+  | 'start_type'
 > & {
+  equipment_category?: string;
+  motricity_type?: string;
+  start_type?: string;
+};
+
+export type CreateElevatorInput = ElevatorWritable & {
   qr_token?: string;
 };
 
-export type UpdateElevatorInput = Omit<
-  Partial<Elevator>,
-  'id' | 'created_at' | 'updated_at' | 'qr_token' | 'responsible_user_id' | 'building' | 'client'
->;
+export type UpdateElevatorInput = Partial<ElevatorWritable>;
 
 function generateQRToken(length: number = 12): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -22,17 +39,17 @@ function generateQRToken(length: number = 12): string {
   return result;
 }
 
-export async function listElevators(): Promise<Elevator[]> {
+export async function listElevators(): Promise<ElevatorWithTechnical[]> {
   const { data, error } = await supabase
     .from('elevators')
     .select('*, building:buildings(name, address), client:clients(name)')
     .order('code');
 
   if (error) throw error;
-  return data || [];
+  return (data || []) as ElevatorWithTechnical[];
 }
 
-export async function getElevatorById(id: string): Promise<Elevator | null> {
+export async function getElevatorById(id: string): Promise<ElevatorWithTechnical | null> {
   const { data, error } = await supabase
     .from('elevators')
     .select('*, building:buildings(*), client:clients(*)')
@@ -40,10 +57,10 @@ export async function getElevatorById(id: string): Promise<Elevator | null> {
     .single();
 
   if (error) throw error;
-  return data;
+  return data as ElevatorWithTechnical;
 }
 
-export async function getElevatorByToken(token: string): Promise<Elevator | null> {
+export async function getElevatorByToken(token: string): Promise<ElevatorWithTechnical | null> {
   const { data, error } = await supabase
     .from('elevators')
     .select('*, building:buildings(name, address), client:clients(name)')
@@ -51,10 +68,10 @@ export async function getElevatorByToken(token: string): Promise<Elevator | null
     .single();
 
   if (error) throw error;
-  return data;
+  return data as ElevatorWithTechnical;
 }
 
-export async function searchElevators(query: string, active?: boolean): Promise<Elevator[]> {
+export async function searchElevators(query: string, active?: boolean): Promise<ElevatorWithTechnical[]> {
   let q = supabase
     .from('elevators')
     .select('*, building:buildings(name, address), client:clients(name)')
@@ -68,7 +85,7 @@ export async function searchElevators(query: string, active?: boolean): Promise<
   const { data, error } = await q;
 
   if (error) throw error;
-  return data || [];
+  return (data || []) as ElevatorWithTechnical[];
 }
 
 export async function filterElevators(filters: {
@@ -78,7 +95,7 @@ export async function filterElevators(filters: {
   client_id?: string;
   building_id?: string;
   active?: boolean;
-}): Promise<Elevator[]> {
+}): Promise<ElevatorWithTechnical[]> {
   let query = supabase
     .from('elevators')
     .select('*, building:buildings(name, address), client:clients(name)');
@@ -105,10 +122,10 @@ export async function filterElevators(filters: {
   const { data, error } = await query.order('code');
 
   if (error) throw error;
-  return data || [];
+  return (data || []) as ElevatorWithTechnical[];
 }
 
-export async function createElevator(input: CreateElevatorInput): Promise<Elevator> {
+export async function createElevator(input: CreateElevatorInput): Promise<ElevatorWithTechnical> {
   const elevatorData = {
     ...input,
     qr_token: input.qr_token || generateQRToken(),
@@ -121,10 +138,10 @@ export async function createElevator(input: CreateElevatorInput): Promise<Elevat
     .single();
 
   if (error) throw error;
-  return data;
+  return data as ElevatorWithTechnical;
 }
 
-export async function updateElevator(id: string, updates: UpdateElevatorInput): Promise<Elevator> {
+export async function updateElevator(id: string, updates: UpdateElevatorInput): Promise<ElevatorWithTechnical> {
   const { data, error } = await supabase
     .from('elevators')
     .update({ ...updates, updated_at: new Date().toISOString() })
@@ -133,7 +150,7 @@ export async function updateElevator(id: string, updates: UpdateElevatorInput): 
     .single();
 
   if (error) throw error;
-  return data;
+  return data as ElevatorWithTechnical;
 }
 
 export async function deactivateElevator(id: string): Promise<void> {
@@ -161,7 +178,7 @@ export async function updateElevatorStatus(
     conservation_status?: string;
     contractual_status?: string;
   }
-): Promise<Elevator> {
+): Promise<ElevatorWithTechnical> {
   const { data, error } = await supabase
     .from('elevators')
     .update({ ...status, updated_at: new Date().toISOString() })
@@ -170,5 +187,5 @@ export async function updateElevatorStatus(
     .single();
 
   if (error) throw error;
-  return data;
+  return data as ElevatorWithTechnical;
 }
