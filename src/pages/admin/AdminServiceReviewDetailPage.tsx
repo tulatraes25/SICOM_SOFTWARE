@@ -14,7 +14,7 @@ import PhotoViewerModal from '@/components/photos/PhotoViewerModal';
 import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
 import { OPERATIONAL_STATUS_LABELS, CONSERVATION_STATUS_LABELS } from '@/types/elevators';
 import type { ServiceRecord } from '@/types/database';
-import { ArrowLeft, CheckCircle, XCircle, AlertCircle, Download, Loader2, Sparkles, Save, Mail, Check, X, Image, Calendar, Clock } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, AlertCircle, Download, Loader2, Sparkles, Save, Mail, Check, X, Image, Calendar, Clock, FileText } from 'lucide-react';
 import { formatDateOnlyEsAR } from '@/lib/dateUtils';
 
 const STATUS_BADGE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
@@ -44,6 +44,8 @@ export default function AdminServiceReviewDetailPage() {
   const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
   const [photos, setPhotos] = useState<any[]>([]);
   const [processedPhotos, setProcessedPhotos] = useState<any[]>([]);
+  const [qrLastServiceDate, setQrLastServiceDate] = useState<string | null>(null);
+  const [qrDateChecked, setQrDateChecked] = useState(false);
 
   useEffect(() => { loadData(); }, [id]);
   useEffect(() => {
@@ -53,6 +55,33 @@ export default function AdminServiceReviewDetailPage() {
         .then(({ data }) => setRecipients(data || []));
     }
   }, [(record?.elevator as any)?.building_id]);
+
+  // Leer la misma fecha que consulta el QR público, sin asumir que la RPC funcionó.
+  const qrElevatorId = (record?.elevator as { id?: string } | null)?.id;
+  useEffect(() => {
+    if (record?.status !== 'approved' || !qrElevatorId) {
+      setQrLastServiceDate(null);
+      setQrDateChecked(false);
+      return;
+    }
+    let mounted = true;
+    setQrDateChecked(false);
+    (async () => {
+      try {
+        const { data, error: dateError } = await supabase
+          .from('elevators')
+          .select('last_service_date')
+          .eq('id', qrElevatorId)
+          .single();
+        if (mounted) setQrLastServiceDate(dateError ? null : data?.last_service_date || null);
+      } catch {
+        if (mounted) setQrLastServiceDate(null);
+      } finally {
+        if (mounted) setQrDateChecked(true);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [record?.id, record?.status, qrElevatorId]);
 
   const loadData = async () => {
     if (!id) return;
@@ -144,11 +173,11 @@ export default function AdminServiceReviewDetailPage() {
 
   const handleApprove = async () => {
     if (!id) return;
-    if (!confirm('¿Aprobar este mantenimiento?')) return;
+    if (!confirm('¿Validar este mantenimiento? Se publicarán la fecha del servicio y los estados del ascensor en el QR. El informe mensual permanecerá pendiente de su aprobación independiente.')) return;
     setSaving(true);
     try {
       await approveServiceRecord(id);
-      setSuccess('Mantenimiento aprobado correctamente');
+      setSuccess('Mantenimiento validado. Consultá debajo la fecha registrada para el QR público. El informe mensual sigue en su etapa independiente.');
       setTimeout(() => setSuccess(''), 3000);
       loadData();
     } catch (err: any) { setError(err?.message || 'Error al aprobar'); }
@@ -172,6 +201,7 @@ export default function AdminServiceReviewDetailPage() {
 
   const handleSendEmail = async () => {
     if (!id || !record) return;
+    if (!confirm('Esto envía un informe INDIVIDUAL del mantenimiento, no el informe mensual. ¿Confirmás este envío independiente?')) return;
     setSendingEmail(true);
     setError('');
     try {
@@ -385,6 +415,96 @@ export default function AdminServiceReviewDetailPage() {
 
           {/* Right column */}
           <div className="space-y-4 2xl:space-y-6">
+            {/* Stage 1: maintenance verification controls public QR publication */}
+            <Card>
+              <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><CheckCircle size={18} /> Etapa 1 · Validar mantenimiento (QR público)</h3></CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 mb-3">
+                  Validá o rechazá el trabajo realizado. Al validarlo, el QR público mostrará la fecha del servicio
+                  y los estados del equipo. Esta acción NO aprueba ni envía el informe mensual.
+                </p>
+                <div className="space-y-3">
+                  {canReview && (
+                    <>
+                      <Button onClick={handleApprove} loading={saving} className="w-full"><CheckCircle size={16} className="mr-2" /> Aprobar mantenimiento y actualizar QR</Button>
+                      <Button variant="danger" onClick={() => setShowRejectModal(true)} className="w-full"><XCircle size={16} className="mr-2" /> Rechazar mantenimiento</Button>
+                    </>
+                  )}
+                  {isApproved && (
+                    <>
+                      <div className="p-3 bg-success/10 rounded-lg text-sm">
+                        <p className="font-medium text-gray-900">Mantenimiento validado</p>
+                        <p className="text-gray-700 mt-1">
+                          Última fecha de mantenimiento aprobada registrada para el QR:
+                          {' '}{qrDateChecked
+                            ? (qrLastServiceDate ? formatDateOnlyEsAR(qrLastServiceDate) : 'No disponible')
+                            : 'Verificando...'}
+                        </p>
+                        {qrDateChecked && (!qrLastServiceDate || qrLastServiceDate < record.service_date) && (
+                          <p role="alert" className="text-danger mt-2">
+                            No se pudo confirmar la fecha en el ascensor. Revisar la sincronización antes de dar por publicada la intervención.
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Documento individual opcional. Su descarga o envío no sustituye la aprobación del informe mensual.
+                      </p>
+                      <PDFDownloadLink
+                        document={
+                          <ServiceRecordPDF
+                            record={{ ...record, final_report_text: finalReport || record.final_report_text }}
+                            elevator={elevator}
+                            technician={technician}
+                            approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Usuario aprobador no disponible' } : undefined}
+                            checklist={checklist}
+                            selectedPhotos={processedPhotos}
+                          />
+                        }
+                        fileName={fileName}
+                      >
+                        {({ loading: pdfLoading }) => (
+                          <Button className="w-full" disabled={pdfLoading}>
+                            {pdfLoading ? <Loader2 size={16} className="animate-spin mr-2" /> : <Download size={16} className="mr-2" />}
+                            Descargar PDF
+                          </Button>
+                        )}
+                      </PDFDownloadLink>
+                      <Button onClick={handleSendEmail} loading={sendingEmail} variant="secondary" className="w-full mt-2">
+                        <Mail size={16} className="mr-2" /> Enviar informe individual ({recipients.length} destinatarios)
+                      </Button>
+                    </>
+                  )}
+                  {isRejected && (
+                    <div className="p-3 bg-warning/10 rounded-lg text-sm text-warning">
+                      <p className="font-medium">Rechazado</p>
+                      {record.rejection_reason && <p className="mt-1">{record.rejection_reason}</p>}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Stage 2: approval and mailing of the monthly report is separate */}
+            <Card>
+              <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><FileText size={18} /> Etapa 2 · Informe mensual y destinatarios</h3></CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  El PDF mensual reúne los mantenimientos aprobados del período. Lucas o Adriana revisan el documento,
+                  lo aprueban y luego autorizan su envío. La fecha del QR no depende de esta etapa.
+                </p>
+                {!isApproved && (
+                  <p className="text-sm text-warning mt-2">Este mantenimiento aún no está aprobado y no debe incluirse como validado en el informe mensual.</p>
+                )}
+                <Button
+                  variant="outline"
+                  className="w-full mt-3"
+                  onClick={() => navigate(`/admin/mantenimientos?tab=monthly&elevator_id=${encodeURIComponent(elevator?.id || '')}&period=${encodeURIComponent(record.service_date.slice(0, 7))}`)}
+                >
+                  <FileText size={16} className="mr-2" /> Ver informe mensual del ascensor
+                </Button>
+              </CardContent>
+            </Card>
+
             {/* AI Report */}
             <Card>
               <CardHeader>
@@ -411,54 +531,6 @@ export default function AdminServiceReviewDetailPage() {
                     <Save size={14} className="mr-1" /> Guardar cambios
                   </Button>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* Actions */}
-            <Card>
-              <CardHeader><h3 className="font-semibold text-gray-900">Acciones</h3></CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {canReview && (
-                    <>
-                      <Button onClick={handleApprove} loading={saving} className="w-full"><CheckCircle size={16} className="mr-2" /> Aprobar</Button>
-                      <Button variant="danger" onClick={() => setShowRejectModal(true)} className="w-full"><XCircle size={16} className="mr-2" /> Rechazar</Button>
-                    </>
-                  )}
-                  {isApproved && (
-                    <>
-                      <PDFDownloadLink
-                        document={
-                          <ServiceRecordPDF
-                            record={{ ...record, final_report_text: finalReport || record.final_report_text }}
-                            elevator={elevator}
-                            technician={technician}
-                            approvedBy={record.approved_by ? { full_name: (record as any).approved_by_profile?.full_name || 'Usuario aprobador no disponible' } : undefined}
-                            checklist={checklist}
-                            selectedPhotos={processedPhotos}
-                          />
-                        }
-                        fileName={fileName}
-                      >
-                        {({ loading: pdfLoading }) => (
-                          <Button className="w-full" disabled={pdfLoading}>
-                            {pdfLoading ? <Loader2 size={16} className="animate-spin mr-2" /> : <Download size={16} className="mr-2" />}
-                            Descargar PDF
-                          </Button>
-                        )}
-                      </PDFDownloadLink>
-                      <Button onClick={handleSendEmail} loading={sendingEmail} variant="secondary" className="w-full mt-2">
-                        <Mail size={16} className="mr-2" /> Enviar por Correo ({recipients.length} destinatarios)
-                      </Button>
-                    </>
-                  )}
-                  {isRejected && (
-                    <div className="p-3 bg-warning/10 rounded-lg text-sm text-warning">
-                      <p className="font-medium">Rechazado</p>
-                      {record.rejection_reason && <p className="mt-1">{record.rejection_reason}</p>}
-                    </div>
-                  )}
-                </div>
               </CardContent>
             </Card>
 
