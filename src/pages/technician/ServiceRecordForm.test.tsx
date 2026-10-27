@@ -57,6 +57,7 @@ vi.mock('@/components/service/ServiceChecklist', () => {
     'Nivelación',
     'Iluminación de cabina',
     'Sala de máquinas',
+    'Estado de máquina de tracción y cables',
     'Sistema de freno',
     'Ruidos o vibraciones',
     'Limpieza general',
@@ -66,9 +67,15 @@ vi.mock('@/components/service/ServiceChecklist', () => {
   function createDefaultChecklist() {
     return DEFAULT_ITEMS.map((item_name) => ({
       item_name,
-      status: 'ok' as const,
+      status: item_name === 'Estado de máquina de tracción y cables' ? 'na' as const : 'ok' as const,
       notes: '',
     }));
+  }
+
+  function ensureTractionCablesItem(items: Array<{ item_name: string; status: string; notes: string }>) {
+    return items.some(item => item.item_name === 'Estado de máquina de tracción y cables')
+      ? items
+      : [...items, { item_name: 'Estado de máquina de tracción y cables', status: 'na', notes: '' }];
   }
 
   return {
@@ -115,6 +122,7 @@ vi.mock('@/components/service/ServiceChecklist', () => {
       </div>
     ),
     createDefaultChecklist,
+    ensureTractionCablesItem,
   };
 });
 
@@ -268,24 +276,25 @@ describe('ServiceRecordForm — Modo creación: tipo por defecto', () => {
 });
 
 describe('ServiceRecordForm — Modo creación: checklist', () => {
-  it('checklist inicial contiene 10 ítems', async () => {
+  it('checklist inicial contiene 11 ítems', async () => {
     renderCreationForm();
     await waitFor(() => {
       expect(screen.getByText('ASC-0001')).toBeInTheDocument();
     });
     const items = screen.getAllByTestId('checklist-item');
-    expect(items).toHaveLength(10);
+    expect(items).toHaveLength(11);
   });
 
-  it('los 10 comienzan en OK', async () => {
+  it('los ítems históricos comienzan en OK y el nuevo no se certifica automáticamente', async () => {
     renderCreationForm();
     await waitFor(() => {
       expect(screen.getByText('ASC-0001')).toBeInTheDocument();
     });
     const statuses = screen.getAllByTestId(/^status-/);
-    statuses.forEach((el) => {
-      expect(el).toHaveTextContent('ok');
-    });
+    expect(statuses).toHaveLength(11);
+    statuses.filter(el => el.getAttribute('data-testid') !== 'status-Estado de máquina de tracción y cables')
+      .forEach(el => expect(el).toHaveTextContent('ok'));
+    expect(screen.getByTestId('status-Estado de máquina de tracción y cables')).toHaveTextContent('na');
   });
 
   it('permite cambiar un ítem', async () => {
@@ -337,7 +346,7 @@ describe('ServiceRecordForm — Modo creación: creación', () => {
     });
   });
 
-  it('después de crear inserta 10 ítems de checklist', async () => {
+  it('después de crear inserta los 11 ítems de checklist', async () => {
     mocks.mockCreateServiceRecord.mockResolvedValue({ id: 'r-new' });
     renderCreationForm();
     await waitFor(() => {
@@ -352,7 +361,8 @@ describe('ServiceRecordForm — Modo creación: creación', () => {
       );
     });
     const call = mocks.mockCreateChecklistItems.mock.calls[0];
-    expect(call[0]).toHaveLength(10);
+    expect(call[0]).toHaveLength(11);
+    expect(call[0]).toEqual(expect.arrayContaining([expect.objectContaining({ item_name: 'Estado de máquina de tracción y cables', status: 'na' })]));
   });
 });
 
@@ -527,6 +537,20 @@ describe('ServiceRecordForm — Modo edición: carga', () => {
     });
     expect(screen.getByText('Estado de puertas')).toBeInTheDocument();
     expect(screen.getByText('Botonera de cabina')).toBeInTheDocument();
+    // Borrador histórico: no borrar ni cambiar los controles ya cargados.
+    expect(screen.getByTestId('status-Botonera de cabina')).toHaveTextContent('needs_attention');
+    expect(screen.getByTestId('note-Botonera de cabina')).toHaveTextContent('Falla');
+    expect(screen.getByText('Estado de máquina de tracción y cables')).toBeInTheDocument();
+    expect(screen.getByTestId('status-Estado de máquina de tracción y cables')).toHaveTextContent('na');
+  });
+
+  it('un registro ya enviado no incorpora el nuevo ítem ni altera su historial', async () => {
+    renderEditForm({
+      status: 'submitted',
+      checklist: [{ item_name: 'Estado de puertas', status: 'ok', notes: '' }],
+    });
+    await waitFor(() => expect(screen.getByText('Estado de puertas')).toBeInTheDocument());
+    expect(screen.queryByText('Estado de máquina de tracción y cables')).not.toBeInTheDocument();
   });
 
   it('carga fotografías existentes', async () => {

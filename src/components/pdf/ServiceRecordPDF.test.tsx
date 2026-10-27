@@ -117,6 +117,26 @@ describe('ServiceRecordPDF — Checklist', () => {
     expect(screen.getAllByText('OK').length).toBeGreaterThanOrEqual(1);
   });
 
+  it('muestra el nuevo control, su resultado y las observaciones en el PDF aprobado', () => {
+    renderPdf({
+      checklist: [
+        { item_name: 'Estado de máquina de tracción y cables', status: 'needs_attention', notes: 'Revisar tensión' },
+      ],
+    });
+    expect(screen.getByText('Estado de máquina de tracción y cables')).toBeInTheDocument();
+    expect(screen.getByText('Observado')).toBeInTheDocument();
+    expect(screen.getByText('Revisar tensión')).toBeInTheDocument();
+  });
+
+  it('no inventa un resultado de cables en los informes históricos', () => {
+    renderPdf({
+      checklist: [
+        { item_name: 'Estado de puertas', status: 'ok', notes: '' },
+      ],
+    });
+    expect(screen.queryByText('Estado de máquina de tracción y cables')).not.toBeInTheDocument();
+  });
+
   it('nota de limpieza', () => {
     renderPdf();
     expect(screen.getAllByText('Limpieza realizada').length).toBeGreaterThanOrEqual(1);

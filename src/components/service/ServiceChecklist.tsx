@@ -13,6 +13,8 @@ interface ServiceChecklistProps {
   readOnly?: boolean;
 }
 
+export const TRACTION_CABLES_ITEM = 'Estado de máquina de tracción y cables';
+
 const DEFAULT_CHECKLIST_ITEMS = [
   'Estado de puertas',
   'Botonera de cabina',
@@ -20,6 +22,7 @@ const DEFAULT_CHECKLIST_ITEMS = [
   'Nivelación',
   'Iluminación de cabina',
   'Sala de máquinas',
+  TRACTION_CABLES_ITEM,
   'Sistema de freno',
   'Ruidos o vibraciones',
   'Limpieza general',
@@ -70,7 +73,14 @@ export default function ServiceChecklist({ items, onChange, readOnly = false }: 
           className="border border-gray-200 rounded-lg overflow-hidden"
         >
           <div className="flex items-center justify-between p-3 bg-gray-50">
-            <span className="font-medium text-gray-700 text-sm">{item.item_name}</span>
+            <div className="min-w-0">
+              <span className="font-medium text-gray-700 text-sm">{item.item_name}</span>
+              {item.item_name === TRACTION_CABLES_ITEM && !readOnly && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Revisar el estado del conjunto. Seleccionar No aplica si el ascensor no utiliza máquina de tracción y cables.
+                </p>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {!readOnly && (
                 <div className="flex gap-1">
@@ -131,7 +141,20 @@ export default function ServiceChecklist({ items, onChange, readOnly = false }: 
 export function createDefaultChecklist(): ChecklistItem[] {
   return DEFAULT_CHECKLIST_ITEMS.map(item_name => ({
     item_name,
-    status: 'ok' as const,
+    // No certificar una inspección de cables que el técnico aún no realizó.
+    // Para ascensores hidráulicos, el técnico puede conservar "No aplica".
+    status: item_name === TRACTION_CABLES_ITEM ? 'na' as const : 'ok' as const,
     notes: '',
   }));
+}
+
+/**
+ * Agrega el nuevo control a borradores anteriores sin cambiar ni eliminar
+ * resultados, notas u otros ítems históricos. Solo se usa al editar borradores.
+ */
+export function ensureTractionCablesItem(items: ChecklistItem[]): ChecklistItem[] {
+  if (items.some(item => item.item_name === TRACTION_CABLES_ITEM)) {
+    return items;
+  }
+  return [...items, { item_name: TRACTION_CABLES_ITEM, status: 'na', notes: '' }];
 }

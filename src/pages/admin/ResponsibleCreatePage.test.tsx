@@ -876,7 +876,8 @@ describe('ResponsibleCreatePage — Orden elevator_ids', () => {
     ]);
     mockCreateResponsible.mockResolvedValue({ user: { id: 'new-1' }, assigned_elevator_ids: ['e1', 'e3', 'e2'] });
     renderPage();
-    await waitForReady();
+    // Esperar a que se resuelva listClients; el título se monta antes del selector.
+    await waitFor(() => { expect(screen.getByLabelText(/cliente/i)).toBeInTheDocument(); });
     fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
     await waitFor(() => { expect(screen.getByText('Edificio Centro')).toBeInTheDocument(); });
     fireEvent.click(screen.getByRole('checkbox', { name: /edificio centro/i }));
@@ -897,7 +898,8 @@ describe('ResponsibleCreatePage — Orden elevator_ids', () => {
     ]);
     mockCreateResponsible.mockResolvedValue({ user: { id: 'new-1' }, assigned_elevator_ids: ['e2', 'e1'] });
     renderPage();
-    await waitForReady();
+    // Esperar a que se resuelva listClients; el título se monta antes del selector.
+    await waitFor(() => { expect(screen.getByLabelText(/cliente/i)).toBeInTheDocument(); });
     fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
     await waitFor(() => { expect(screen.getByText('Edificio Centro')).toBeInTheDocument(); });
     fireEvent.click(screen.getByRole('checkbox', { name: /edificio centro/i }));
@@ -916,7 +918,8 @@ describe('ResponsibleCreatePage — Orden elevator_ids', () => {
     mockFilterElevators.mockResolvedValue([makeElevator({ id: 'e1', code: 'A100' })]);
     mockCreateResponsible.mockResolvedValue({ user: { id: 'new-1' }, assigned_elevator_ids: ['e1'] });
     renderPage();
-    await waitForReady();
+    // Esperar a que se resuelva listClients; el título se monta antes del selector.
+    await waitFor(() => { expect(screen.getByLabelText(/cliente/i)).toBeInTheDocument(); });
     fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
     await waitFor(() => { expect(screen.getByText('Edificio Centro')).toBeInTheDocument(); });
     fireEvent.click(screen.getByRole('checkbox', { name: /edificio centro/i }));
@@ -989,7 +992,7 @@ describe('ResponsibleCreatePage — Accesibilidad', () => {
     mockFilterElevators.mockResolvedValue([makeElevator()]);
     mockCreateResponsible.mockReturnValue(def.promise);
     renderPage();
-    await waitForReady();
+    await waitFor(() => { expect(screen.getByLabelText(/cliente/i)).toBeInTheDocument(); });
     fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
     await waitFor(() => { expect(screen.getByText('Edificio Centro')).toBeInTheDocument(); });
     fireEvent.click(screen.getByRole('checkbox', { name: /edificio centro/i }));
