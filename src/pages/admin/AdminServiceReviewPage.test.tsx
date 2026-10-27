@@ -6,10 +6,11 @@ import AdminServiceReviewPage from './AdminServiceReviewPage';
 interface Deferred<T> { promise: Promise<T>; resolve: (value: T) => void; }
 function deferred<T>(): Deferred<T> { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; }
 
-const { mockListPending, mockListApproved, mockListServiceOrders } = vi.hoisted(() => ({
+const { mockListPending, mockListApproved, mockListServiceOrders, mockListMonthlyReports } = vi.hoisted(() => ({
   mockListPending: vi.fn(),
   mockListApproved: vi.fn(),
   mockListServiceOrders: vi.fn(),
+  mockListMonthlyReports: vi.fn(),
 }));
 
 vi.mock('@/services/supervisor.service', () => ({
@@ -19,6 +20,9 @@ vi.mock('@/services/supervisor.service', () => ({
 vi.mock('@/services/serviceOrders.service', () => ({
   listServiceOrders: (...args: unknown[]) => mockListServiceOrders(...args),
 }));
+vi.mock('@/services/monthlyReportEnhanced.service', () => ({
+  listMonthlyReports: () => mockListMonthlyReports(),
+}));
 vi.mock('@/components/layout/DashboardLayout', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -26,8 +30,8 @@ vi.mock('@/components/layout/DashboardLayout', () => ({
 const maintenanceItem = { id: 'm1', status: 'submitted', elevator: { code: 'ASC-0001', building: { name: 'Edificio Central', client: { name: 'Cliente A' } } } };
 const orderItem = { id: 'o1', status: 'completed', service_case: { case_number: 1914, numbering_mode: 'test' }, client: { name: 'Cliente B' }, building: { name: 'Edificio B' }, elevator: { code: 'ASC-002' } };
 
-function renderPage() {
-  return render(<MemoryRouter><AdminServiceReviewPage /></MemoryRouter>);
+function renderPage(path = '/admin/mantenimientos') {
+  return render(<MemoryRouter initialEntries={[path]}><AdminServiceReviewPage /></MemoryRouter>);
 }
 
 beforeEach(() => {
@@ -35,6 +39,7 @@ beforeEach(() => {
   mockListPending.mockResolvedValue([maintenanceItem]);
   mockListServiceOrders.mockResolvedValue({ data: [orderItem], count: 1 });
   mockListApproved.mockResolvedValue([]);
+  mockListMonthlyReports.mockResolvedValue([]);
 });
 afterEach(() => { vi.restoreAllMocks(); cleanup(); });
 
@@ -173,4 +178,46 @@ describe('AdminServiceReviewPage', () => {
     def2.resolve();
     await waitFor(() => { expect(screen.getAllByText('ASC-0001').length).toBeGreaterThanOrEqual(1); });
   });
+
+  it('explica las dos instancias independientes y no publica antes de aprobar', async () => {
+    renderPage();
+    expect(screen.getByText(/Etapa 1 · Validación del mantenimiento/)).toBeInTheDocument();
+    expect(screen.getByText(/Etapa 2 · Informe mensual/)).toBeInTheDocument();
+    expect(screen.getByText(/No se aprueba ni envía el informe mensual/)).toBeInTheDocument();
+    await waitFor(() => expect(mockListPending).toHaveBeenCalledTimes(1));
+    expect(mockListMonthlyReports).not.toHaveBeenCalled();
+  });
+
+  it('abre la etapa de informes mensuales dentro de Revisión de Servicios', async () => {
+    mockListMonthlyReports.mockResolvedValue([{
+      id: 'rm-1', elevator_id: 'elev-1', report_month: 10, report_year: 2026,
+      status: 'generated', elevator: { code: 'ASC-22/01', building: { name: 'NATANIA' } },
+    }]);
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /Informes mensuales/ }));
+    await waitFor(() => expect(mockListMonthlyReports).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('NATANIA')).toBeInTheDocument();
+    expect(screen.getByText('Octubre 2026')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Revisar y aprobar/ })).toHaveAttribute('href', '/admin/informes-mensuales/rm-1');
+  });
+
+  it('desde un mantenimiento abre los informes filtrados por equipo y período', async () => {
+    mockListMonthlyReports.mockResolvedValue([
+      { id: 'rm-natania', elevator_id: 'elev-22', report_month: 10, report_year: 2026, status: 'approved', elevator: { code: 'ASC-22/01' } },
+      { id: 'rm-otro', elevator_id: 'elev-33', report_month: 10, report_year: 2026, status: 'approved', elevator: { code: 'ASC-33/01' } },
+    ]);
+    renderPage('/admin/mantenimientos?tab=monthly&elevator_id=elev-22&period=2026-10');
+    await waitFor(() => expect(mockListMonthlyReports).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('ASC-22/01')).toBeInTheDocument();
+    expect(screen.queryByText('ASC-33/01')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Revisar envío/ })).toHaveAttribute('href', '/admin/informes-mensuales/rm-natania');
+  });
+
+  it('sin informe mensual ofrece creación sin enviar correos', async () => {
+    renderPage('/admin/mantenimientos?tab=monthly&elevator_id=elev-22&period=2026-10');
+    await waitFor(() => expect(mockListMonthlyReports).toHaveBeenCalledTimes(1));
+    expect(screen.getByText(/No hay informes mensuales para esta selección/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Crear informe mensual/ })).toHaveAttribute('href', '/admin/informes-mensuales');
+  });
+
 });
