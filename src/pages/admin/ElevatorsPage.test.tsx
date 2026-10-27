@@ -24,7 +24,7 @@ vi.mock('@/services/elevators.service', () => ({
 vi.mock('@/services/clients.service', () => ({ listClients: (...a: unknown[]) => mockListClients(...a) }));
 vi.mock('@/services/audit.service', () => ({ createAuditLog: (...a: unknown[]) => mockCreateAuditLog(...a) }));
 vi.mock('@/components/layout/Sidebar', () => ({ default: () => <div data-testid="sidebar" /> }));
-vi.mock('@/components/qr/ModalQR', () => ({ default: () => <div data-testid="modal-qr" /> }));
+vi.mock('@/components/qr/ModalQR', () => ({ default: ({ elevatorCode, qrToken }: { elevatorCode: string; qrToken: string }) => <div data-testid="modal-qr" data-elevator-code={elevatorCode} data-token={qrToken} /> }));
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: vi.fn(() => ({
     user: { id: 'admin1' },
@@ -147,6 +147,31 @@ describe('ElevatorsPage — Visualización', () => {
     await waitFor(() => { expect(screen.getByText(/ascensores/)).toBeInTheDocument(); });
     fireEvent.change(screen.getByLabelText(/vigencia/i), { target: { value: 'inactive' } });
     await waitFor(() => { expect(screen.getByText('No hay ascensores inactivos.')).toBeInTheDocument(); });
+  });
+});
+
+describe('ElevatorsPage — Descarga de etiquetas QR', () => {
+  it('ofrece QR PNG visible junto a cada ascensor, con nombre accesible', async () => {
+    mockFilterElevators.mockResolvedValue([makeElevator({ code: 'ASC-22/01', qr_token: 'qr-token-existente' })]);
+    render(<MemoryRouter><ElevatorsPage /></MemoryRouter>);
+    const qrButton = await screen.findByRole('button', { name: 'Descargar QR ASC-22/01' });
+    expect(qrButton).toHaveTextContent('QR PNG');
+    expect(qrButton).toHaveAttribute('type', 'button');
+    expect(qrButton).toHaveAttribute('title', expect.stringContaining('imagen PNG'));
+  });
+
+  it('usa el QR existente del ascensor correcto sin alterar registros', async () => {
+    mockFilterElevators.mockResolvedValue([
+      makeElevator({ code: 'ASC-22/01', qr_token: 'token-natania-1' }),
+      makeElevator({ id: 'e2', code: 'ASC-54/02', qr_token: 'token-alvear-2' }),
+    ]);
+    render(<MemoryRouter><ElevatorsPage /></MemoryRouter>);
+    const qrButton = await screen.findByRole('button', { name: 'Descargar QR ASC-54/02' });
+    fireEvent.click(qrButton);
+    expect(screen.getByTestId('modal-qr')).toHaveAttribute('data-elevator-code', 'ASC-54/02');
+    expect(screen.getByTestId('modal-qr')).toHaveAttribute('data-token', 'token-alvear-2');
+    expect(mockDeactivateElevator).not.toHaveBeenCalled();
+    expect(mockReactivateElevator).not.toHaveBeenCalled();
   });
 });
 
