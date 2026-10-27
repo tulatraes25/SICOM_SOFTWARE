@@ -636,6 +636,9 @@ describe('ResponsibleCreatePage — Resultado', () => {
   }
 
   async function submitForm() {
+    // El título de la página aparece antes de que listClients termine.
+    // Esperar a que esté el selector evita carreras intermitentes en CI.
+    await waitFor(() => { expect(screen.getByLabelText(/cliente/i)).toBeInTheDocument(); });
     fireEvent.change(screen.getByLabelText(/cliente/i), { target: { value: 'c1' } });
     await waitFor(() => { expect(screen.getByText('Edificio Centro')).toBeInTheDocument(); });
     fireEvent.click(screen.getByRole('checkbox', { name: /edificio centro/i }));
