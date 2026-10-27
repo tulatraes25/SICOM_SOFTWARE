@@ -1,7 +1,7 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Download, Copy, Check, Printer } from 'lucide-react';
-import { useState } from 'react';
+import { downloadQrStickerPng } from '@/utils/qrSticker';
 import { getElevatorPublicUrl } from '@/config/supabase';
 
 interface ElevatorQRCodeProps {
@@ -23,6 +23,8 @@ export default function ElevatorQRCode({
 }: ElevatorQRCodeProps) {
   const qrRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [qrError, setQrError] = useState('');
 
   const publicUrl = getElevatorPublicUrl(qrToken);
 
@@ -44,55 +46,47 @@ export default function ElevatorQRCode({
     }
   }, [publicUrl]);
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
+    if (downloading) return;
     const svgElement = qrRef.current?.querySelector('svg');
-    if (!svgElement) return;
+    if (!svgElement) {
+      setQrError('No se pudo encontrar el QR para descargarlo.');
+      return;
+    }
 
-    const svgData = new XMLSerializer().serializeToString(svgElement);
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const img = new Image();
-    img.onload = () => {
-      canvas.width = size + 60;
-      canvas.height = size + 100;
-      
-      // White background
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // QR code
-      ctx.drawImage(img, 30, 10, size, size);
-      
-      // Text
-      ctx.fillStyle = '#1f2937';
-      ctx.font = 'bold 14px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(elevatorCode, canvas.width / 2, size + 35);
-      
-      ctx.font = '10px Arial';
-      ctx.fillStyle = '#6b7280';
-      ctx.fillText('Escanee para consultar estado', canvas.width / 2, size + 55);
-      ctx.fillText('SICOM Patagonia SRL', canvas.width / 2, size + 70);
-
-      const link = document.createElement('a');
-      link.download = `SICOM_QR_${elevatorCode}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    };
-    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-  }, [size, elevatorCode]);
+    setDownloading(true);
+    setQrError('');
+    try {
+      // El PNG utiliza el SVG/URL pública existente: no genera otro token.
+      await downloadQrStickerPng(svgElement, elevatorCode);
+    } catch {
+      setQrError('No se pudo generar el PNG. Probá de nuevo o utilizá Imprimir.');
+    } finally {
+      setDownloading(false);
+    }
+  }, [downloading, elevatorCode]);
 
   const handlePrint = useCallback(() => {
+    const svgMarkup = qrRef.current?.querySelector('svg')?.outerHTML;
+    if (!svgMarkup) {
+      setQrError('No se pudo encontrar el QR para imprimirlo.');
+      return;
+    }
     const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    if (!printWindow) {
+      setQrError('El navegador bloqueó la ventana de impresión.');
+      return;
+    }
+    // El código puede tener caracteres especiales; nunca insertarlo en HTML sin escapar.
+    const safeCode = elevatorCode.replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[character] || character));
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>QR - ${elevatorCode}</title>
+          <title>QR - ${safeCode}</title>
           <style>
             body {
               display: flex;
@@ -129,8 +123,8 @@ export default function ElevatorQRCode({
         </head>
         <body>
           <div class="qr-container">
-            ${qrRef.current?.querySelector('svg')?.outerHTML || ''}
-            <div class="elevator-code">${elevatorCode}</div>
+            ${svgMarkup}
+            <div class="elevator-code">${safeCode}</div>
             <div class="instruction">Escanee para consultar estado del ascensor</div>
             <div class="company">SICOM Patagonia SRL</div>
           </div>
@@ -159,34 +153,41 @@ export default function ElevatorQRCode({
         )}
       </div>
 
-      <div className="flex gap-2">
-        <button
-          onClick={handleCopyUrl}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-        >
-          {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
-          {copied ? 'Copiado' : 'Copiar URL'}
-        </button>
-        
+      {qrError && <p role="alert" className="text-center text-sm text-danger">{qrError}</p>}
+
+      <div className="flex flex-wrap justify-center gap-2">
         {allowDownload && (
           <button
+            type="button"
             onClick={handleDownload}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary text-white hover:bg-primary-dark rounded-lg transition-colors"
+            disabled={downloading}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold bg-primary text-white hover:bg-primary-dark disabled:opacity-50 rounded-lg transition-colors"
+            title="Descargar etiqueta QR en PNG de 1200 píxeles para imprimir"
           >
-            <Download size={14} />
-            Descargar PNG
+            <Download size={16} />
+            {downloading ? 'Generando PNG...' : 'Descargar QR (PNG)'}
           </button>
         )}
 
         {allowPrint && (
           <button
+            type="button"
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
           >
             <Printer size={14} />
             Imprimir
           </button>
         )}
+
+        <button
+          type="button"
+          onClick={handleCopyUrl}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+        >
+          {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+          {copied ? 'Copiado' : 'Copiar URL'}
+        </button>
       </div>
     </div>
   );
