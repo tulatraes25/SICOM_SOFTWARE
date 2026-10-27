@@ -12,7 +12,7 @@ import {
   deleteChecklistByServiceRecord,
 } from '@/services/serviceRecords.service';
 import { createAuditLog } from '@/services/audit.service';
-import ServiceChecklist, { createDefaultChecklist } from '@/components/service/ServiceChecklist';
+import ServiceChecklist, { createDefaultChecklist, ensureTractionCablesItem } from '@/components/service/ServiceChecklist';
 import ServicePhotoUpload from '@/components/service/ServicePhotoUpload';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -94,11 +94,16 @@ export default function ServiceRecordForm() {
       
       const checklistItems = (record as any).checklist || [];
       if (checklistItems.length > 0) {
-        setChecklist(checklistItems.map((item: any) => ({
+        const savedItems = checklistItems.map((item: any) => ({
           item_name: item.item_name,
           status: item.status,
           notes: item.notes || '',
-        })));
+        }));
+        // Solo los borradores editables incorporan el control nuevo.
+        // Los registros enviados o aprobados mantienen el checklist original.
+        setChecklist(record.status === 'draft'
+          ? ensureTractionCablesItem(savedItems)
+          : savedItems);
       }
       
       const photoItems = (record as any).photos || [];
