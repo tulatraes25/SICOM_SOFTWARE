@@ -267,7 +267,7 @@ export default function ElevatorsPage() {
                         <td className="py-3 px-4">
                           <div className="flex justify-end gap-1">
                             <Button size="sm" variant="ghost" onClick={() => setTechnicalSheet(elevator)} title="Ficha técnica" type="button"><FileText size={16} /></Button>
-                            <Button size="sm" variant="ghost" onClick={() => setQrModal(elevator)} title="Ver QR" type="button"><QrCode size={16} /></Button>
+                            <Button size="sm" variant="outline" onClick={() => setQrModal(elevator)} title={`Descargar QR como imagen PNG — ${elevator.code}`} aria-label={`Descargar QR ${elevator.code}`} type="button" className="whitespace-nowrap"><QrCode size={16} className="mr-1" /> QR PNG</Button>
                             <Button size="sm" variant="ghost" onClick={() => handleEdit(elevator)} title="Editar" type="button"><Edit size={16} /></Button>
                             {elevator.active ? (
                               <Button size="sm" variant="ghost" onClick={() => handleDeactivate(elevator)} title={`Desactivar ascensor ${elevator.code}`} type="button" disabled={actionElevatorId === elevator.id} className="text-danger hover:text-danger"><PowerOff size={16} /></Button>
