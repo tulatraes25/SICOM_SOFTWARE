@@ -12,7 +12,7 @@ vi.mock('@/utils/qrSticker', () => ({
 }));
 
 vi.mock('@/config/supabase', () => ({
-  getElevatorPublicUrl: (...args: unknown[]) => mockGetElevatorPublicUrl(...args),
+  getElevatorPublicUrl: (token: string) => mockGetElevatorPublicUrl(token),
 }));
 
 vi.mock('qrcode.react', () => ({
