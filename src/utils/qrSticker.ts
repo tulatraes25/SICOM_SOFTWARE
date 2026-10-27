@@ -25,7 +25,12 @@ export async function renderQrStickerPng(
   qrSvg: SVGSVGElement,
   elevatorCode: string,
 ): Promise<Blob> {
-  const svgString = new XMLSerializer().serializeToString(qrSvg);
+  // Escalar el SVG antes de rasterizarlo para conservar el detalle del QR.
+  // Nunca modificar el nodo original ni su valor público.
+  const exportSvg = qrSvg.cloneNode(true) as SVGSVGElement;
+  exportSvg.setAttribute('width', String(QR_STICKER_SYMBOL_SIZE));
+  exportSvg.setAttribute('height', String(QR_STICKER_SYMBOL_SIZE));
+  const svgString = new XMLSerializer().serializeToString(exportSvg);
   const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
 
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
