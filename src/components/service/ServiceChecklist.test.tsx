@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import ServiceChecklist, { createDefaultChecklist } from './ServiceChecklist';
+import ServiceChecklist, { createDefaultChecklist, ensureTractionCablesItem, TRACTION_CABLES_ITEM } from './ServiceChecklist';
 
 vi.mock('lucide-react', () => ({
   CheckCircle: (props: Record<string, unknown>) => <svg data-testid="icon-check" {...props} />,
@@ -164,5 +164,59 @@ describe('createDefaultChecklist', () => {
     const b = createDefaultChecklist();
     expect(b[0]!.notes).toBe('');
     expect(b[0]!.status).toBe('ok');
+  });
+});
+
+
+describe('ServiceChecklist — Máquina de tracción y cables', () => {
+  it('incluye el control nuevo en el checklist para mantenimientos nuevos', () => {
+    const items = createDefaultChecklist();
+    expect(items).toHaveLength(11);
+    expect(items.map(i => i.item_name)).toContain(TRACTION_CABLES_ITEM);
+    const item = items.find(i => i.item_name === TRACTION_CABLES_ITEM);
+    // Nunca marcar OK sin inspección.
+    expect(item).toEqual({ item_name: TRACTION_CABLES_ITEM, status: 'na', notes: '' });
+    expect(items.filter(i => i.item_name !== TRACTION_CABLES_ITEM).every(i => i.status === 'ok')).toBe(true);
+  });
+
+  it('el técnico puede marcar la máquina y los cables como Observado', () => {
+    const onChange = vi.fn();
+    render(<ServiceChecklist items={createDefaultChecklist()} onChange={onChange} />);
+    expect(screen.getByText(TRACTION_CABLES_ITEM)).toBeInTheDocument();
+    expect(screen.getByText(/Seleccionar No aplica si el ascensor no utiliza/)).toBeInTheDocument();
+    const idx = createDefaultChecklist().findIndex(i => i.item_name === TRACTION_CABLES_ITEM);
+    fireEvent.click(screen.getAllByTitle('Observado')[idx]!);
+    expect(onChange).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ item_name: TRACTION_CABLES_ITEM, status: 'needs_attention' }),
+    ]));
+  });
+
+  it('agrega ítem a borrador antiguo sin alterar respuestas previas', () => {
+    const oldItems: Array<{ item_name: string; status: 'ok' | 'needs_attention' | 'failed' | 'na'; notes: string }> = [
+      { item_name: 'Estado de puertas', status: 'failed', notes: 'Reparación pendiente' },
+      { item_name: 'Otro control personalizado', status: 'ok', notes: 'Revisado' },
+    ];
+    const merged = ensureTractionCablesItem(oldItems);
+    expect(merged).toHaveLength(3);
+    expect(merged.slice(0, 2)).toEqual(oldItems);
+    expect(merged[2]).toEqual({ item_name: TRACTION_CABLES_ITEM, status: 'na', notes: '' });
+    expect(oldItems).toHaveLength(2);
+  });
+
+  it('no duplica el ítem ni modifica su evaluación previa', () => {
+    const items = createDefaultChecklist();
+    const assessed = items.map(i => i.item_name === TRACTION_CABLES_ITEM ? { ...i, status: 'failed' as const, notes: 'Desgaste de cables' } : i);
+    const merged = ensureTractionCablesItem(assessed);
+    expect(merged).toBe(assessed);
+    expect(merged.filter(i => i.item_name === TRACTION_CABLES_ITEM)).toHaveLength(1);
+    expect(merged.find(i => i.item_name === TRACTION_CABLES_ITEM)?.notes).toBe('Desgaste de cables');
+  });
+
+  it('la vista solo lectura presenta el resultado sin ofrecer edición', () => {
+    const items = [{ item_name: TRACTION_CABLES_ITEM, status: 'failed' as const, notes: 'Cables desgastados' }];
+    render(<ServiceChecklist items={items} onChange={vi.fn()} readOnly />);
+    expect(screen.getByText(TRACTION_CABLES_ITEM)).toBeInTheDocument();
+    expect(screen.getByText('Requiere intervención')).toBeInTheDocument();
+    expect(screen.queryByTitle('OK')).not.toBeInTheDocument();
   });
 });
