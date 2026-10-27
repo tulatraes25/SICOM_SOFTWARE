@@ -123,7 +123,7 @@ export default function AdminServiceReviewPage() {
           </Card>
         </div>
 
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Etapas de revisión">
+        <div className="flex flex-wrap gap-2" >
           <Button variant={activeTab === 'pending' ? 'primary' : 'outline'} onClick={() => setActiveTab('pending')}>
             <Clock size={16} className="mr-2" /> Pendientes
           </Button>
@@ -150,7 +150,10 @@ export default function AdminServiceReviewPage() {
                   <h3 className="font-semibold text-gray-900">Aprobación y envío de informes mensuales</h3>
                   <p className="text-sm text-gray-500">Esta instancia es independiente de la fecha y estado del mantenimiento publicados en el QR.</p>
                   {(selectedElevator || selectedPeriod) && (
-                    <p className="text-sm text-secondary mt-1">Mostrando el ascensor y período seleccionados desde el mantenimiento.</p>
+                    <p className="text-sm text-secondary mt-1">
+                      Mostrando el ascensor y período seleccionados desde el mantenimiento.
+                      {' '}<Link to="/admin/mantenimientos?tab=monthly" className="underline hover:text-primary">Ver todos los informes</Link>
+                    </p>
                   )}
                 </div>
                 <Link to="/admin/informes-mensuales"><Button size="sm" variant="outline">Crear informe mensual</Button></Link>
