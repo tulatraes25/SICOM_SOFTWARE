@@ -73,7 +73,14 @@ export default function ServiceChecklist({ items, onChange, readOnly = false }: 
           className="border border-gray-200 rounded-lg overflow-hidden"
         >
           <div className="flex items-center justify-between p-3 bg-gray-50">
-            <span className="font-medium text-gray-700 text-sm">{item.item_name}</span>
+            <div className="min-w-0">
+              <span className="font-medium text-gray-700 text-sm">{item.item_name}</span>
+              {item.item_name === TRACTION_CABLES_ITEM && !readOnly && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Revisar el estado del conjunto. Seleccionar No aplica si el ascensor no utiliza máquina de tracción y cables.
+                </p>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {!readOnly && (
                 <div className="flex gap-1">
