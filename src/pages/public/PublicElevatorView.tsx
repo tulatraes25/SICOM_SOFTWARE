@@ -189,11 +189,14 @@ export default function PublicElevatorView() {
           <div className="flex items-center gap-3">
             <Clock size={20} className="text-secondary" />
             <div>
-              <p className="text-sm text-gray-500">Último mantenimiento</p>
+              <p className="text-sm text-gray-500">Último mantenimiento validado</p>
               <p className="font-medium text-gray-900">
                 {elevator.last_service_date
                   ? formatDateOnlyLongEsAR(elevator.last_service_date)
                   : 'Sin mantenimientos aprobados registrados para este equipo.'}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                La fecha corresponde al servicio aprobado por SICOM. No reemplaza la evaluación del estado operativo y de conservación mostrados arriba.
               </p>
             </div>
           </div>

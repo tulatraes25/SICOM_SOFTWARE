@@ -433,3 +433,54 @@ describe('AdminServiceReviewDetailPage — Errores', () => {
     });
   });
 });
+
+
+describe('AdminServiceReviewDetailPage — Flujo en dos etapas', () => {
+  it('indica que la validación del mantenimiento actualiza el QR sin aprobar el informe mensual', async () => {
+    await renderPage();
+    expect(screen.getByText(/Etapa 1 · Validar mantenimiento/)).toBeInTheDocument();
+    expect(screen.getByText(/Etapa 2 · Informe mensual y destinatarios/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Aprobar mantenimiento y actualizar QR/ })).toBeInTheDocument();
+    expect(screen.getByText(/Esta acción NO aprueba ni envía el informe mensual/)).toBeInTheDocument();
+    expect(mockSendServiceReportByEmail).not.toHaveBeenCalled();
+  });
+
+  it('enlaza el informe mensual al ascensor y período correctos', async () => {
+    await renderPage({
+      ...mockRecord,
+      service_date: '2026-10-21',
+      elevator: { ...mockRecord.elevator, id: 'elev-22' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Ver informe mensual del ascensor/ }));
+    expect(mockNavigate).toHaveBeenCalledWith('/admin/mantenimientos?tab=monthly&elevator_id=elev-22&period=2026-10');
+  });
+
+  it('muestra fecha validada que realmente tiene el ascensor después de aprobar', async () => {
+    mockSupabaseFrom.mockImplementation((table: string) => {
+      const chain = createDefaultChain();
+      if (table === 'elevators') {
+        chain.single.mockResolvedValue({ data: { last_service_date: '2026-08-03' }, error: null });
+      }
+      return chain;
+    });
+    await renderPage(approvedRecord);
+    await waitFor(() => {
+      expect(screen.getByText(/Última fecha de mantenimiento aprobada registrada para el QR/).textContent).toContain('3/8/2026');
+    });
+    expect(screen.queryByText(/No se pudo confirmar la fecha en el ascensor/)).not.toBeInTheDocument();
+  });
+
+  it('advierte cuando la base no confirma la fecha publicada para el QR', async () => {
+    await renderPage(approvedRecord);
+    await waitFor(() => {
+      expect(screen.getByText(/No se pudo confirmar la fecha en el ascensor/)).toBeInTheDocument();
+    });
+  });
+
+  it('el envío individual requiere confirmación y no se confunde con el mensual', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await renderPage(approvedRecord);
+    fireEvent.click(screen.getByRole('button', { name: /Enviar informe individual/ }));
+    expect(mockSendServiceReportByEmail).not.toHaveBeenCalled();
+  });
+});

@@ -56,7 +56,7 @@ describe('PublicElevatorView', () => {
     renderView();
     const introBtn = await screen.findByRole('button', { name: /ver estado del ascensor/i });
     await userEvent.click(introBtn);
-    expect(screen.getByText('Último mantenimiento')).toBeDefined();
+    expect(screen.getByText('Último mantenimiento validado')).toBeDefined();
   });
 
   it('muestra la fecha correcta cuando last_service_date existe', async () => {
