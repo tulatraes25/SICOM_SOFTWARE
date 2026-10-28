@@ -104,6 +104,41 @@ describe('PublicElevatorView', () => {
     expect(mockLogQRScan).toHaveBeenCalledWith('test-token');
   });
 
+  it('muestra la reparación pendiente en amarillo cuando el ascensor está operativo', async () => {
+    mockGetPublicElevatorByToken.mockResolvedValue({
+      ...VALID_ELEVATOR,
+      operational_status: 'operativo',
+      conservation_status: 'requiere_reparacion',
+    });
+
+    renderView();
+    await userEvent.click(await screen.findByRole('button', { name: /ver estado del ascensor/i }));
+
+    expect(screen.getByText('Operativo')).toBeDefined();
+    const repairStatus = screen.getByText('Requiere Reparación');
+    expect(repairStatus.classList.contains('bg-warning/15')).toBe(true);
+    expect(repairStatus.classList.contains('text-warning')).toBe(true);
+    expect(repairStatus.classList.contains('border-warning/30')).toBe(true);
+    expect(repairStatus.classList.contains('text-danger')).toBe(false);
+  });
+
+  it('mantiene el rojo para la conservación fuera de servicio', async () => {
+    mockGetPublicElevatorByToken.mockResolvedValue({
+      ...VALID_ELEVATOR,
+      operational_status: 'fuera_de_servicio_por_reparacion',
+      conservation_status: 'fuera_de_servicio',
+    });
+
+    renderView();
+    await userEvent.click(await screen.findByRole('button', { name: /ver estado del ascensor/i }));
+
+    expect(screen.getByText('Fuera de Servicio (Reparación)')).toBeDefined();
+    const outOfService = screen.getByText('Fuera de Servicio');
+    expect(outOfService.classList.contains('bg-danger/15')).toBe(true);
+    expect(outOfService.classList.contains('text-danger')).toBe(true);
+    expect(outOfService.classList.contains('border-danger/30')).toBe(true);
+  });
+
   it('token inválido muestra mensaje correcto', async () => {
     mockGetPublicElevatorByToken.mockResolvedValue(null);
     renderView();
