@@ -39,7 +39,7 @@ const OPERATIONAL_ICONS: Record<string, { color: string; bg: string; icon: any }
 const CONSERVATION_COLORS: Record<string, string> = {
   conforme: 'bg-success/15 text-success border-success/30',
   observado: 'bg-warning/15 text-warning border-warning/30',
-  requiere_reparacion: 'bg-danger/15 text-danger border-danger/30',
+  requiere_reparacion: 'bg-warning/15 text-warning border-warning/30',
   fuera_de_servicio: 'bg-danger/15 text-danger border-danger/30',
   pendiente_de_verificacion: 'bg-warning/15 text-warning border-warning/30',
 };
