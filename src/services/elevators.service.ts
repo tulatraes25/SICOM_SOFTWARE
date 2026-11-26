@@ -1,6 +1,7 @@
 import { supabase } from '@/config/supabase';
 import type { Elevator } from '@/types/database';
 import type { ElevatorTechnicalFields } from '@/types/elevators';
+import { buildElevatorSearchFilters } from '@/utils/elevatorSearch';
 
 export type ElevatorWithTechnical = Elevator & ElevatorTechnicalFields;
 
@@ -71,34 +72,37 @@ export async function getElevatorByToken(token: string): Promise<ElevatorWithTec
   return data as ElevatorWithTechnical;
 }
 
-export async function searchElevators(query: string, active?: boolean): Promise<ElevatorWithTechnical[]> {
-  let q = supabase
-    .from('elevators')
-    .select('*, building:buildings(name, address), client:clients(name)')
-    .or(`code.ilike.%${query}%,serial_number.ilike.%${query}%,manufacturer.ilike.%${query}%`)
-    .order('code');
-
-  if (active !== undefined) {
-    q = q.eq('active', active);
-  }
-
-  const { data, error } = await q;
-
-  if (error) throw error;
-  return (data || []) as ElevatorWithTechnical[];
-}
-
-export async function filterElevators(filters: {
+export type ElevatorFilters = {
   operational_status?: string;
   conservation_status?: string;
   contractual_status?: string;
   client_id?: string;
   building_id?: string;
   active?: boolean;
-}): Promise<ElevatorWithTechnical[]> {
+};
+
+export async function searchElevators(
+  query: string,
+  active?: boolean,
+  filters: Omit<ElevatorFilters, 'active'> = {},
+): Promise<ElevatorWithTechnical[]> {
+  return filterElevators({ ...filters, active }, query);
+}
+
+export async function filterElevators(filters: ElevatorFilters, searchQuery = ''): Promise<ElevatorWithTechnical[]> {
+  const search = searchQuery.trim();
   let query = supabase
     .from('elevators')
-    .select('*, building:buildings(name, address), client:clients(name)');
+    .select('*, building:buildings(name, address), client:clients(name), building_search:buildings()');
+
+  if (search) {
+    const searchFilters = buildElevatorSearchFilters(search);
+    // A separate empty embed filters buildings without hiding the building
+    // details when the match comes from the elevator's code or manufacturer.
+    query = query
+      .or(searchFilters.building, { referencedTable: 'building_search' })
+      .or(searchFilters.equipment);
+  }
 
   if (filters.operational_status) {
     query = query.eq('operational_status', filters.operational_status);
