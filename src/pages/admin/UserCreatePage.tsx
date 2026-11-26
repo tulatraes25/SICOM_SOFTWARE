@@ -99,7 +99,9 @@ export default function UserCreatePage() {
 
             <Input label="Nombre completo *" value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" disabled={isBusy} />
             <Input label="Email *" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" disabled={isBusy} />
+            <p className="text-sm text-gray-500">Para una segunda cuenta de la misma persona, usá otro email.</p>
             <Select label="Rol *" options={ROLE_OPTIONS} value={role} onChange={(e) => handleRoleChange(e.target.value)} disabled={isBusy} />
+            {role === 'admin' && <p className="text-sm text-gray-500">El administrador puede crear y gestionar usuarios, incluidos otros administradores.</p>}
             <Input label="Contraseña *" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" autoComplete="new-password" disabled={isBusy} />
             <Input label="Confirmar contraseña *" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" disabled={isBusy} />
 

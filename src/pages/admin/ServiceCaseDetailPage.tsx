@@ -31,6 +31,7 @@ const EVENT_LABELS: Record<string, string> = {
   cancelled: 'Expediente anulado',
   case_reopened: 'Expediente reabierto',
   case_reactivated: 'Expediente reactivado',
+  document_uploaded: 'PDF adjuntado',
   production_numbering_activated: 'Numeración productiva activada',
 };
 
@@ -202,6 +203,9 @@ export default function ServiceCaseDetailPage() {
   };
 
   const formatEventDetails = (evt: ServiceCaseEvent): string | null => {
+    if (evt.event_type === 'document_uploaded' && evt.details?.file_name) {
+      return String(evt.details.file_name);
+    }
     if (evt.event_type === 'cancelled' && evt.details?.reason) {
       return `Motivo: ${evt.details.reason}`;
     }
@@ -358,7 +362,7 @@ export default function ServiceCaseDetailPage() {
             </Card>
 
             {/* Documents */}
-            <CaseDocumentsSection serviceCaseId={serviceCase.id} />
+            <CaseDocumentsSection key={serviceCase.id} serviceCaseId={serviceCase.id} canUpload onDocumentUploaded={() => void loadData()} />
 
             {/* Events timeline */}
             <Card>

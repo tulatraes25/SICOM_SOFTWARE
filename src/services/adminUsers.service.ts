@@ -1,5 +1,5 @@
 import { supabase } from '@/config/supabase';
-import { FunctionsHttpError } from '@supabase/supabase-js';
+import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 
 export type AdminUserRole = 'admin' | 'supervisor' | 'technician' | 'responsible';
 
@@ -72,7 +72,17 @@ export function getAdminUsersErrorMessage(error: unknown): string {
 }
 
 async function getAdminUsersInvokeErrorMessage(error: unknown): Promise<string> {
+  if (error instanceof FunctionsFetchError || error instanceof FunctionsRelayError) {
+    return 'No se pudo conectar con la gestión de usuarios. Revisá tu conexión y volvé a intentar.';
+  }
   if (error instanceof FunctionsHttpError) {
+    const status = error.context.status;
+    if (status === 401) {
+      return 'Tu sesión venció o no pudo validarse. Volvé a iniciar sesión e intentá nuevamente.';
+    }
+    if (status === 403) {
+      return 'Tu cuenta debe tener el rol Administrador y estar activa para gestionar usuarios.';
+    }
     try {
       const body: unknown = await error.context.json();
       if (isRecord(body) && typeof body.error === 'string' && body.error) {

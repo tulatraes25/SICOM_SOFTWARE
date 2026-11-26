@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ElevatorsPage from './ElevatorsPage';
 
@@ -60,6 +60,38 @@ beforeEach(() => {
 });
 
 afterEach(() => { vi.restoreAllMocks(); });
+
+describe('ElevatorsPage — Búsqueda por edificio', () => {
+  it('busca por nombre del edificio conservando cliente, estado y vigencia', async () => {
+    mockListClients.mockResolvedValue([{ id: 'c1', name: 'Cliente Alpha', active: true }]);
+    mockSearchElevators.mockResolvedValue([makeElevator({ building: { name: 'Natania' } })]);
+    render(<MemoryRouter><ElevatorsPage /></MemoryRouter>);
+    await screen.findByRole('option', { name: 'Cliente Alpha' });
+    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'c1' } });
+    fireEvent.change(screen.getByLabelText('Estado operativo'), { target: { value: 'operativo' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /edificio/i }), { target: { value: '  Natania  ' } });
+    expect(await screen.findByText('Natania')).toBeInTheDocument();
+    expect(mockSearchElevators).toHaveBeenLastCalledWith('Natania', true, expect.objectContaining({ client_id: 'c1', operational_status: 'operativo' }));
+    fireEvent.change(screen.getByLabelText('Vigencia'), { target: { value: 'inactive' } });
+    await waitFor(() => expect(mockSearchElevators).toHaveBeenLastCalledWith('Natania', false, expect.objectContaining({ client_id: 'c1' })));
+  });
+
+  it('una respuesta antigua no reemplaza los resultados de la búsqueda actual', async () => {
+    let resolveOldSearch!: (result: unknown[]) => void;
+    mockSearchElevators
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveOldSearch = resolve; }))
+      .mockResolvedValueOnce([makeElevator({ id: 'e2', code: 'ASC-NUEVO', building: { name: 'Natania' } })]);
+    render(<MemoryRouter><ElevatorsPage /></MemoryRouter>);
+    await screen.findByText('No hay ascensores activos.');
+    const input = screen.getByRole('textbox', { name: /edificio/i });
+    fireEvent.change(input, { target: { value: 'Centro' } });
+    fireEvent.change(input, { target: { value: 'Natania' } });
+    await screen.findByText('ASC-NUEVO');
+    await act(async () => resolveOldSearch([makeElevator({ code: 'ASC-ANTERIOR' })]));
+    expect(screen.getByText('ASC-NUEVO')).toBeInTheDocument();
+    expect(screen.queryByText('ASC-ANTERIOR')).not.toBeInTheDocument();
+  });
+});
 
 describe('ElevatorsPage — Filtro de vigencia', () => {
   it('filtro inicial es Activos', async () => {

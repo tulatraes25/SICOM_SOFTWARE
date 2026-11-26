@@ -1,5 +1,6 @@
 import { supabase } from '@/config/supabase';
 import type { ServiceRecord, ServiceChecklistItem, ServicePhoto } from '@/types/database';
+import { buildElevatorSearchFilters } from '@/utils/elevatorSearch';
 
 export async function listMyServiceRecords(technicianId: string): Promise<ServiceRecord[]> {
   const { data, error } = await supabase
@@ -208,6 +209,8 @@ export async function deleteServicePhoto(id: string): Promise<void> {
 
 // Search elevators for technician
 export async function searchElevatorsForTechnician(query: string) {
+  if (!query.trim()) return [];
+  const searchFilters = buildElevatorSearchFilters(query, true);
   const { data, error } = await supabase
     .from('elevators')
     .select(`
@@ -220,6 +223,7 @@ export async function searchElevatorsForTechnician(query: string) {
       model,
       serial_number,
       active,
+      building_search:buildings(),
       building:buildings(
         id,
         name,
@@ -232,7 +236,8 @@ export async function searchElevatorsForTechnician(query: string) {
       )
     `)
     .eq('active', true)
-    .or(`code.ilike.%${query}%,serial_number.ilike.%${query}%,manufacturer.ilike.%${query}%,model.ilike.%${query}%`)
+    .or(searchFilters.building, { referencedTable: 'building_search' })
+    .or(searchFilters.equipment)
     .order('code')
     .limit(20);
 

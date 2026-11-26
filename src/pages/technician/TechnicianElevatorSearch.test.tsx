@@ -67,6 +67,16 @@ describe('TechnicianElevatorSearch — Render', () => {
 });
 
 describe('TechnicianElevatorSearch — Búsqueda', () => {
+  it('permite buscar por nombre del edificio y muestra los ascensores encontrados', async () => {
+    mockSearch.mockResolvedValue([makeElevator({ building: { name: 'Natania', locality: 'Comodoro Rivadavia' } })]);
+    render(<MemoryRouter><TechnicianElevatorSearch /></MemoryRouter>);
+    fireEvent.change(screen.getByRole('textbox', { name: /edificio/i }), { target: { value: '  Natania  ' } });
+    fireEvent.click(screen.getByRole('button', { name: /Buscar/i }));
+    expect(await screen.findByText('ASC-0001')).toBeInTheDocument();
+    expect(screen.getByText('Natania')).toBeInTheDocument();
+    expect(mockSearch).toHaveBeenCalledWith('Natania');
+  });
+
   it('no consulta con texto vacío', async () => {
     render(<MemoryRouter><TechnicianElevatorSearch /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /Buscar/i }));
@@ -231,6 +241,20 @@ describe('TechnicianElevatorSearch — Navegación', () => {
 });
 
 describe('TechnicianElevatorSearch — Error', () => {
+  it('retira resultados anteriores si una nueva búsqueda falla', async () => {
+    mockSearch.mockResolvedValueOnce([makeElevator()]).mockRejectedValueOnce(new Error('Error de red'));
+    render(<MemoryRouter><TechnicianElevatorSearch /></MemoryRouter>);
+    const input = screen.getByRole('textbox', { name: /edificio/i });
+    fireEvent.change(input, { target: { value: 'Central' } });
+    fireEvent.click(screen.getByRole('button', { name: /Buscar/i }));
+    await screen.findByText('ASC-0001');
+    fireEvent.change(input, { target: { value: 'Natania' } });
+    fireEvent.click(screen.getByRole('button', { name: /Buscar/i }));
+    await screen.findByText('Error de red');
+    expect(screen.queryByText('ASC-0001')).not.toBeInTheDocument();
+    expect(screen.queryByText('No se encontraron ascensores')).not.toBeInTheDocument();
+  });
+
   it('error del servicio muestra mensaje visible', async () => {
     mockSearch.mockRejectedValue(new Error('Error de red'));
     render(<MemoryRouter><TechnicianElevatorSearch /></MemoryRouter>);
