@@ -205,6 +205,28 @@ describe('serviceRecords.service — getPhotosByServiceRecord', () => {
 });
 
 describe('serviceRecords.service — searchElevatorsForTechnician', () => {
+  it('no consulta si no hay texto de búsqueda', async () => {
+    expect(await searchElevatorsForTechnician('   ')).toEqual([]);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('incluye nombre de edificio, dirección y localidad junto a los datos del equipo', async () => {
+    const chain = createChain();
+    const elevator = { id: 'e1', code: 'ASC-22/01', building: { name: 'Natania' } };
+    chain.limit.mockResolvedValue({ data: [elevator], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    expect(await searchElevatorsForTechnician('  Natania  ')).toEqual([elevator]);
+    expect(chain.select).toHaveBeenCalledWith(expect.stringContaining('building_search:buildings()'));
+    expect(chain.or).toHaveBeenCalledWith(
+      'name.ilike."%Natania%",address.ilike."%Natania%",locality.ilike."%Natania%"',
+      { referencedTable: 'building_search' },
+    );
+    expect(chain.or).toHaveBeenCalledWith(expect.stringContaining('building_search.not.is.null'));
+    expect(chain.or).toHaveBeenCalledWith(expect.stringContaining('model.ilike."%Natania%"'));
+    expect(chain.eq).toHaveBeenCalledWith('active', true);
+  });
+
   it('exige active=true', async () => {
     const chain = createChain();
     chain.limit.mockResolvedValue({ data: [], error: null });

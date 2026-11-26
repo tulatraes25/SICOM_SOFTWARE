@@ -41,22 +41,27 @@ export default function ElevatorsPage() {
   const [actionElevatorId, setActionElevatorId] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const actionRef = useRef(false);
+  const loadRequestRef = useRef(0);
 
   const loadElevators = async () => {
+    const request = ++loadRequestRef.current;
     try {
       setLoading(true);
       setLoadError('');
       let data: ElevatorWithTechnical[];
-      if (searchQuery) {
-        data = await searchElevators(searchQuery, activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined);
+      if (searchQuery.trim()) {
+        data = await searchElevators(searchQuery.trim(), activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined, filters);
       } else {
         data = await filterElevators({ ...filters, active: activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined });
       }
-      setElevators(data);
+      if (request === loadRequestRef.current) setElevators(data);
     } catch {
-      setLoadError('No se pudieron cargar los ascensores.');
+      if (request === loadRequestRef.current) {
+        setElevators([]);
+        setLoadError('No se pudieron cargar los ascensores.');
+      }
     } finally {
-      setLoading(false);
+      if (request === loadRequestRef.current) setLoading(false);
     }
   };
 
@@ -151,7 +156,8 @@ export default function ElevatorsPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="text"
-                placeholder="Buscar por código, fabricante o serie..."
+                aria-label="Buscar ascensores por edificio, código, fabricante o serie"
+                placeholder="Buscar por código, edificio, fabricante o serie..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
