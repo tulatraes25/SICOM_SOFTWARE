@@ -358,6 +358,17 @@ describe('UserCreatePage — Éxito', () => {
 });
 
 describe('UserCreatePage — Normalización', () => {
+  it('permite seleccionar y enviar Administrador con el alcance explicado', async () => {
+    mockCreateUser.mockResolvedValue({ id: 'new-admin' });
+    renderPage();
+    fillForm('Administrador de prueba', 'admin@example.test', 'Example-password-42');
+    fireEvent.change(screen.getByLabelText(/^rol/i), { target: { value: 'admin' } });
+    expect(screen.getByText(/incluidos otros administradores/i)).toBeInTheDocument();
+    submitForm();
+    await waitFor(() => expect(mockCreateUser).toHaveBeenCalledWith(expect.objectContaining({ role: 'admin' })));
+    expect(screen.getByRole('status')).toHaveTextContent('Usuario creado correctamente');
+  });
+
   it('envía campos exactos y normalizados', async () => {
     const def = deferred<{ id: string }>();
     mockCreateUser.mockReturnValue(def.promise);

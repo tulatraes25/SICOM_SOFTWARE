@@ -272,7 +272,7 @@ export interface ServiceCase {
 export interface ServiceCaseEvent {
   id: string;
   service_case_id: string;
-  event_type: 'case_created' | 'case_updated' | 'status_changed' | 'assigned' | 'case_unassigned' | 'closed' | 'cancelled' | 'case_reopened' | 'case_reactivated' | 'production_numbering_activated';
+  event_type: 'case_created' | 'case_updated' | 'status_changed' | 'assigned' | 'case_unassigned' | 'closed' | 'cancelled' | 'case_reopened' | 'case_reactivated' | 'production_numbering_activated' | 'document_uploaded';
   performed_by?: string;
   details: Record<string, unknown>;
   created_at: string;

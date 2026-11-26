@@ -50,16 +50,45 @@ function json(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders });
 }
 
-function log(code: string, adminId?: string, targetId?: string): void {
+function log(code: string, adminId?: string, targetId?: string, error?: unknown): void {
   const entry: Record<string, unknown> = { code };
   if (adminId) entry.admin_user_id = adminId;
   if (targetId) entry.target_user_id = targetId;
+  // Record machine-readable diagnostics, never provider messages, emails or passwords.
+  if (isRecord(error)) {
+    if (typeof error.code === "string" && /^[a-zA-Z0-9_]{1,64}$/.test(error.code)) {
+      entry.provider_error_code = error.code;
+    }
+    if (typeof error.status === "number") entry.provider_status = error.status;
+  }
   console.error("[admin-users]", entry);
 }
 
-let authenticatedAdminId: string | undefined;
+function authCreationError(error: unknown, fallback: string): Response {
+  const code = isRecord(error) ? error.code : undefined;
+  if (code === "email_exists" || code === "user_already_exists") {
+    return json({
+      error: "Ya existe un usuario con ese email. Buscalo en Usuarios o usá otro email para una cuenta diferente.",
+      code: "EMAIL_ALREADY_EXISTS",
+    }, 409);
+  }
+  if (code === "weak_password") {
+    return json({
+      error: "La contraseña no cumple los requisitos de seguridad. Elegí una contraseña más segura y volvé a intentar.",
+      code: "WEAK_PASSWORD",
+    }, 400);
+  }
+  if (code === "email_address_invalid") {
+    return json({ error: "Ingresá un email válido", code: "INVALID_EMAIL" }, 400);
+  }
+  if (code === "over_request_rate_limit") {
+    return json({ error: "Se realizaron demasiados intentos. Esperá unos minutos y volvé a intentar.", code: "RATE_LIMITED" }, 429);
+  }
+  return json({ error: fallback, code: "USER_CREATION_FAILED" }, 500);
+}
 
 serve(async (req): Promise<Response> => {
+  let authenticatedAdminId: string | undefined;
   if (req.method === "OPTIONS") {
     return json({ ok: true });
   }
@@ -106,7 +135,7 @@ serve(async (req): Promise<Response> => {
       .single();
 
     if (adminProfileError || !adminProfile || adminProfile.role !== "admin" || adminProfile.active !== true) {
-      log("ADMIN_PROFILE_FAILED", adminId);
+      log("ADMIN_PROFILE_FAILED", adminId, undefined, adminProfileError);
       return json({ error: "Acceso no autorizado" }, 403);
     }
 
@@ -131,40 +160,57 @@ serve(async (req): Promise<Response> => {
     if (data !== undefined && (typeof data !== "object" || data === null || Array.isArray(data))) {
       return json({ error: "Acción no válida" }, 400);
     }
+    if (action !== "list_users" && !isRecord(data)) {
+      return json({ error: "Faltan los datos de la operación" }, 400);
+    }
 
     // --- Actions ---
     switch (action) {
       case "list_users": {
-        const { data: users, error: listError } = await supabase.auth.admin.listUsers();
-        if (listError) {
-          log("LIST_USERS_FAILED", adminId);
-          return json({ error: "No se pudo obtener la lista de usuarios" }, 400);
+        const pageSize = 100;
+        const result: Record<string, unknown>[] = [];
+        // Auth is paginated. Load profiles per page too, avoiding the database row limit.
+        for (let page = 1; ; page += 1) {
+          const { data: users, error: listError } = await supabase.auth.admin.listUsers({ page, perPage: pageSize });
+          if (listError) {
+            log("LIST_USERS_FAILED", adminId, undefined, listError);
+            return json({ error: "No se pudo obtener la lista de usuarios" }, 400);
+          }
+          if (users.users.length === 0) break;
+
+          const userIds = users.users.map((u) => u.id);
+          const { data: profiles, error: profilesError } = await supabase
+            .from("profiles")
+            .select("id, full_name, role, active, created_at, must_change_password, temporary_password_issued_at, password_changed_at")
+            .in("id", userIds);
+
+          if (profilesError) {
+            log("LIST_USERS_FAILED", adminId, undefined, profilesError);
+            return json({ error: "No se pudo obtener la lista de usuarios" }, 400);
+          }
+
+          const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+          for (const u of users.users) {
+            const profile = profileMap.get(u.id);
+            if (!profile || !(VALID_ROLES as readonly string[]).includes(profile.role) || typeof profile.active !== "boolean") {
+              log("LIST_USER_PROFILE_INCOMPLETE", adminId, u.id);
+              return json({ error: "Hay una cuenta con un perfil incompleto. Contactá al soporte de SICOM para revisar el listado." }, 500);
+            }
+            result.push({
+              id: u.id,
+              email: u.email,
+              full_name: profile.full_name || "",
+              role: profile.role,
+              active: profile.active,
+              created_at: profile.created_at || u.created_at,
+              last_sign_in_at: u.last_sign_in_at,
+              must_change_password: profile.must_change_password ?? false,
+              temporary_password_issued_at: profile.temporary_password_issued_at ?? null,
+              password_changed_at: profile.password_changed_at ?? null,
+            });
+          }
+          if (users.users.length < pageSize) break;
         }
-
-        const userIds = users.users.map((u) => u.id);
-        const { data: profiles, error: profilesError } = await supabase
-          .from("profiles")
-          .select("id, full_name, role, active, created_at, must_change_password, temporary_password_issued_at, password_changed_at")
-          .in("id", userIds);
-
-        if (profilesError) {
-          log("LIST_USERS_FAILED", adminId);
-          return json({ error: "No se pudo obtener la lista de usuarios" }, 400);
-        }
-
-        const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
-        const result = users.users.map((u) => ({
-          id: u.id,
-          email: u.email,
-          full_name: profileMap.get(u.id)?.full_name || "",
-          role: profileMap.get(u.id)?.role || "technician",
-          active: profileMap.get(u.id)?.active ?? true,
-          created_at: profileMap.get(u.id)?.created_at || u.created_at,
-          last_sign_in_at: u.last_sign_in_at,
-          must_change_password: profileMap.get(u.id)?.must_change_password ?? false,
-          temporary_password_issued_at: profileMap.get(u.id)?.temporary_password_issued_at ?? null,
-          password_changed_at: profileMap.get(u.id)?.password_changed_at ?? null,
-        }));
 
         return json({ users: result });
       }
@@ -197,8 +243,8 @@ serve(async (req): Promise<Response> => {
           id: u.user.id,
           email: u.user.email,
           full_name: p.full_name || "",
-          role: p.role || "technician",
-          active: p.active ?? true,
+          role: p.role,
+          active: p.active,
           created_at: p.created_at || u.user.created_at,
           last_sign_in_at: u.user.last_sign_in_at,
           must_change_password: p.must_change_password ?? false,
@@ -223,6 +269,9 @@ serve(async (req): Promise<Response> => {
         if (!email || !password || !full_name || !role) {
           return json({ error: "email, password, full_name y role son obligatorios" }, 400);
         }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          return json({ error: "Ingresá un email válido" }, 400);
+        }
 
         if (!(VALID_ROLES as readonly string[]).includes(role)) {
           return json({ error: "Rol inválido" }, 400);
@@ -246,8 +295,8 @@ serve(async (req): Promise<Response> => {
         });
 
         if (createError) {
-          log("CREATE_AUTH_USER_FAILED", adminId);
-          return json({ error: "No se pudo crear el usuario" }, 400);
+          log("CREATE_AUTH_USER_FAILED", adminId, undefined, createError);
+          return authCreationError(createError, "No se pudo crear el usuario. Si el problema continúa, contactá al soporte de SICOM.");
         }
 
         // Create or update profile (compatible with trigger)
@@ -273,7 +322,7 @@ serve(async (req): Promise<Response> => {
           if (rollbackError) {
             log("CREATE_AUTH_ROLLBACK_FAILED", adminId, authUser.user.id);
           }
-          log("CREATE_PROFILE_FAILED", adminId, authUser.user.id);
+          log("CREATE_PROFILE_FAILED", adminId, authUser.user.id, profileError);
           return json({ error: "No se pudo completar la creación del usuario" }, 500);
         }
 
@@ -588,8 +637,8 @@ serve(async (req): Promise<Response> => {
         });
 
         if (createError) {
-          log("CREATE_RESPONSIBLE_AUTH_FAILED", adminId);
-          return json({ error: "No se pudo crear el responsable" }, 400);
+          log("CREATE_RESPONSIBLE_AUTH_FAILED", adminId, undefined, createError);
+          return authCreationError(createError, "No se pudo crear el responsable. Si el problema continúa, contactá al soporte de SICOM.");
         }
 
         const newUserId = authUser.user.id;
@@ -615,7 +664,7 @@ serve(async (req): Promise<Response> => {
         if (profileError) {
           const { error: rollbackError } = await supabase.auth.admin.deleteUser(newUserId);
           if (rollbackError) log("CREATE_RESPONSIBLE_ROLLBACK_FAILED", adminId, newUserId);
-          log("CREATE_RESPONSIBLE_PROFILE_FAILED", adminId, newUserId);
+          log("CREATE_RESPONSIBLE_PROFILE_FAILED", adminId, newUserId, profileError);
           return json({ error: "No se pudo completar la creación del responsable" }, 500);
         }
 

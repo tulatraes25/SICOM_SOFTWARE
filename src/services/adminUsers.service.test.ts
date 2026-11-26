@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { FunctionsHttpError } from '@supabase/supabase-js';
+import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 import { listUsers, getUser, createUser, updateUser, resetPassword, sendRecovery, createResponsible, getResponsibleAssignments, replaceResponsibleAssignments, getAdminUsersErrorMessage } from './adminUsers.service';
 
 const { mockInvoke } = vi.hoisted(() => ({
@@ -871,6 +871,23 @@ describe('FunctionsHttpError extraction', () => {
     const response = new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
     return new FunctionsHttpError(response);
   }
+
+  it('explica que hay que renovar la sesión cuando el gateway rechaza el JWT', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: makeHttpError({ message: 'Invalid JWT' }, 401) });
+    await expect(createUser({ email: 'a@example.test', password: 'password1', full_name: 'Test', role: 'admin' })).rejects.toThrow('Volvé a iniciar sesión');
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('explica el permiso de administrador activo sin exponer detalles del proveedor', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: makeHttpError({ error: 'Acceso no autorizado' }, 403) });
+    await expect(listUsers()).rejects.toThrow('rol Administrador y estar activa');
+  });
+
+  it.each([new FunctionsFetchError(new Error('network')), new FunctionsRelayError(new Error('relay'))])('localiza errores de conexión y no repite una escritura', async (error) => {
+    mockInvoke.mockResolvedValue({ data: null, error });
+    await expect(createUser({ email: 'a@example.test', password: 'password1', full_name: 'Test', role: 'technician' })).rejects.toThrow('Revisá tu conexión');
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+  });
 
   it('FunctionsHttpError con body JSON y propiedad error devuelve el mensaje exacto', async () => {
     const MSG = 'Antes de desactivar este responsable, reasigná sus ascensores a otro responsable.';
